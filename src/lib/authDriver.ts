@@ -247,6 +247,8 @@ export function createCloudBaseAuthDriver(
     PendingItem<(arg: { nonce: string; password: string }) => Promise<{ error?: AuthErrorLike | null }>>
   >()
   let _authGen = 0
+  /** 上一次已建立会话的 userId：仅 SIGNED_IN 且 userId 变化才算「切号」 */
+  let _lastAuthUserId = ''
 
   function sweepExpired<T>(map: Map<string, PendingItem<T>>) {
     const now = Date.now()
@@ -310,9 +312,16 @@ export function createCloudBaseAuthDriver(
 
     onAuthStateChange(cb) {
       auth()?.onAuthStateChange?.((event, session) => {
-        _authGen++
-        const curGen = _authGen
         const mapped = mapSession(session)
+        const nextUserId = (mapped?.user?.id as string | undefined) ?? ''
+        // 仅在登出 / 切号时作废旧代次；TOKEN_REFRESHED 只是 token 轮换，
+        // 不该作废在途的 getUser() 资料补全（否则昵称/头像退回默认）。
+        // refreshSession()/signOut() 各自内部已递增代次。
+        const isSignOut = event === 'SIGNED_OUT'
+        const isAccountSwitch = event === 'SIGNED_IN' && !!_lastAuthUserId && !!nextUserId && nextUserId !== _lastAuthUserId
+        if (isSignOut || isAccountSwitch) _authGen++
+        if (nextUserId) _lastAuthUserId = nextUserId
+        const curGen = _authGen
         // 先同步交付，保持「回调即事件」的原有契约
         cb(mapped)
         // 刚登录时 session 里的 user 可能只带最小字段（没有昵称/头像）：再补一次
@@ -515,15 +524,40 @@ export function __setAuthDriverForTest(driver: AuthDriver | null): void {
  * usePayment/useRedeem 曾因此静默拿不到 token，「暂无可购买的套餐」的最终根因。
  * 必须走 authDriver（CloudBase 分支读 js-sdk 登录态，session.accessToken）。
  */
+// ── getApiToken 刷新节流 / 并发单飞（模块级，跨请求共享）──
+// AI 流式会在极短时间内并发多个请求；若各自发现「无会话」就各自 refreshSession，
+// 会用同一 refresh_token 并发轮换，互相把凭证挤掉。30s 节流 + 同一时刻只发一个请求。
+const API_TOKEN_REFRESH_THROTTLE_MS = 30_000
+let _lastApiTokenRefreshAt = 0
+let _apiTokenRefreshInFlight: Promise<Session | null> | null = null
+
+/** 节流 + 单飞地抢救一次会话；被节流时直接返回 null，不发请求。 */
+async function _refreshForApiToken(driver: AuthDriver): Promise<Session | null> {
+  if (_apiTokenRefreshInFlight) return _apiTokenRefreshInFlight
+  if (Date.now() - _lastApiTokenRefreshAt < API_TOKEN_REFRESH_THROTTLE_MS) return null
+  _lastApiTokenRefreshAt = Date.now()
+  _apiTokenRefreshInFlight = (async () => {
+    try {
+      const { session } = await driver.refreshSession()
+      return session ?? null
+    } catch {
+      return null
+    } finally {
+      _apiTokenRefreshInFlight = null
+    }
+  })()
+  return _apiTokenRefreshInFlight
+}
+
 export async function getApiToken(): Promise<string> {
   try {
     const driver = getAuthDriver()
-    let { session } = await driver.getSession()
-    if (!session && typeof driver.refreshSession === 'function') {
-      // access token 过期时 getSession 会拿不到会话（SDK 不自动刷新），
-      // 这里补一次抢救，否则登录用户调 AI/支付/探针会带着空 token 401。
-      // 未登录时 refreshSession 会立即失败（本地无 refresh_token，不发请求）。
-      session = (await driver.refreshSession()).session
+    const { session: initial, error } = await driver.getSession()
+    let session = initial
+    // 仅在「有凭证但 getSession 读不到（返回 error / 过期）」时才抢救刷新；
+    // 纯未登录（无 session 且无 error）不发任何刷新请求。
+    if (!session && error && typeof driver.refreshSession === 'function') {
+      session = await _refreshForApiToken(driver)
     }
     if (session) {
       const rec = session as unknown as Record<string, unknown>

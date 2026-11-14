@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useAppStore } from '../../stores/app.js'
+import { useAppStore, _fingerprint } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import * as persist from '../../stores/persist.js'
 
@@ -161,5 +161,67 @@ describe('AppStore', () => {
       expect(r1).toBe(true)
       expect(saveSpy).toHaveBeenCalledTimes(0)
     })
+
+    // #25: _syncMaps 就地改写孤儿引用（不 bump updatedAt / 不 markDirty）也必须能落盘
+    it('_syncMaps 式改写 categoryId/parentId/order 但不改 updatedAt → 仍落盘（不被指纹早退）', async () => {
+      const store = useAppStore()
+      const ds = useDataStore()
+      ds.addBookmark({
+        id: 'fp-bm', title: 't', url: 'u', categoryId: 'cat-x', parentId: 'p-old',
+        order: 3, useCount: 0, updatedAt: 5000,
+      } as any)
+      await store.save() // 建立 _lastSavedFingerprint 基线
+      vi.clearAllMocks()
+
+      // 模拟 _syncMaps 的就地改写：只动结构字段，不改 updatedAt
+      const bm = ds.bookmarks[0]
+      bm.categoryId = 'uncategorized'
+      bm.parentId = null
+      bm.order = 0
+      const r = await store.save()
+
+      expect(r).toBe(true)
+      expect(saveSpy).toHaveBeenCalledTimes(1) // 指纹变化 → 未早退 → 真的落盘
+    })
+  })
+})
+
+// #25: _fingerprint 必须把 order/categoryId/parentId/deletedAt 纳入校验和，
+// 否则 _syncMaps / 软删 / 归一化的就地改写完全捕捉不到，save() 静默跳过落盘。
+describe('#25 _fingerprint 纳入结构字段', () => {
+  const makeData = () => ({
+    bookmarks: [{
+      id: 'b1', title: 't', url: 'u', username: '', password: '', notes: '', icon: '',
+      categoryId: 'cat1', parentId: 'p1' as string | null, order: 0, useCount: 0,
+      attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 100,
+    }],
+    siblingGroups: [], categories: [], customAttributes: [],
+  }) as any
+
+  const fpWith = (mutate: (d: any) => void) => {
+    const d = makeData()
+    mutate(d)
+    return _fingerprint(d)
+  }
+
+  it('categoryId 改变（updatedAt 不变）→ 指纹改变', () => {
+    expect(fpWith((d) => { d.bookmarks[0].categoryId = 'uncategorized' }))
+      .not.toBe(_fingerprint(makeData()))
+  })
+  it('parentId 改变 → 指纹改变', () => {
+    expect(fpWith((d) => { d.bookmarks[0].parentId = null }))
+      .not.toBe(_fingerprint(makeData()))
+  })
+  it('order 改变 → 指纹改变', () => {
+    expect(fpWith((d) => { d.bookmarks[0].order = 7 }))
+      .not.toBe(_fingerprint(makeData()))
+  })
+  it('deletedAt 改变 → 指纹改变', () => {
+    expect(fpWith((d) => { d.bookmarks[0].deletedAt = 9999 }))
+      .not.toBe(_fingerprint(makeData()))
+  })
+  it('仅改 title（非结构字段）→ 指纹不变（不误伤 PERF-3 早退优化）', () => {
+    expect(fpWith((d) => { d.bookmarks[0].title = '新标题' }))
+      .toBe(_fingerprint(makeData()))
   })
 })

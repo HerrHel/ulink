@@ -238,3 +238,58 @@ describe('useChatInputInteraction quickFill', () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('useChatInputInteraction IME composition 保护（#23/#42 下沉到 composable）', () => {
+  it('compositionend 后 60ms 内的尾随 Enter 不提交且 preventDefault；窗口过后正常提交', () => {
+    vi.useFakeTimers()
+    try {
+      const { api, submit } = makeHarness()
+      api.onCompositionStart()
+      api.onCompositionEnd()
+      const ev = key({ key: 'Enter' })
+      api.handleKeyDown(ev)
+      expect(submit).not.toHaveBeenCalled()
+      expect(ev.defaultPrevented).toBe(true)
+      vi.advanceTimersByTime(60)
+      api.handleKeyDown(key({ key: 'Enter' }))
+      expect(submit).toHaveBeenCalledTimes(1)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('组合中（isComposing）Enter 不提交', () => {
+    const { api, submit } = makeHarness()
+    api.onCompositionStart()
+    api.handleKeyDown(key({ key: 'Enter' }))
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('多次 compositionend 只保留最后一个 timer（旧 timer 不提前复位标志）', () => {
+    vi.useFakeTimers()
+    try {
+      const { api, submit } = makeHarness()
+      api.onCompositionEnd()
+      vi.advanceTimersByTime(40)
+      api.onCompositionEnd() // 先 clear 旧 timer，重新计时 60ms
+      vi.advanceTimersByTime(40) // 距首次 80ms、距第二次 40ms
+      expect(api.compositionJustEnded.value).toBe(true)
+      const ev = key({ key: 'Enter' })
+      api.handleKeyDown(ev)
+      expect(submit).not.toHaveBeenCalled()
+      expect(ev.defaultPrevented).toBe(true)
+      vi.advanceTimersByTime(20) // 距第二次 60ms，标志复位
+      expect(api.compositionJustEnded.value).toBe(false)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('自行监听 textarea 的 compositionend 事件（抽屉无需模板接线）', () => {
+    vi.useFakeTimers()
+    try {
+      const { api, ta, submit } = makeHarness()
+      ta.dispatchEvent(new Event('compositionend', { bubbles: true }))
+      const ev = key({ key: 'Enter' })
+      api.handleKeyDown(ev)
+      expect(submit).not.toHaveBeenCalled()
+      expect(ev.defaultPrevented).toBe(true)
+    } finally { vi.useRealTimers() }
+  })
+})

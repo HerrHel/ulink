@@ -209,6 +209,13 @@ const server = http.createServer(async (req, res) => {
   const isCategory = pathParts[1] === 'c'
   const id = String(isCategory ? pathParts[2] || '' : pathParts[1] || '').trim()
 
+  // 2026-11-14 审计 #30：多余尾段必须拒绝。原实现忽略 pathParts 的额外段，
+  // 却用完整 url.pathname 做缓存键 → 攻击者用 /s/<gid>/<随机段> 可刷出无限
+  // 缓存键挤爆 300 条 LRU，把合法分享缓存淘汰，形成对上游 RPC 的请求放大。
+  if (pathParts.length !== (isCategory ? 3 : 2)) {
+    sendText(res, 400, 'bad request')
+    return
+  }
   if (pathParts[0] !== 's' || !isValidShareId(id) || (isCategory && !id)) {
     sendText(res, 400, 'bad request')
     return
@@ -339,7 +346,9 @@ const server = http.createServer(async (req, res) => {
     cacheSearch = explicitLayout ? `?layout=${explicitLayout}` : `?_dev=${isMobile ? 'm' : 'd'}`
   }
 
-  const cacheKey = `${url.pathname}${cacheSearch}|${locale}`
+  // 2026-11-14 审计 #30：缓存键用规范化路径（只含 id），不再用原始 pathname，
+  // 避免任何残留的尾段/编码差异生成等价但不同的键。
+  const cacheKey = `${isCategory ? '/s/c/' : '/s/'}${id}${cacheSearch}|${locale}`
 
   // 有密码的组：先验票据。
   // 未通过 → 只吐密码门（可缓存，但与内容缓存键分离）；
@@ -365,10 +374,17 @@ const server = http.createServer(async (req, res) => {
       return
     }
   } else {
-    const hit = getFresh(cacheKey)
-    if (hit) {
-      sendHtml(res, 200, hit, { 'x-share-cache': 'HIT' })
-      return
+    // 2026-11-14 审计 #28：分类分享不读内容缓存。
+    // 分类路径的 get_share_secret 前置判定被 `if (!isCategory)` 跳过，hasPassword
+    // 恒 false；一旦分类下某组加密码 / 取消公开，旧 HTML 仍会在 300s fresh +
+    // 24h stale 内对未验密访客可见，且 mem-cache 无失效接口。分类访问量低，
+    // 直接每次回源（SQL 层 20261114000002 已补密码过滤），用实时性换安全。
+    if (!isCategory) {
+      const hit = getFresh(cacheKey)
+      if (hit) {
+        sendHtml(res, 200, hit, { 'x-share-cache': 'HIT' })
+        return
+      }
     }
   }
 
@@ -393,13 +409,15 @@ const server = http.createServer(async (req, res) => {
   // 上游故障 ≠ 分享不存在：404 语义保留给「不存在或未公开」。
   // 先试 24h 兜底副本（200 + STALE）；没有才 503（no-store，恢复后下次请求拿真数据）。
   if (upstreamFailed) {
-    const stale = getStale(cacheKey)
+    // 分类页同样不读 stale（见 #28），避免 24h 前含旧组内容的副本被回吐。
+    const stale = isCategory ? null : getStale(cacheKey)
     if (stale) {
-      // 带密码的分享即使本次票据校验通过，也绝不能标 public：响应未按 Cookie 区分，
-      // 中间层若缓存会把完整内容发给未验密访客。与验密门 no-store 口径保持一致。
+      // 2026-11-14 审计 #6：分享内容页任何路径都不得标 public / s-maxage。
+      // 原实现在「无密码」时下发 public,max-age=60，主人随后加密码后 TTL 内
+      // 共享缓存可直接把加密码前的完整 HTML 给未验密访客，绕过验密前置判定。
       sendHtml(res, 200, stale, {
         'x-share-cache': 'STALE',
-        'cache-control': hasPassword ? 'private, no-store' : 'public, max-age=60',
+        'cache-control': 'private, no-store',
       })
       return
     }
@@ -431,7 +449,8 @@ const server = http.createServer(async (req, res) => {
     html = renderSharePage(data.group, data.bookmarks || [], shareUrl, APP_ORIGIN, locale)
   }
 
-  if (!hasPassword) {
+  // 分类分享不写内容缓存（#28）；带密码的组也不写（凭票据可见）。
+  if (!hasPassword && !isCategory) {
     putShare(cacheKey, html)
   }
   // 已验密的页面属于「凭票据可见」，不允许任何中间层缓存

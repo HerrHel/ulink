@@ -55,7 +55,28 @@ export function createCloudBaseSyncPort(db: RdbClient = getCbDb()): SyncRemotePo
   return {
     async upsert(table, row) {
       const r = await db.from(table).upsert(row, { onConflict: ON_CONFLICT })
-      return { data: r.data, error: toPortError(r.error) }
+      const error = toPortError(r.error)
+      if (error) return { data: r.data, error }
+      // #27: CloudBase rdb js-sdk 的 .upsert() 本身不返回受影响行、也不给 count
+      //（真实 SDK 非 PostgREST 风格，见项目记忆），无法像 Supabase 那样从响应读行数。
+      // 按 onConflict 复合主键 (user_id,id) 回查一次 head count：确认写入确实生效，
+      // RLS 静默 0 行时回查 0 → count=0，syncPush 与 update 同口径判失败、不静默出队。
+      // 后端限制：若云端已存在同 (user_id,id) 旧行且本次 UPDATE 被 RLS 静默拒绝，
+      // 回查仍会命中旧行（count≥1）无法区分「写入成功」——此场景只能由服务端
+      // RLS/触发器兜底，客户端无法可靠判定，记录于此。
+      const rows = (Array.isArray(row) ? row : [row]) as Array<Record<string, unknown>>
+      const userId = rows[0]?.user_id
+      const ids = rows.map((x) => x.id).filter((id) => id != null)
+      let count: number | null = null
+      if (userId != null && ids.length > 0) {
+        const c = await db
+          .from(table)
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .in('id', ids)
+        count = c.error ? null : (typeof c.count === 'number' ? c.count : null)
+      }
+      return { data: r.data, error: null, count }
     },
 
     async update(table, id, userId, patch) {

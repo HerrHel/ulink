@@ -91,7 +91,7 @@ vi.mock('../../stores/app.js', () => ({
   saveAppData: vi.fn(),
 }))
 
-import { useE2E } from '../../composables/domain/useE2E.js'
+import { useE2E, canaryQueryError, clearCanaryQueryError } from '../../composables/domain/useE2E.js'
 import { deriveKey, generateCanary } from '../../crypto.js'
 
 beforeEach(() => {
@@ -103,6 +103,7 @@ beforeEach(() => {
   _e2eState.cryptoKey = null
   _authState.user = null
   _supabaseStub.maybeSingleRes = { data: null, error: null }
+  clearCanaryQueryError() // 模块级 ref，用例间复位
 })
 
 // 小迭代数加速 PBKDF2（canaryData 显式携带 it，unlock 按其派生）
@@ -168,5 +169,34 @@ describe('unlock 成功 → isE2EEnabled 置 true（云端解锁场景回归）'
     expect(ok).toBe(false)
     expect(_e2eState.isE2EEnabled).toBe(false)
     expect(_e2eState.isUnlocked).toBe(false)
+  })
+})
+
+describe('#4 checkE2EStatus 云端查询失败护栏', () => {
+  it('查询失败(res.error) 时跳过状态判定：不把 isE2EEnabled 误置 false、给出可见提示', async () => {
+    _authState.user = { id: 'user-1' }
+    ;(_supabaseStub.maybeSingleRes as any).error = { message: 'network down' }
+    _e2eState.isE2EEnabled = true // 当前已启用；旧实现会因 data=null 静默置 false
+
+    const e2e = useE2E()
+    await e2e.checkE2EStatus()
+
+    // 关键：查询失败不得当成「云端无 canary」→ 不引导用户重设主密码/覆盖云端 canary
+    expect(_e2eState.isE2EEnabled).toBe(true)
+    expect(canaryQueryError.value).toBeTruthy()
+  })
+
+  it('查询恢复（error=null 且云端有 canary）正常置 enabled=true 且清除错误提示', async () => {
+    _authState.user = { id: 'user-1' }
+    ;(_supabaseStub.maybeSingleRes as any).error = { message: 'down' }
+    const e2e = useE2E()
+    await e2e.checkE2EStatus()
+    expect(canaryQueryError.value).toBeTruthy()
+
+    _supabaseStub.maybeSingleRes = { data: { master_canary: await cloudCanaryFor('master-pw') }, error: null }
+    await e2e.checkE2EStatus()
+
+    expect(_e2eState.isE2EEnabled).toBe(true)
+    expect(canaryQueryError.value).toBeNull()
   })
 })

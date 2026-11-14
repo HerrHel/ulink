@@ -10,7 +10,7 @@
  * - 加密密钥派生与管理（密钥缓存移至 e2eStore）
  * - 加密/解密字段辅助函数
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useDataStore } from '../../stores/data.js'
@@ -35,6 +35,24 @@ export { ENCRYPT_FIELDS, LEGACY_DECRYPT_FIELDS }
 export type { E2ECanaryMismatch }
 
 const LOCAL_CANARY_KEY = 'lv_e2e_canary'
+
+/**
+ * 缺陷#4：云端 canary「查询失败」的可见提示（不静默）。
+ * 旧实现把查询失败静默当成「云端无 canary」，导致登录覆盖云端 canary、冲突弹窗不弹、
+ * 换设备被引导重设主密码。查询失败时置位此 ref，供 UI 提示「云端主密码状态读取失败」；
+ * 查询成功（含确实无行）时自动清除。UI 接线读取方式见文末报告。
+ */
+export const canaryQueryError = ref<string | null>(null)
+
+/** 清除可见提示：查询恢复时内部调用，亦供 UI 关闭提示 / 测试复位 */
+export function clearCanaryQueryError(): void {
+  canaryQueryError.value = null
+}
+
+function _flagCanaryQueryError(where: string, detail?: unknown): void {
+  canaryQueryError.value = '云端主密码状态读取失败，请检查网络后重试（已跳过本次同步/判定，未覆盖任何数据）'
+  console.error(`[e2e] ${where}: 云端 canary 查询失败`, detail)
+}
 
 
 // ── 本地 canary 读写 ──
@@ -75,25 +93,51 @@ function _parseRecoveryKey(formatted: string): string {
   return formatted.replace(/-/g, '').toUpperCase()
 }
 
-/** 获取当前构建 canary data（含本地 + 云端读写切换） */
-function _getCanaryData(): Promise<Record<string, unknown> | null> {
-  const local = _readLocalCanary()
-  if (local) return Promise.resolve(local)
-  // 本地无 canary，尝试从云端拉取（登录用户多设备场景）
+/**
+ * 缺陷#4：云端 canary 查询必须区分「查询失败」与「确实无行」。
+ * 旧实现 .catch(() => null) 且从不读 res.error，把网络/RLS/服务端错误等同「云端无 canary」，
+ * 于是登录时 ensureCloudCanarySynced 覆盖云端 canary、冲突弹窗不弹、换设备被引导重设主密码。
+ * 返回三态：ok=false = 查询失败（调用方必须跳过覆盖/状态判定）；ok=true + canary=null = 确实无行。
+ * 查询失败/恢复同时维护模块级可见错误 canaryQueryError（不静默）。
+ */
+async function _getCloudCanaryChecked(where: string): Promise<{ ok: boolean; canary: Record<string, unknown> | null }> {
   try {
     const auth = useAuth()
-    if (!auth || !auth.user) return Promise.resolve(null)
-    const userId = auth.user?.id
-    if (!userId) return Promise.resolve(null)
-    return Promise.resolve(dbFrom('user_security')
+    const userId = auth?.user?.id
+    // 未登录：确实没有云端可查，不是「查询失败」，返回无行
+    if (!userId) return { ok: true, canary: null }
+    const res = await Promise.resolve(dbFrom('user_security')
       .select('master_canary')
       .eq('user_id', userId)
       .maybeSingle())
-      .then(res => res.data?.master_canary as Record<string, unknown> ?? null)
-      .catch(() => null)
-  } catch {
-    return Promise.resolve(null)
+    // 明确读取 res.error：查询失败绝不能当成「云端无 canary」
+    if (res?.error) {
+      _flagCanaryQueryError(where, res.error)
+      return { ok: false, canary: null }
+    }
+    clearCanaryQueryError()
+    return { ok: true, canary: (res?.data?.master_canary as Record<string, unknown>) ?? null }
+  } catch (e) {
+    _flagCanaryQueryError(where, e)
+    return { ok: false, canary: null }
   }
+}
+
+/** 本地优先的 canary 读取（三态）：供 checkE2EStatus 在查询失败时跳过状态判定 */
+async function _getCanaryDataChecked(where: string): Promise<{ ok: boolean; data: Record<string, unknown> | null }> {
+  const local = _readLocalCanary()
+  if (local) return { ok: true, data: local }
+  const cloud = await _getCloudCanaryChecked(where)
+  return cloud.ok ? { ok: true, data: cloud.canary } : { ok: false, data: null }
+}
+
+/**
+ * 兼容旧调用方：返回 Record | null。云端查询失败时返回 null（unlock/reset/change 据此
+ * fail-closed 返回 false，不会误覆盖），可见错误由 _getCloudCanaryChecked 统一登记。
+ */
+async function _getCanaryData(): Promise<Record<string, unknown> | null> {
+  const r = await _getCanaryDataChecked('_getCanaryData')
+  return r.data
 }
 
 async function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> {
@@ -119,22 +163,15 @@ async function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boo
 //  - adoptCloudCanary：切到云端 canary 统一主密码（本机旧 key 加密数据不可逆失效，UI 需提示）
 //  - 保留本机：接受加密字段不互通，且禁止在本机改主密码/重置（防覆盖云端 canary 锁死其他设备）
 
-/** 直接读云端 canary（不经本地优先，仅登录用户有值） */
-function _getCloudCanary(): Promise<Record<string, unknown> | null> {
-  try {
-    const auth = useAuth()
-    if (!auth || !auth.user) return Promise.resolve(null)
-    const userId = auth.user?.id
-    if (!userId) return Promise.resolve(null)
-    return Promise.resolve(dbFrom('user_security')
-      .select('master_canary')
-      .eq('user_id', userId)
-      .maybeSingle())
-      .then(res => res.data?.master_canary as Record<string, unknown> ?? null)
-      .catch(() => null)
-  } catch {
-    return Promise.resolve(null)
-  }
+/**
+ * 直接读云端 canary（不经本地优先，仅登录用户有值）。
+ * 兼容旧签名：查询失败返回 null（调用方据此 fail-closed，不覆盖数据），可见错误由
+ * _getCloudCanaryChecked 统一登记。需要区分「查询失败」与「确实无行」的同步逻辑
+ * （登录覆盖 / 冲突判定 / 状态判定 / adopt）请直接用 _getCloudCanaryChecked。
+ */
+async function _getCloudCanary(): Promise<Record<string, unknown> | null> {
+  const r = await _getCloudCanaryChecked('_getCloudCanary')
+  return r.canary
 }
 
 /** 两 canary 是否同源：canary 验证串与派生盐一致 → 同一主密码设置 */
@@ -188,8 +225,11 @@ export function useE2E() {
   async function ensureCloudCanarySynced(): Promise<void> {
     const local = _readLocalCanary()
     if (!local) return
-    const cloud = await _getCloudCanary()
-    if (cloud) return
+    const checked = await _getCloudCanaryChecked('ensureCloudCanarySynced')
+    // 查询失败：跳过覆盖。绝不能把「读不到」当成「云端无 canary」而推本地 canary
+    // 覆盖掉云端真实 canary（会锁死其他设备）。
+    if (!checked.ok) return
+    if (checked.canary) return
     const auth = useAuth()
     if (!auth.user) return
     await _saveCanaryData(local)
@@ -198,7 +238,11 @@ export function useE2E() {
   /** 登录后检测本机与云端主密码设置是否一致（多设备冲突 / 主密码升级，canary 单槽覆盖风险） */
   async function detectCloudCanaryMismatch(): Promise<E2ECanaryMismatch> {
     const local = _readLocalCanary()
-    const cloud = await _getCloudCanary()
+    const checked = await _getCloudCanaryChecked('detectCloudCanaryMismatch')
+    // 查询失败：跳过状态判定，不得当成「云端无 canary」。返回保守值（mismatch=false，
+    // 不弹冲突弹窗、不引导覆盖），可见错误由 canaryQueryError 提示 UI 稍后重试。
+    if (!checked.ok) return { mismatch: false, hasLocal: !!local, hasCloud: false, upgraded: false }
+    const cloud = checked.canary
     if (!local || !cloud) return { mismatch: false, hasLocal: !!local, hasCloud: !!cloud, upgraded: false }
     const mismatch = !_sameCanary(local, cloud)
     // upgraded：云端带 prev_*（其他设备 changeMasterPassword 过）→ 走「跟随迁移」而非多设备冲突
@@ -211,8 +255,10 @@ export function useE2E() {
    * 代价：本机此前用本机主密码加密的数据（key 已换）将不可逆失效，UI 必须在调用前提示。
    */
   async function adoptCloudCanary(): Promise<boolean> {
-    const cloud = await _getCloudCanary()
-    if (!cloud) return false
+    const checked = await _getCloudCanaryChecked('adoptCloudCanary')
+    // 查询失败：跳过覆盖（不把本地 canary 覆成「读不到」的错误结论）
+    if (!checked.ok || !checked.canary) return false
+    const cloud = checked.canary
     _writeLocalCanary(cloud)
     e2eStore.setEnabled(true)
     e2eStore.setUnlocked(false)
@@ -225,9 +271,12 @@ export function useE2E() {
   async function checkE2EStatus(): Promise<boolean> {
     const hasLocal = !!_readLocalCanary()
     if (hasLocal) { e2eStore.setEnabled(true); e2eStore.setBiometricEnrolled(biometric.isBiometricEnrolled()); return true }
-    const data = await _getCanaryData()
-    e2eStore.setEnabled(!!data)
-    if (data) e2eStore.setBiometricEnrolled(biometric.isBiometricEnrolled())
+    const checked = await _getCanaryDataChecked('checkE2EStatus')
+    // 查询失败：跳过状态判定，绝不把 isE2EEnabled 置 false（否则会静默引导用户重设主密码
+    // 并覆盖云端 canary）。保持当前状态不变，可见错误提示稍后重试。
+    if (!checked.ok) return isE2EEnabled.value
+    e2eStore.setEnabled(!!checked.data)
+    if (checked.data) e2eStore.setBiometricEnrolled(biometric.isBiometricEnrolled())
     return isE2EEnabled.value
   }
 
@@ -738,7 +787,22 @@ export function useE2E() {
     }
 
     // ── 步骤 8：push 覆盖云端（整行 upsert，带新 updatedAt 覆盖远端旧密文）──
-    await _reencryptCloudPush()
+    // 缺陷#3：_reencryptCloudPush 抛异常时绝不能跳过步骤 9 的 canary 覆盖——本地/IDB
+    // 已是新 key，若 canary 仍停在旧值，下次 unlock 用旧 canary 派生旧 key 验证失败 →
+    // 全库永久不可解。对齐 setupMasterPassword 的 try/catch 写法：push 异常仅告警并
+    // 标记可重试，步骤 9 的 canary 写入是必经路径（保留「push 部分失败也覆盖」语义）。
+    try {
+      const pushed = await _reencryptCloudPush()
+      if (!pushed) {
+        console.warn('[e2e] 改主密码后数据重加密推云未完成：已保留队列，待下次同步重试')
+      }
+    } catch (e) {
+      console.warn('[e2e] 改主密码后数据重加密推云异常，标记可重试:', e)
+      // 异常路径 pushFromQueue 可能未跑到，显式置 error 态确保有可重试标记
+      const syncStore = useSyncStore()
+      syncStore.setSyncStatus('error')
+      syncStore.setSyncError('E2E 改主密码后存量数据重加密待重试')
+    }
 
     // ── 步骤 9：覆盖 canaryData（无条件，即便 push 部分失败也覆盖——否则本机下次 unlock 用旧 canary 失败）──
     let newCanaryData: Record<string, unknown>
@@ -853,7 +917,7 @@ export function useE2E() {
   }
 
   return {
-    isE2EEnabled, isUnlocked, isBiometricEnrolled, cloudCanaryStale,
+    isE2EEnabled, isUnlocked, isBiometricEnrolled, cloudCanaryStale, canaryQueryError,
     checkE2EStatus, generateRecoveryKey,
     setupMasterPassword, resetWithRecoveryKey, changeMasterPassword,
     unlock, lock, encryptItem, decryptItem, encryptField, decryptField, decryptStoreItems, hasEncryptedData,

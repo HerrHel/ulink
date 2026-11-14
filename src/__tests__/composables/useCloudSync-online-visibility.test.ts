@@ -88,7 +88,7 @@ vi.mock('../../stores/storage.js', async (importOriginal) => {
 
 import { useSyncStore } from '../../stores/sync.js'
 import { useCloudSync, __resetInitialSync } from '../../composables/domain/useCloudSync.js'
-import { recordSyncFailure } from '../../composables/domain/syncCircuit.js'
+import { recordSyncFailure, getSyncCircuitSnapshot } from '../../composables/domain/syncCircuit.js'
 
 let _winHandlers: { [type: string]: EventListener } = {}
 let _docHandlers: { [type: string]: EventListener } = {}
@@ -239,5 +239,20 @@ describe('useCloudSync online/visibility 核心契约护栏', () => {
     await vi.runAllTimersAsync()
     expect(_pull.pullChangesSpy).toHaveBeenCalledTimes(1)
     expect(_push.pushFromQueueSpy).toHaveBeenCalledTimes(1)
+  })
+
+  // #14: half-open 放行一轮后，若 push 因空队列提前 return / pull 提前 return，
+  // 都不调 recordSyncSuccess/Failure → _state 永久 half-open、自动同步彻底停摆。
+  // 本用例 round 内 pull/push 均为 spy（刻意不登记结果），验证一轮结束后复位。
+  it('half-open 探活轮未登记结果 → 一轮后复位 closed（不再永久死锁）', async () => {
+    for (let i = 0; i < 3; i++) recordSyncFailure('429 Too Many Requests')
+    expect(getSyncCircuitSnapshot().state).toBe('open')
+    vi.setSystemTime(Date.now() + 60_000 + 1)
+    syncStore.setAutoSync(true)
+    initAndDispatch('visibilitychange', true)
+    await vi.runAllTimersAsync()
+    // 旧实现会停在 half-open（canAttemptSync 恒 false）；修复后 guardedBackgroundSync
+    // 检测到仍是 half-open 即 recordSyncSuccess() 复位。
+    expect(getSyncCircuitSnapshot().state).toBe('closed')
   })
 })

@@ -152,9 +152,31 @@ export function setSessionStorageErrorHandler(fn: (() => void) | null): void {
 /** 保存会话列表到本地存储 */
 export function saveSessions(sessions: AiChatSession[]): void {
   try {
-    // 缺陷2：可选文本字段统一脱敏，保持 undefined（字段缺失）语义与展示结构
+    // #34 落盘脱敏如实清单（注释与实际处理一一对应，不再宣称「全部文本字段」却漏字段）：
+    //  - 会话级：title 脱敏；
+    //  - turn 文本：content / reasoning / preToolContent / steps[].text /
+    //    toolCalls[].arguments 字符串值 / suggestedReplies / promptContent /
+    //    toolResults[].resultText 脱敏；
+    //  - 结构化对象：sendSummary / candidates / attachedCards / actionCard（含 payload、
+    //    title、buttonText、desc、selectedCandidateUrls 等全部字符串）统一递归脱敏；
+    //  - 媒体：attachedFiles[].dataUrl 一律不落盘——明文 base64 常含证件/隐私图像，
+    //    旧实现仅对 >32768 字符裁剪，≤32768 的小图仍明文持久化，属漏脱敏；
+    //    textContent 脱敏 + 4000 字截断。
+    //  - loadSessions 读取兼容：脱敏只替换字符串值、保留对象结构与字段名，缺字段时
+    //    展示侧按无预览/无值降级（AttachedMediaFile.dataUrl 本就可选）。
     const redactText = (v: string | undefined): string | undefined =>
       v === undefined ? undefined : redactSensitivePatterns(v)
+    /** 递归脱敏任意嵌套结构里的字符串值；数组/对象保结构，数字/布尔/空值原样，避免破坏读取兼容 */
+    function redactDeep<T>(value: T): T {
+      if (typeof value === 'string') return redactSensitivePatterns(value) as unknown as T
+      if (Array.isArray(value)) return value.map((v) => redactDeep(v)) as unknown as T
+      if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = redactDeep(v)
+        return out as unknown as T
+      }
+      return value
+    }
     // toolCalls.arguments 是对象：仅对其中字符串值脱敏，其余类型原样保留
     const redactArgs = (args: Record<string, unknown> | undefined): Record<string, unknown> | undefined => {
       if (!args) return args
@@ -164,25 +186,27 @@ export function saveSessions(sessions: AiChatSession[]): void {
     }
     const trimmed = sessions.slice(0, MAX_SESSIONS).map((s) => ({
       ...s,
+      title: redactSensitivePatterns(s.title),
       turns: (s.turns || []).slice(-MAX_TURNS_PER_SESSION).map((t) => ({
         ...t,
         loading: false, // 存盘时 loading 必须置 false
         isThinking: false, // 存盘时 isThinking 置 false
-        // 缺陷2：落盘前对全部文本字段统一脱敏（旧实现只覆盖 promptContent 与
-        // toolResults[].resultText，content/steps/reasoning/... 曾明文落盘）。
         content: redactSensitivePatterns(t.content).slice(0, 20000),
         reasoning: redactText(t.reasoning)?.slice(0, 8000),
         preToolContent: redactText(t.preToolContent)?.slice(0, 8000),
         steps: t.steps?.map((step) => ({ ...step, text: redactSensitivePatterns(step.text).slice(0, 2000) })),
         toolCalls: t.toolCalls?.map((c) => ({ ...c, arguments: redactArgs(c.arguments) })),
         suggestedReplies: t.suggestedReplies?.map((r) => redactSensitivePatterns(r)),
-        actionCard: t.actionCard
-          ? { ...t.actionCard, desc: redactText(t.actionCard.desc) }
-          : t.actionCard,
-        // 避免多模态超大图片 Base64 击穿 localStorage 5MB 配额（保留 dataUrl 裁剪与 textContent 截断）
+        // #34：actionCard 整体递归脱敏（payload/title/buttonText/desc/selectedCandidateUrls）
+        actionCard: t.actionCard ? redactDeep(t.actionCard) : t.actionCard,
+        // #34：sendSummary / candidates / attachedCards 纳入脱敏
+        sendSummary: t.sendSummary ? redactDeep(t.sendSummary) : t.sendSummary,
+        candidates: t.candidates ? redactDeep(t.candidates) : t.candidates,
+        attachedCards: t.attachedCards ? redactDeep(t.attachedCards) : t.attachedCards,
+        // #34：媒体 dataUrl 一律不落盘，textContent 脱敏 + 截断
         attachedFiles: t.attachedFiles?.map((f) => ({
           ...f,
-          dataUrl: f.dataUrl && f.dataUrl.length > 32768 ? undefined : f.dataUrl,
+          dataUrl: undefined,
           textContent: f.textContent ? redactSensitivePatterns(f.textContent.slice(0, 4000)).slice(0, 4000) : undefined,
         })),
         promptContent: t.promptContent

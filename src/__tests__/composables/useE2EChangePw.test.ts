@@ -433,6 +433,33 @@ describe('useE2E.changeMasterPassword 登录态云端链路（push 失败 / real
     expect(_e2eState.cloudCanaryStale).toBe(false)
   }, 20000)
 
+  it('#3 _reencryptCloudPush 抛异常：步骤9 canary 仍被覆盖（不跳过），本机下次可正常解锁', async () => {
+    const e2e = useE2E()
+    const ds = useDataStore()
+    await loginSetup(e2e, ds)
+    const canaryBefore = localCanary()
+    // withLock 直接 return fn()（异常会传播）：pushFromQueue reject → _reencryptCloudPush 抛出。
+    // 旧实现步骤8 无 try/catch，异常会整段跳过步骤9 写新 canary → 本地已是新 key、
+    // canary 仍旧 → 下次 unlock 用旧 canary 派生旧 key 验不通，全库永久不可解。
+    vi.mocked(pushFromQueue).mockRejectedValue(new Error('cloud push exploded'))
+
+    const ok = await e2e.changeMasterPassword('', 'new-master-pw-9')
+
+    // 修复后：异常被接住，changePw 仍成功（本机重加密已落 IDB）
+    expect(ok).toBe(true)
+    // 核心：步骤9 成为必经路径，新 canary 已写入（不是旧 canary 停留）
+    const after = localCanary()
+    expect(after.canary).not.toEqual(canaryBefore.canary)
+    expect(after.salt).not.toEqual(canaryBefore.salt)
+    const newKey = await deriveKey('new-master-pw-9', new Uint8Array(after.salt as number[]), after.it as number)
+    expect(await verifyCanary(after.canary as string, newKey)).toBe(true)
+    // 旧主密码（旧 canary 派生参数）已无法验通新 canary，证明写的确实是新 canary
+    const oldKey = await deriveKey('old-master-pw', new Uint8Array(after.salt as number[]), after.it as number)
+    expect(await verifyCanary(after.canary as string, oldKey)).toBe(false)
+    // push 链路确被调用（异常来自 push，而非早退）
+    expect(vi.mocked(pushFromQueue)).toHaveBeenCalled()
+  }, 20000)
+
   it('⑨ realtime 回声清洗：_reencryptCloudPush 先 unsubscribe 后无条件 re-subscribe（即使 push 失败 finally 仍恢复）', async () => {
     const e2e = useE2E()
     const ds = useDataStore()

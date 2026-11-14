@@ -28,11 +28,11 @@ import {
 } from './useSyncRealtime.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { getAuthDriver } from '../../lib/authDriver.js'
-import { enqueueDirtyAsOps, pushFromQueue, reenqueueDeadDeletes } from './syncPush.js'
+import { enqueueDirtyAsOps, pushFromQueue, reenqueueDeadDeletes, isDeadUpsert } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
 import { _clearAllPendingSync } from './syncPending.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
-import { canAttemptSync, takeSyncRecovered } from './syncCircuit.js'
+import { canAttemptSync, takeSyncRecovered, getSyncCircuitSnapshot, recordSyncSuccess } from './syncCircuit.js'
 import { withLock } from '../../lib/withLock.js'
 import { saveAppData } from '../../stores/app.js'
 import { _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
@@ -95,9 +95,12 @@ export function useCloudSync() {
     syncStore.setPendingCount(await syncOpsCount())
   }
 
-  function debouncedSync() {
+  async function debouncedSync(): Promise<void> {
     if (!syncStore.autoSync || !isLoggedIn.value) return
-    enqueueDirtyAsOps()
+    // #11: enqueueDirtyAsOps 内部是异步 IDB 写，未 await 就调度推送会读到空队列，
+    // 而 drainDirtyIds() 已清标记 → 编辑永不上云。await 完成后再布置 timer
+    //（对照 syncImmediate 的正确写法）。
+    await enqueueDirtyAsOps()
     if (_syncTimer) clearTimeout(_syncTimer)
     _syncTimer = setTimeout(() => {
       _syncTimer = null
@@ -128,6 +131,15 @@ export function useCloudSync() {
   async function guardedBackgroundSync(round: () => Promise<void>): Promise<void> {
     if (!canAttemptSync()) return
     await round()
+    // #14: half-open 探活轮若因空队列提前 return（syncPush:249）/ E2E 锁定
+    // return false（syncPull:93-96）等路径提前收尾，push/pull 都不会调
+    // recordSyncSuccess/Failure，_state 永久停在 half-open → canAttemptSync()
+    // 恒 false、自动同步彻底停摆。选「一轮结束后检查快照复位」这一更稳的做法：
+    // 仍为 half-open（本轮既未登记成功也未登记失败）即按探活成功复位。
+    // 失败轮已被 recordSyncFailure 转回 open、成功轮已转 closed，二者都不误入此分支。
+    if (getSyncCircuitSnapshot().state === 'half-open') {
+      recordSyncSuccess()
+    }
     if (takeSyncRecovered()) {
       console.info('[sync] 云端已恢复，自动重建同步队列补推（含死信恢复）')
       // 失败静默：resyncAllToCloud 内部 push/pull 失败已各自落 error 状态与熔断计数
@@ -141,7 +153,9 @@ export function useCloudSync() {
       clearTimeout(_syncTimer)
       _syncTimer = null
     }
-    enqueueDirtyAsOps()
+    // #11: 与 syncImmediate 同口径，先 await 入队完成再进入 withLock（否则 pull/push
+    // 会在异步 IDB 写落地前跑，读到空队列而 drain 已清 dirty → 编辑永不上云）
+    await enqueueDirtyAsOps()
     return withLock('linkvault-sync', async () => {
       // R-RESURRECT：与 _onOnline 同口径，先 pull 后 push。
       // 旧顺序先推后拉——离线积压的 op.data 是入队时的存活快照，会把远端新写入的
@@ -186,7 +200,7 @@ export function useCloudSync() {
    *   存活快照重推会被服务端 032 触发器静默拦截，反复入队只是制造死 op；
    *   本地残墓由 fullSync 的 full-absent-delete 对账清理。
    */
-  async function _enqueueMissingToCloud(userId: string): Promise<number> {
+  async function _enqueueMissingToCloud(userId: string): Promise<number | false> {
     const ds = useDataStore()
     const port = getSyncRemotePort()
     const [bmIds, gIds, cIds, aIds, graveyard] = await Promise.all([
@@ -254,22 +268,30 @@ export function useCloudSync() {
 
     const allOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
     const now = Date.now()
-    const shouldPush = (table: SyncOp['table'], id: string, deletedAt?: number) => {
+    const shouldPush = (table: SyncOp['table'], id: string, deletedAt?: number, updatedAt = 0) => {
       if (graveyardKeys.has(`${table}:${id}`)) return false
       const tableRemotes = remoteIdsByTable.get(table)
       return ds._dirtyIds.has(id) || ds._newIds.has(id) || !!deletedAt
         || (!probeFailed.has(table) && (!tableRemotes || !tableRemotes.has(id)))
+        // #10: 非 delete 死信（本地 updatedAt 领先云端却推送失败出队、dirty 已 drain）。
+        // clearAllSyncOps 后上面几项全 false，靠此记录把「云端已有该 id」的分叉补回来，
+        // 否则本地新值/云端旧值永久分叉、手动全量同步也补不回。
+        || isDeadUpsert(table, id, updatedAt)
     }
 
     const pushIf = <T extends { id: string; updatedAt?: number; deletedAt?: number }>(
       items: T[], table: SyncOp['table'],
     ) => {
       for (const item of items) {
-        if (!shouldPush(table, item.id, item.deletedAt)) continue
+        if (!shouldPush(table, item.id, item.deletedAt, item.updatedAt || 0)) continue
         allOps.push({
           action: 'upsert', table, itemId: item.id,
-          data: { ...item, _userId: userId },
-          ts: item.updatedAt || now,
+          // #13: 基线补推行必须用当前时间作 updated_at_num。旧实现直接展开
+          // item.updatedAt（可能是几周前的历史时间戳），推上云后落在另一台设备
+          // selectSince 的 gt(updated_at_num, since) 窗口之外，整批历史数据一条都拉不到。
+          // 只覆盖「推云的行」副本，绝不回写 ds 里的 item.updatedAt（用户真实时间戳不改动）。
+          data: { ...item, _userId: userId, updatedAt: now },
+          ts: now,
         })
       }
     }
@@ -278,8 +300,13 @@ export function useCloudSync() {
     pushIf(ds.categories, 'categories')
     pushIf(ds.customAttributes, 'custom_attributes')
     // 分批入队，避免一次性写入超大事务；队列已不再做数量裁剪，故不会丢 op
+    // #12: 每批检查入队结果，IDB 写失败（配额满/隐私模式）即中止本轮补推并
+    // 返回 false —— 静默不入队却让调用方继续 push/pull 报 success 会让基线数据永久不上云。
     for (let i = 0; i < allOps.length; i += 200) {
-      await enqueueSyncOps(allOps.slice(i, i + 200))
+      if ((await enqueueSyncOps(allOps.slice(i, i + 200))) === false) {
+        console.error('[sync] 基线补推入队失败（IDB 不可写），中止本轮补推待重试')
+        return false
+      }
     }
     return allOps.length
   }
@@ -318,7 +345,9 @@ export function useCloudSync() {
       _clearAllPendingSync()
       // 队列被清空，死信 delete 必须强制重新入队（本会话去重集合不能拦住它）
       await reenqueueDeadDeletes(true)
-      await _enqueueMissingToCloud(userId)
+      // #12: 补推入队失败（IDB 不可写）即中止本轮，不继续 push/pull 报 success、
+      // 不推进后续 pull 的增量游标
+      if ((await _enqueueMissingToCloud(userId)) === false) return false
       // 与 initialSync 一致：首轮失败退避 1s 重试一轮，给瞬时故障留恢复窗口
       let pushed = await pushFromQueue()
       if (!pushed && (await syncOpsCount())) {
@@ -373,7 +402,8 @@ export function useCloudSync() {
         } else {
           // 死信 delete 补偿：重新入队后再统一推送（墓碑已在 pull 合并时阻止复活）
           await reenqueueDeadDeletes()
-          await _enqueueMissingToCloud(userId)
+          // #12: 补推入队失败即中止本轮，不继续后续 push/pull 报 success
+          if ((await _enqueueMissingToCloud(userId)) === false) return
         }
       }
 
@@ -438,7 +468,8 @@ export function useCloudSync() {
       await reenqueueDeadDeletes()
       await pullChanges()
       if (syncStore.autoSync) {
-        enqueueDirtyAsOps()
+        // #11: 与上面的重连分支同口径，await 入队完成再 push，避免读空队列
+        await enqueueDirtyAsOps()
         await pushFromQueue()
       }
     }))

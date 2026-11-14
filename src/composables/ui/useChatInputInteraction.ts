@@ -48,6 +48,48 @@ export function useChatInputInteraction(deps: ChatInputInteractionDeps) {
   } = deps
   const { t } = useI18n()
 
+  // ── IME 组合态 ──
+  // 抽屉 textarea（ChatInputDock）由宿主把 keydown 交到本 composable，但模板未接
+  // composition 事件。中文输入法 compositionend 后 Chrome/Windows 会伴生一个尾随
+  // Enter keydown，此时 isComposing 已复位，仅靠 e.isComposing/keyCode===229 挡不住。
+  // 这里下沉 60ms 保护：保存 timer handle，每次先 clearTimeout，防旧 timer 提前复位。
+  const isComposing = ref(false)
+  const compositionJustEnded = ref(false)
+  let compositionEndTimer: ReturnType<typeof setTimeout> | null = null
+
+  function onCompositionStart() {
+    isComposing.value = true
+    compositionJustEnded.value = false
+    if (compositionEndTimer) { clearTimeout(compositionEndTimer); compositionEndTimer = null }
+  }
+
+  function onCompositionEnd(e?: CompositionEvent) {
+    isComposing.value = false
+    compositionJustEnded.value = true
+    // 每次先清掉上一个 timer：多次 compositionend 各起一个 60ms timer 时，
+    // 旧 timer 会提前把标志复位，尾随 Enter 又被误提交。
+    if (compositionEndTimer) clearTimeout(compositionEndTimer)
+    compositionEndTimer = setTimeout(() => {
+      compositionJustEnded.value = false
+      compositionEndTimer = null
+    }, 60)
+    // compositionend 时 v-model 可能尚未 flush，同步 DOM 值防止提交空内容
+    const target = e?.target as HTMLTextAreaElement | undefined
+    if (target && target.value !== undefined) aiQuery.value = target.value
+  }
+
+  // 自行监听宿主共享的 textarea：DetailPanel 无需改模板接线，ref 变化（切换/卸载置 null）
+  // 时自动移除旧监听。
+  watch(textareaRef, (el, _prev, onCleanup) => {
+    if (!el) return
+    el.addEventListener('compositionstart', onCompositionStart)
+    el.addEventListener('compositionend', onCompositionEnd)
+    onCleanup(() => {
+      el.removeEventListener('compositionstart', onCompositionStart)
+      el.removeEventListener('compositionend', onCompositionEnd)
+    })
+  }, { immediate: true })
+
   // ── 斜杠指令快捷联想（文案走 i18n，与语言包 slash* 键一一对应）──
   const activeSlashIndex = ref(0)
   const showSlashSuggest = computed(() => {
@@ -74,8 +116,15 @@ export function useChatInputInteraction(deps: ChatInputInteractionDeps) {
   }
 
   function handleKeyDown(e: KeyboardEvent) {
+    const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.keyCode === 13
     // IME 组合中的按键（选词/确认）交还输入法，防 Enter 误提交、方向键误翻历史
-    if (e.isComposing || e.keyCode === 229) return
+    if (isComposing.value || e.isComposing || e.keyCode === 229) return
+    // compositionend 后 60ms 内 Chrome/Windows 会伴生一个尾随 Enter keydown，
+    // 此时 isComposing 已是 false，上面的守卫挡不住：吞掉（不提交、不换行）。
+    if (compositionJustEnded.value) {
+      if (isEnter) e.preventDefault()
+      return
+    }
     // Esc：有输入内容/补全菜单时先清空输入（拦截不上抛，防全局清扫连带关掉面板）；
     // 空输入时放行给全局 Esc（关闭整个面板）
     if (e.key === 'Escape' && (showSlashSuggest.value || aiQuery.value)) {
@@ -153,7 +202,6 @@ export function useChatInputInteraction(deps: ChatInputInteractionDeps) {
       }
     }
 
-    const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.keyCode === 13
     if (isEnter) {
       if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
         // Shift+Enter 允许换行
@@ -174,5 +222,8 @@ export function useChatInputInteraction(deps: ChatInputInteractionDeps) {
     filteredSlashCommands,
     quickFill,
     handleKeyDown,
+    onCompositionStart,
+    onCompositionEnd,
+    compositionJustEnded,
   }
 }

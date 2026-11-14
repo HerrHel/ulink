@@ -551,16 +551,23 @@ const {
 
 const isComposing = ref(false)
 const compositionJustEnded = ref(false)
+// 多次 compositionend 各起一个 60ms timer 且不 clear 时，旧 timer 会提前把
+// compositionJustEnded 复位，导致尾随 Enter 误提交。保存 handle 并清除上一个 timer。
+let compositionEndTimer: ReturnType<typeof setTimeout> | null = null
 
 function onCompositionStart() {
   isComposing.value = true
+  compositionJustEnded.value = false
+  if (compositionEndTimer) { clearTimeout(compositionEndTimer); compositionEndTimer = null }
 }
 
 function onCompositionEnd(e: CompositionEvent) {
   isComposing.value = false
   compositionJustEnded.value = true
-  setTimeout(() => {
+  if (compositionEndTimer) clearTimeout(compositionEndTimer)
+  compositionEndTimer = setTimeout(() => {
     compositionJustEnded.value = false
+    compositionEndTimer = null
   }, 60)
 
   const target = e.target as HTMLTextAreaElement

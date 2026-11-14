@@ -13,9 +13,16 @@ vi.mock('../../stores/app.js', () => ({
   debouncedSaveAppData: vi.fn(),
 }))
 
+// #26: useSyncConflict 静态 import useCloudSync 触发同步调度；用 spy 隔离门控/队列副作用
+const _sync = vi.hoisted(() => ({ debouncedSync: vi.fn() }))
+vi.mock('../../composables/domain/useCloudSync.js', () => ({
+  useCloudSync: () => ({ debouncedSync: _sync.debouncedSync }),
+}))
+
 beforeEach(() => {
   setActivePinia(createPinia())
   _remoteSnapshots.clear()
+  _sync.debouncedSync.mockClear()
 })
 
 describe('resolveConflict', () => {
@@ -170,7 +177,8 @@ describe('resolveConflict 持久化与快照编排', () => {
     expect(saveAppData).toHaveBeenCalledTimes(1)
   })
 
-  it('keepLocal=true：不调 saveAppData（保留本地，下次 push 落盘）', () => {
+  // #26: keepLocal 分支必须补落盘 + 同步调度，否则选择刷新回退 / 本地版本永不上云
+  it('keepLocal=true：补 saveAppData 落盘 + 触发 debouncedSync 同步调度', () => {
     const ds = useDataStore()
     const sync = useSyncStore()
     ds.addBookmark({
@@ -182,7 +190,33 @@ describe('resolveConflict 持久化与快照编排', () => {
 
     resolveConflict('bm-p2', true)
 
-    expect(saveAppData).not.toHaveBeenCalled()
+    expect(saveAppData).toHaveBeenCalledTimes(1)
+    expect(_sync.debouncedSync).toHaveBeenCalledTimes(1)
+    // 保留本地内容与 dirty（既有冲突语义不破坏）
+    expect(ds.bookmarkMap['bm-p2']?.title).toBe('本地')
+    expect(ds._dirtyIds.has('bm-p2')).toBe(true)
+  })
+
+  // #26: 远端时钟超前时，updateBookmark 内的 Date.now() 会把传入的 now 覆盖回本机时间，
+  // 小于他端 → keepLocal 选择被后续 pull 静默覆盖。修复后直接写 item.updatedAt = now。
+  it('远端时钟超前 → keepLocal 后 updatedAt 严格大于远端（不被 Date.now() 覆盖）', () => {
+    const ds = useDataStore()
+    const sync = useSyncStore()
+    const remoteTs = Date.now() + 100_000 // 远端超前
+    ds.addBookmark({
+      id: 'bm-clock', title: '本地', url: 'https://a.com', username: '', password: '',
+      notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null,
+      order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1,
+    } as any)
+    sync.addConflict({
+      id: 'bm-clock', type: 'bookmark',
+      local: { title: '本地' }, remote: { title: '远端', updatedAt: remoteTs },
+    })
+
+    resolveConflict('bm-clock', true)
+
+    expect(ds.bookmarkMap['bm-clock']!.updatedAt).toBe(remoteTs + 1)
+    expect(ds.bookmarkMap['bm-clock']!.updatedAt).toBeGreaterThan(Date.now() - 1000)
   })
 
   it('keepLocal=false group 分支：走 updateGroup + saveAppData + 删快照', () => {

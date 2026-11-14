@@ -1,4 +1,13 @@
-# Cloudflare Pages 配置（部署用，非密钥型变量）
+# ⚠️⚠️⚠️ 已退役 / DO NOT DEPLOY ⚠️⚠️⚠️
+# Cloudflare Pages 项目 `ulink` 已退役，本站生产已迁国内 CloudBase（ulink.ren）。
+# 本 wrangler.toml **仅为历史回滚参考保留**，不是当前部署目标：
+#   - 不要执行 `wrangler pages deploy` / `npm run pages:deploy`；
+#   - 不要用它发布任何构建产物（那会绕过全部 CI 门禁，把整份 dist 发到已退役项目，
+#     且该项目仍绑 ulink.ren 自定义域）；
+#   - 下方 [vars] 的历史取值按 AGENTS.md 要求保留，勿删除、勿改动。
+# 真正部署走 CI 的 CloudBase 通道；`pages:deploy` 脚本已删除。
+# ────────────────────────────────────────────────────────────────────────
+# Cloudflare Pages 配置（历史保留，非密钥型变量）
 # 说明：SUPABASE_ANON_KEY 为 Supabase 公开的 anon key（已随前端 JS 下发浏览器），
 # 本仓库为 GitHub 用户页（须公开），故明文放此处无额外泄露风险。
 # 若日后想改为加密 secret，可执行：

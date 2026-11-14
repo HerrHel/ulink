@@ -301,7 +301,7 @@ describe('Module 5 Deep Audit Fixes Regression Suite', () => {
   // 7. chatSessions.ts: saveSessions 超大图片与 prompt 截断防爆
   // ─────────────────────────────────────────────────────────────
   describe('7. chatSessions.ts 持久化存储防爆保护', () => {
-    it('剥离超过 32KB 的超大 Base64 dataUrl，并截断超长 promptContent', () => {
+    it('#34：媒体 dataUrl 一律不落盘（含小图），并截断超长 promptContent', () => {
       const hugeDataUrl = 'data:image/png;base64,' + 'A'.repeat(40000)
       const smallDataUrl = 'data:image/png;base64,' + 'B'.repeat(100)
       const hugePrompt = 'C'.repeat(15000)
@@ -346,9 +346,9 @@ describe('Module 5 Deep Audit Fixes Regression Suite', () => {
       const loaded = loadSessions()
       const savedTurn = loaded[0].turns[0]
 
-      // 超大图被剥离，小图保留
+      // #34：媒体明文 base64 一律不落盘（旧实现仅剥离 >32KB，小图仍明文持久化）
       expect(savedTurn.attachedFiles?.[0].dataUrl).toBeUndefined()
-      expect(savedTurn.attachedFiles?.[1].dataUrl).toBe(smallDataUrl)
+      expect(savedTurn.attachedFiles?.[1].dataUrl).toBeUndefined()
       // promptContent 被截断到 8000 字符内
       expect(savedTurn.promptContent?.length).toBeLessThanOrEqual(8000)
     })

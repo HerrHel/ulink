@@ -39,6 +39,7 @@ export const e2eVaultZh = {
     // ── E2EUnlockModal ──
     unlockData: '解锁数据',
     unlockIntro: '输入主密码以解密您的数据',
+    canaryQueryError: '云端主密码状态读取失败，请检查网络后重试；本次不会覆盖云端状态。',
     verifying: '验证中…',
     or: '或',
     forgotRecoveryReset: '忘记主密码？使用 Recovery Key 重置',
@@ -184,6 +185,7 @@ export const e2eVaultEn = {
     // ── E2EUnlockModal ──
     unlockData: 'Unlock data',
     unlockIntro: 'Enter your master password to decrypt your data',
+    canaryQueryError: 'Could not read cloud master-password status. Check your connection and retry; cloud state was not overwritten.',
     verifying: 'Verifying…',
     or: 'or',
     forgotRecoveryReset: 'Forgot your master password? Reset with Recovery Key',

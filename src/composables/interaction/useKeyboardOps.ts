@@ -182,11 +182,20 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
   }
   if (e.key === 'Tab') {
-    const modal = document.querySelector('.modal-mask.open .modal')
+    // 多层弹窗时取 DOM 顺序最后一个 open mask（最上层）：只取第一个会把焦点陷阱
+    // 锁在背景弹窗里，ConfirmModal 打开后焦点可逃到背景。
+    const modals = document.querySelectorAll('.modal-mask.open .modal')
+    const modal = modals[modals.length - 1]
     if (!modal) return
     const focusable = modal.querySelectorAll('input:not([type="hidden"]),textarea,select,button,[tabindex]:not([tabindex="-1"])')
     if (!focusable.length) return
     const first = focusable[0] as HTMLElement, last = focusable[focusable.length - 1] as HTMLElement
+    // 焦点不在最上层 modal 内时先拉回 first，避免 Tab 把焦点带进背景。
+    if (!modal.contains(document.activeElement)) {
+      e.preventDefault()
+      first.focus()
+      return
+    }
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
   }

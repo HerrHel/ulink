@@ -14,6 +14,10 @@
  * --apply 必须同时显式传 --yes 并先打印不可逆警告，否则拒绝执行。
  * 恢复语义：对每张表先 DELETE 再 INSERT（不是 DROP，保留表结构与 RLS 策略）；
  * DELETE 段集中在所有 INSERT 之前，DELETE 逆序、INSERT 正序以避开外键。
+ * 事务性（#15）：生成的文件是唯一一对 BEGIN/COMMIT 包住的**整批单事务**。--apply 仅在
+ * 整份能一次调用提交时自动执行；大备份（受 ExecutePGSql ~10KB/批限制）不会拆成多个
+ * 独立事务（那会让首批 DELETE 先提交、后续失败即清库），而是预检后拒绝自动执行、引导
+ * 人工单一事务执行该文件，保证任一失败整体回滚、不留 DELETE 已提交状态。
  */
 import { execFileSync } from 'node:child_process'
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -108,8 +112,13 @@ const esc = (v) => {
   return `'${String(v).replace(/'/g, "''")}'`
 }
 
-// 快照校验：遍历 Object.keys(snapshot.tables)（不再遍历 ORDER 后静默 continue）；
-// 未知表/非数组/row_counts 行数不符全部计入 skipped 并报错退出，且打印实际表数而非硬编码 ORDER.length
+// 快照校验（#16）：既要遍历快照里实有的表，也要反向核对 ORDER 全集。
+// 旧版只 for (const t of Object.keys(tables))，缺表会被下面 .filter(present.has) 静默跳过：
+// 那张表既没 DELETE 也没 INSERT，恢复后停留在「当前时点」，其余表却已回滚到备份时点，
+// 造成跨时点不一致，脚本仍打印「恢复执行完成」。因此缺表一律计入 skipped 并拒绝生成/执行。
+// 注：ORDER 是业务表全集；若某张表是后加的、旧备份早于它，则该备份同样被拒绝——
+// 宁可拒绝，也不能把「部分表当前、部分表历史」的混合库当成成功恢复。
+// 未知表/非数组/row_counts 行数不符一并计入 skipped，打印实际表数而非硬编码 ORDER.length。
 const known = new Set(ORDER)
 const present = new Set(Object.keys(tables))
 const rowCounts = snapshot.row_counts
@@ -117,6 +126,10 @@ const skipped = []
 for (const t of Object.keys(tables)) {
   if (!known.has(t)) { skipped.push(`未知表 ${t}`); continue }
   if (!Array.isArray(tables[t])) { skipped.push(`非数组 ${t}`); continue }
+}
+// #16 核心：ORDER 每张表都必须在快照里出现，缺一即拒绝
+for (const t of ORDER) {
+  if (!present.has(t)) skipped.push(`缺表 ${t}（ORDER 全集要求，快照缺失会导致跨时点不一致）`)
 }
 // 校验 snapshot.row_counts（若存在）与实际行数一致
 if (rowCounts && typeof rowCounts === 'object') {
@@ -134,7 +147,9 @@ if (skipped.length) {
   process.exit(1)
 }
 
-// DELETE 逆序（子表先删，避免违反外键）、INSERT 正序（父表先插）；只处理快照里实有的表
+// DELETE 逆序（子表先删，避免违反外键）、INSERT 正序（父表先插）。
+// 上面的 #16 校验已保证 ORDER 全集都在快照里，故 .filter(present.has) 此时是恒真的防御式写法，
+// 不会再静默跳过任何缺表；保留它是为了在校验被误改后仍不逐出多余表。
 const deleteOrder = ORDER.slice().reverse().filter((t) => present.has(t))
 const insertOrder = ORDER.filter((t) => present.has(t))
 
@@ -193,40 +208,54 @@ if (apply) {
     process.exit(1)
   }
 
-  // tcb db execute 单批约 10KB；大备份按表切批（每批 ~9KB），每批自带 BEGIN/COMMIT
-  // 各批独立事务，避免旧版那样 BEGIN 无 COMMIT 被连接关闭静默回滚；小备份直接执行完整 SQL
-  const MAX_BATCH_BYTES = 9 * 1024
-  const WRAP_BYTES = Buffer.byteLength('BEGIN;\n\nCOMMIT;', 'utf8')
-  const batches = []
-  if (Buffer.byteLength(fullSql, 'utf8') <= MAX_BATCH_BYTES) {
-    batches.push({ label: `完整 SQL（单事务，${totalRows} 行）`, sql: fullSql })
-  } else {
-    let cur = []
-    let curBytes = 0
-    let curTable = ''
-    const flush = () => {
-      if (!cur.length) return
-      batches.push({ label: curTable, sql: 'BEGIN;\n' + cur.join('\n') + '\nCOMMIT;' })
-      cur = []
-      curBytes = 0
+  // ── #15 灾难恢复的事务性保证 ──
+  // ExecutePGSql / `tcb db execute` 单批约 10KB，无法把大备份塞进一次调用。
+  // 旧版对 >9KB 备份按表切批、每批独立 BEGIN/COMMIT：首批 DELETE 一旦提交，后续
+  // INSERT 批失败脚本即 exit(1)，库被清空且没有自动回滚 —— 灾难恢复反而清库。
+  //
+  // 修复口径：上方 lines 已把**所有** statements 包进 fullSql 的**唯一一对** BEGIN/COMMIT，
+  // 这份文件本身就是「整批单事务」。--apply 因此只在「整份 SQL 能作为一次调用提交」时
+  // 才自动执行；大备份**绝不再拆成多个独立事务**（tcb 每次 db execute 是独立连接/会话，
+  // BEGIN 无法跨调用延续），而是在执行前做一次完整预检后拒绝自动执行，明确引导人工把
+  // 这一份单一事务 SQL 文件整体执行。如此任一语句失败都不会留下「DELETE 已提交」状态：
+  // PG 单事务内遇错会把后续 COMMIT 变成 ROLLBACK，整批回滚。
+  // 默认「仅生成 SQL」模式完全不受影响，生成的文件内容与改动前一致。
+  const MAX_SINGLE_TX_BYTES = 9 * 1024 // 留余量，低于 ExecutePGSql ~10KB 限制
+  const sqlBytes = Buffer.byteLength(fullSql, 'utf8')
+
+  /** 执行前完整预检：确认产物是且仅是「一个完整事务」，绝不在中途夹带 ROLLBACK/额外 COMMIT */
+  function preflightSingleTx(sql) {
+    const meaningful = sql.split('\n').filter((l) => l.trim() && !l.trim().startsWith('--'))
+    const begins = meaningful.filter((l) => /^BEGIN\s*;/i.test(l)).length
+    const commits = meaningful.filter((l) => /^COMMIT\s*;/i.test(l)).length
+    const rollbacks = meaningful.filter((l) => /^ROLLBACK\s*;/i.test(l)).length
+    const wraps = begins === 1 && commits === 1 && rollbacks === 0
+      && meaningful[0] === 'BEGIN;' && meaningful[meaningful.length - 1] === 'COMMIT;'
+    if (!wraps) {
+      console.error(`✖ 预检失败：生成的 SQL 不是单一完整事务（BEGIN=${begins} COMMIT=${commits} ROLLBACK=${rollbacks}，首=${meaningful[0]} 尾=${meaningful[meaningful.length - 1]}）`)
+      process.exit(1)
     }
-    for (const s of statements) {
-      const b = Buffer.byteLength(s.sql, 'utf8') + 1
-      // 换表或累计超过 ~9KB 就切批（按表分批）
-      if (cur.length && (s.table !== curTable || curBytes + b + WRAP_BYTES > MAX_BATCH_BYTES)) flush()
-      curTable = s.table
-      cur.push(s.sql)
-      curBytes += b
-    }
-    flush()
+    return statements.length
   }
 
-  console.log(`→ 共 ${batches.length} 批，逐批执行并校验返回…`)
-  for (let i = 0; i < batches.length; i++) {
-    console.log(`  [${i + 1}/${batches.length}] ${batches[i].label}`)
-    runSqlChecked(batches[i].sql, `第 ${i + 1} 批 ${batches[i].label}`)
+  const stmtCount = preflightSingleTx(fullSql) // 无论走哪条路径，执行前都先完整预检
+
+  if (sqlBytes > MAX_SINGLE_TX_BYTES) {
+    console.error(`✖ 备份 ${sqlBytes} 字节，超过单次调用上限 ${MAX_SINGLE_TX_BYTES} 字节`)
+    console.error('  --apply 不会自动分批执行大备份：那会退化成多个独立事务、重新引入清库风险。')
+    console.error('  唯一一份单事务 SQL 已生成，请用支持多语句单事务的客户端整体执行（勿拆分）：')
+    console.error(`    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "${outPath}"`)
+    console.error('  （或在数据库控制台一次粘贴整份文件，确保 BEGIN…COMMIT 在同一事务提交；')
+    console.error('   任一语句报错即整体 ROLLBACK，不会留下 DELETE 已提交的状态。）')
+    console.error(`  预检通过：${stmtCount} 条语句，仅含一对 BEGIN/COMMIT。`)
+    process.exit(1)
   }
-  console.log('✔ 恢复执行完成（各批均含 BEGIN/COMMIT 且已校验无错误标记）')
+
+  // 小备份：整份 fullSql 即 BEGIN; … COMMIT;，一次调用原子提交。
+  // runSqlChecked 在 execFileSync 抛错或返回错误标记时 exit(1)；单事务下失败不会提交任何 DELETE。
+  console.log('→ 整份 SQL 在单个事务内一次执行（BEGIN … COMMIT），任一语句失败则整体回滚')
+  runSqlChecked(fullSql, '完整恢复（单事务）')
+  console.log('✔ 恢复执行完成（单一事务已提交并经错误标记校验）')
 } else {
   console.log('  仅生成 SQL 文件；如确认要执行，追加 --apply --yes（会先打印警告）')
 }

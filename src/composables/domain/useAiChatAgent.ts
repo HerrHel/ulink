@@ -35,6 +35,49 @@ import type { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
 import type { ChatTurn } from '../../lib/ai/chatSessions.js'
 
+/**
+ * #9 破坏性写工具门槛：模型参数里的 confirm:true 不算「用户确认」（可被 RAG 召回 /
+ * 网页正文 / 附件全文里的注入指令伪造），必须经 UI 点击 actionCard 确认后由
+ * confirmDestructiveTool() 登记一次性许可，否则一律拒绝执行、只生成待确认卡片。
+ */
+const DESTRUCTIVE_CONFIRMED = new Set<string>()
+
+/** 稳定签名：按参数键排序后序列化，避免键序差异导致确认许可不匹配 */
+function destructiveToolSignature(call: { name: string; arguments?: Record<string, any> }): string {
+  let args = '{}'
+  try {
+    const a = call.arguments || {}
+    const sorted: Record<string, unknown> = {}
+    for (const k of Object.keys(a).sort()) sorted[k] = a[k]
+    args = JSON.stringify(sorted)
+  } catch { /* 参数不可序列化时签名退化，仍按 name 匹配 */ }
+  return `${call.name}:${args}`
+}
+
+/** 判定一次工具调用是否属于「破坏性写」白名单 */
+export function isDestructiveToolCall(call: { name: string; arguments?: Record<string, any> }): boolean {
+  const action = call.arguments?.action
+  if (call.name === 'manage_settings') return action === 'empty_trash' || action === 'export_data'
+  if (call.name === 'manage_bookmarks') return action === 'delete' || action === 'move'
+  if (call.name === 'merge_duplicates') return call.arguments?.confirm === true
+  if (call.name === 'export_data') return true // 旧独立导出工具
+  return false
+}
+
+/**
+ * #9 UI 接线点：用户在破坏性操作的 actionCard 上点「确认」时调用，登记该调用的一次性许可。
+ * 随后模型续轮重发同一调用，runAgentToolCall 消费许可并放行执行。
+ * 需接线位置见文末报告（useAiActionCards.ts 的 handleActionCardClick 新增分支）。
+ */
+export function confirmDestructiveTool(call: { name: string; arguments?: Record<string, any> }): void {
+  DESTRUCTIVE_CONFIRMED.add(destructiveToolSignature(call))
+}
+
+/** 清空全部确认许可（新会话 / 停止生成 / 切换账号 / 测试复位） */
+export function resetDestructiveConfirmations(): void {
+  DESTRUCTIVE_CONFIRMED.clear()
+}
+
 /** 工具执行器依赖（由请求编排层注入） */
 export interface AiAgentToolContext {
   ds: ReturnType<typeof useDataStore>
@@ -80,6 +123,22 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
   ): Promise<string> {
     // 参数 JSON 解析失败：不执行任何副作用，如实回错误结果给模型（role:'tool'）
     if (call.argsParseFailed) return t('ai.toolResultArgsInvalid', { name: call.name })
+
+    // #9：破坏性写工具门槛——未经本轮用户显式确认一律拒绝执行，只生成待确认卡片。
+    if (isDestructiveToolCall(call) && !DESTRUCTIVE_CONFIRMED.delete(destructiveToolSignature(call))) {
+      assistantTurn.actionCard = {
+        type: 'custom',
+        actionName: 'confirm_destructive_tool',
+        title: `请确认操作：${call.name}`,
+        desc: `模型请求执行「${call.name}」（${JSON.stringify(call.arguments || {}).slice(0, 200)}），该操作会删除/移动/导出数据；确认后才会真正执行。`,
+        buttonText: '我已确认，执行',
+        payload: { toolCall: { name: call.name, arguments: call.arguments } },
+      }
+      // 拒绝执行：以 DYNAMIC_NOT_EXECUTED_PREFIX 兜底，保证 inferToolExecStatus 判
+      // not_executed（绝不误报 executed）；语义为 proposed（HITL 待确认），由 actionCard
+      // 承载用户确认入口。模型据此不得宣称操作已完成，须提示用户点击卡片确认。
+      return `${DYNAMIC_NOT_EXECUTED_PREFIX}该操作「${call.name}」需用户显式确认（proposed，已生成待确认卡片），未执行任何写操作。`
+    }
     let resultText = ''
     if (call.name === 'audit_vault') {
       const siteRes = await dispatchSiteCommand('/health', { ds, ui, app, signal: controller.signal })

@@ -10,6 +10,11 @@
           <div class="e2e-info">
             <p>{{ t('e2e.unlockIntro') }}</p>
           </div>
+          <!-- 2026-11-14 审计 #4：云端 canary 查询失败时不再静默当「云端无状态」，
+               必须给用户可见提示，避免误覆盖或误判未启用加密。 -->
+          <div v-if="e2e.canaryQueryError && e2e.canaryQueryError.value" class="e2e-error" role="alert">
+            {{ t('e2e.canaryQueryError') }}
+          </div>
           <div v-if="e2e.isBiometricEnrolled.value && bioAvailable" class="form-group">
             <button class="btn btn-primary btn-block" :disabled="bioLoading" @click="onBiometricUnlock">
               <span aria-hidden="true" v-html="I.lock"></span> {{ bioLoading ? t('e2e.verifying') : t('settings.biometricUnlock') }}
@@ -117,7 +122,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { I } from '../../config/icons.js'
-import { useE2E } from '../../composables/domain/useE2E.js'
+import { useE2E, clearCanaryQueryError } from '../../composables/domain/useE2E.js'
 import { showConfirm } from '../../lib/toast.js'
 import { recoveryKeyEmptyError, newPasswordLengthError, newPasswordMismatchError, oldPasswordEmptyError } from './validatePwResetInput.js'
 import { t } from '../../i18n/index.js'
@@ -296,6 +301,8 @@ async function onChangePw() {
 
 function onCancel() {
   if (loading.value) return
+  // 关闭时清掉一次性查询失败提示（下次打开重新判定）
+  try { clearCanaryQueryError() } catch { /* ignore */ }
   emit('close')
 }
 

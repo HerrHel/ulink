@@ -285,6 +285,32 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * 会话抢救刷新（单一入口）：30s 节流 + 并发单飞，供 init() 的「getSession 报错抢救」
+   * 与运行中「无会话」事件的 recoverSession() 共用。两条路径若各自裸调
+   * refreshSession，会用同一 refresh_token 二次刷新、互相把凭证挤掉。
+   * 被节流 / 在途 / 驱动不支持时跳过，不发请求。
+   */
+  type RecoverRefreshResult = {
+    session: Session | null
+    reason: 'ok' | 'inflight' | 'throttled' | 'no-driver'
+  }
+  async function _recoverRefresh(driver: AuthDriver): Promise<RecoverRefreshResult> {
+    if (typeof driver.refreshSession !== 'function') return { session: null, reason: 'no-driver' }
+    if (_recovering) return { session: null, reason: 'inflight' }
+    if (Date.now() - _lastRecoverAt < RECOVER_THROTTLE_MS) return { session: null, reason: 'throttled' }
+    _lastRecoverAt = Date.now()
+    _recovering = true
+    try {
+      const { session: refreshed } = await driver.refreshSession()
+      return { session: refreshed ?? null, reason: 'ok' }
+    } catch {
+      return { session: null, reason: 'ok' }
+    } finally {
+      _recovering = false
+    }
+  }
+
+  /**
    * 会话「消失」时的抢救：先拿 refresh_token 换新凭证，成功则原地恢复登录态。
    *
    * 为什么需要：CloudBase 的 getSession 只读本地凭证、不比较 expires_at，
@@ -299,23 +325,17 @@ export const useAuthStore = defineStore('auth', () => {
       applySession(null)
       return
     }
-    if (_recovering) return
-    if (Date.now() - _lastRecoverAt < RECOVER_THROTTLE_MS) {
-      // 刚抢救过又被判定无会话：说明刷新拿到的凭证立刻又失效（多为 refresh_token
-      // 已被其它标签/设备轮换挤掉）。不再反复打认证接口，直接落定为登出。
+    const { session: refreshed, reason } = await _recoverRefresh(driver)
+    if (reason === 'inflight') return
+    if (reason === 'throttled') {
+      // 刚抢救过又被判定无会话：刷新凭证立刻又失效（多为 refresh_token 已被
+      // 其它标签/设备轮换挤掉）。不再反复打认证接口，直接落定为登出。
       applySession(null)
       return
     }
-    _lastRecoverAt = Date.now()
-    _recovering = true
-    try {
-      const { session: refreshed } = await driver.refreshSession()
-      if (refreshed?.user) {
-        applySession(refreshed)
-        return
-      }
-    } catch { /* 落回登出 */ } finally {
-      _recovering = false
+    if (refreshed?.user) {
+      applySession(refreshed)
+      return
     }
     applySession(null)
   }
@@ -327,7 +347,9 @@ export const useAuthStore = defineStore('auth', () => {
     // 同上：access token 过期时 getSession 返回 error 而 refresh_token 仍有效。
     // 此前这里丢弃 error 直接当未登录（表现为「自己退出登录」），先抢救一次再判定。
     if (!initial && sessionError) {
-      const { session: refreshed } = await driver.refreshSession()
+      // 与 recoverSession 复用同一节流/单飞入口：init 的抢救也登记时间戳，
+      // 防 SDK 紧接发无会话事件时二次刷新同一 refresh_token。
+      const { session: refreshed } = await _recoverRefresh(driver)
       if (refreshed) initial = refreshed
     }
     session.value = initial
@@ -377,12 +399,15 @@ export const useAuthStore = defineStore('auth', () => {
         const { user: updatedUser, error } = await getAuthDriver().updateUserMeta(updates)
         if (error) {
           console.warn('[auth] updateUser metadata failed:', error)
-        } else if (updatedUser) {
+          return false
+        }
+        if (updatedUser) {
           user.value = updatedUser
           if (session.value) session.value.user = updatedUser
         }
       } catch (err) {
         console.warn('[auth] updateUser metadata error:', err)
+        return false
       }
     }
     return true

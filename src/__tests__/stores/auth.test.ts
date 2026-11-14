@@ -465,3 +465,23 @@ describe('auth 限流纯函数护栏 — lockDurationFor / _isRateLimitError', (
     })
   })
 })
+
+// #45：云端 updateUserMeta 失败不再 return true（否则调用方无条件弹「已保存」，
+// 换设备资料退回默认值）。
+describe('updateProfile 云端失败返回 false（#45）', () => {
+  it('updateUserMeta 返回 error 时 updateProfile 返回 false', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', email: 'alice@example.com' } as any
+    ;(supabase.auth.updateUser as any).mockResolvedValue({ data: { user: null }, error: { message: 'cloud down' } })
+    const ok = await auth.updateProfile({ nickname: 'X' })
+    expect(ok).toBe(false)
+  })
+
+  it('updateUserMeta 抛异常时 updateProfile 返回 false', async () => {
+    const auth = useAuthStore()
+    auth.user = { id: 'u1', email: 'alice@example.com' } as any
+    ;(supabase.auth.updateUser as any).mockRejectedValue(new Error('network'))
+    const ok = await auth.updateProfile({ nickname: 'Y' })
+    expect(ok).toBe(false)
+  })
+})

@@ -76,10 +76,13 @@ export function _deleteWithoutEcho(
     const cbm = ds._bmMap[cid]
     if (cbm && !cbm.deletedAt) ds.updateBookmark(cid, { parentId: null })
   }
-  // 回声清理：删后新增的衍生 dirty（如子项从所属组 bookmarkIds 剔除触发的 group dirty、
-  // 解孤儿 updateBookmark 自身的 dirty）、或属于受影响集自身的项，一律不回推远端。
-  for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) || affectedIds.has(did)) ds._dirtyIds.delete(did)
-  for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || affectedIds.has(cid)) ds._changedFields.delete(cid)
+  // 回声清理：仅清「dirtyBefore / changedBefore 之外」的衍生 dirty（如子项从所属组
+  // bookmarkIds 剔除触发的 group dirty、解孤儿 updateBookmark 自身的 dirty），不回推远端。
+  // #24: 旧实现额外用 `|| affectedIds.has(...)` 把受影响集（含存活后代）里**原本就存在**
+  // 的 dirty/changedFields 一并清掉 —— 用户未推的后代编辑被静默丢弃。只按 Before 集合
+  // 判定，保留用户原本就有的未推编辑；衍生 dirty 仍被清（不在 Before 集合里）。
+  for (const did of ds._dirtyIds) if (!dirtyBefore.has(did)) ds._dirtyIds.delete(did)
+  for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid)) ds._changedFields.delete(cid)
   for (const did of affectedIds) ds._newIds.delete(did)
 }
 

@@ -427,3 +427,37 @@ describe('AuthModal 分支契约', () => {
     })
   })
 })
+
+// #41：@keydown.enter 绕过按钮 disabled，onVerify/onSendCode 必须 busy 早退防并发 OTP
+describe('AuthModal busy 守卫（#41）', () => {
+  it('onVerify 进行中二次调用不并发第二次 verifyOtp', async () => {
+    let resolveVerify!: (v: boolean) => void
+    verifyOtpMock.mockImplementation(() => new Promise<boolean>((r) => { resolveVerify = r }))
+    const wrapper = mount(AuthModal)
+    await fillCode(wrapper, '123456')
+    const s = wrapper.vm.$.setupState as any
+    const p1 = s.onVerify()
+    await s.onVerify() // 第二次：verifying=true 应早退
+    expect(verifyOtpMock).toHaveBeenCalledTimes(1)
+    resolveVerify(true)
+    await p1
+    await flushPromises()
+    wrapper.unmount()
+  })
+
+  it('onSendCode 进行中二次调用不并发第二次 sendOtp', async () => {
+    let resolveSend!: (v: boolean) => void
+    sendOtpMock.mockImplementation(() => new Promise<boolean>((r) => { resolveSend = r }))
+    const wrapper = mount(AuthModal)
+    await openModal(wrapper)
+    await wrapper.find('#authEmailInput').setValue('a@b.com')
+    const s = wrapper.vm.$.setupState as any
+    const p1 = s.onSendCode()
+    await s.onSendCode() // 第二次：sending=true 应早退
+    expect(sendOtpMock).toHaveBeenCalledTimes(1)
+    resolveSend(true)
+    await p1
+    await flushPromises()
+    wrapper.unmount()
+  })
+})

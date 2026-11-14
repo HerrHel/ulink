@@ -346,3 +346,23 @@ describe('AI 专属栏与沉浸式视图状态流', () => {
     wrapper.unmount()
   })
 })
+
+// #42：多次 compositionend 各起 60ms timer 且不 clear 会提前复位标志 → 尾随 Enter 误发送。
+// 同类逻辑在 useChatInputInteraction.test.ts 有行为测试，这里以接线不变式钉住 AiWorkspace 侧。
+describe('AiWorkspace compositionend timer 清理（#42 接线不变式）', () => {
+  it('onCompositionEnd 保存 handle、起新 timer 前 clearTimeout 旧 handle', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const src = readFileSync(
+      join(process.cwd(), 'src/components/chat/AiWorkspace.vue'),
+      'utf8',
+    )
+    const start = src.indexOf('function onCompositionEnd')
+    expect(start).toBeGreaterThanOrEqual(0)
+    // 逐行去 // 行注释（勿对整文件做 /* */ 去注释：.vue 的 <style> 块注释会跨行误删脚本）
+    const body = src.slice(start, start + 600)
+    const code = body.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n')
+    expect(code).toContain('clearTimeout(compositionEndTimer)')
+    expect(code).toContain('compositionEndTimer = setTimeout')
+  })
+})

@@ -131,7 +131,9 @@ async function queryOrder(outTradeNo) {
     // 与 alipay.queryOrder / 本文件 parsePaidNotify 保持同一契约：
     // pay/index.js 的查单兜底分支读取 paidCents / channelOrderId。
     channelOrderId: json?.transaction_id || null,
-    paidCents: json?.amount?.total ?? null,
+    // 2026-11-14 审计 #35：payer_total 是用户实付，amount.total 是订单总额。
+    // 有优惠时以实付为准做金额校验；老渠道响应无 payer_total 时退回 total。
+    paidCents: json?.amount?.payer_total ?? json?.amount?.total ?? null,
     totalCents: json?.amount?.total ?? null,
     successTime: json?.success_time || null,
     raw: json,

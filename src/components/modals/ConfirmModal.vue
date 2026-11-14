@@ -1,6 +1,6 @@
 <template>
   <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.confirm.ariaLabel')" :class="{ open: store.confirmOpen }" @mousedown="onMaskMouseDown" @click="onMaskClick">
-    <div class="modal modal-sm">
+    <div class="modal modal-sm" ref="dialogRef">
       <div class="modal-body modal-body-center">
         <div class="confirm-msg">{{ store.confirmMessage }}</div>
       </div>
@@ -13,12 +13,13 @@
 </template>
 
 <script setup lang="ts">
-import { watch, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onUnmounted, nextTick } from 'vue'
 import { useToastStore } from '../../stores/toast.js'
 import { t } from '../../i18n/index.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const store = useToastStore()
+const dialogRef = ref<HTMLElement | null>(null)
 
 function onKeydown(e: KeyboardEvent) {
   if (!store.confirmOpen) return
@@ -26,7 +27,12 @@ function onKeydown(e: KeyboardEvent) {
   // 一次 Esc 会连带关闭底层编辑弹窗丢失未保存内容。改用 capture 抢占捕获阶段 +
   // stopImmediatePropagation 彻底阻断后续（含全局）监听，交还本弹窗自处理。
   if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); store.resolveConfirm(false) }
-  if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); store.resolveConfirm(true) }
+  if (e.key === 'Enter') {
+    // 焦点归属：仅当焦点仍在本 confirm 弹窗内时才确认。多层弹窗下焦点可能逃到
+    // 背景，此时 Enter 在 capture 阶段会被误判为「确认危险删除」。
+    if (!dialogRef.value?.contains(document.activeElement)) return
+    e.preventDefault(); e.stopImmediatePropagation(); store.resolveConfirm(true)
+  }
 }
 
 watch(() => store.confirmOpen, (open) => {

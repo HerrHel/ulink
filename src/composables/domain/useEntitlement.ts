@@ -69,8 +69,18 @@ function getInitialEntitlement(): MyEntitlement {
   }
 }
 
+// 展示态：可来自 localStorage 缓存，仅用于 UI 显示昵称/套餐/状态（离线体验保留）。
 const currentEntitlement = ref<MyEntitlement>(getInitialEntitlement())
 const loadingEntitlement = ref(false)
+
+/**
+ * #36 决策态：配额 / 权限门禁的唯一依据，与展示态严格分离。
+ * 旧实现把 getInitialEntitlement()（完全信任 localStorage 的 isPaid/expiresAt）直接
+ * 喂给 checkAiEnrichQuota / isProUser，手改缓存即可让前端 PRO 门禁放行。
+ * 现在只有 refresh() 成功且服务端明确返回 isPaid 才置 true；缓存、entitlement.value
+ * 直接赋值都影响不了它；refresh 失败 / 未刷新 / clear 一律 false（免费档 fail-closed）。
+ */
+let serverVerifiedPaid = false
 
 /**
  * refresh 代次：clear()（退出登录 / 切换账号）会让所有在途 refresh() 失效。
@@ -79,8 +89,9 @@ const loadingEntitlement = ref(false)
  */
 let refreshGeneration = 0
 
+/** 语义搜索等门禁：只认服务端已确认的付费状态，绝不认展示态/缓存 */
 export function isProUser(): boolean {
-  return currentEntitlement.value.isPaid
+  return serverVerifiedPaid
 }
 
 export function useEntitlement() {
@@ -95,10 +106,21 @@ export function useEntitlement() {
     const gen = ++refreshGeneration
     loadingEntitlement.value = true
     try {
-      const e = await fetchMyEntitlement()
+      let e: MyEntitlement
+      try {
+        e = await fetchMyEntitlement()
+      } catch (err) {
+        // #36 fail-closed：服务端不可达/报错时门禁立即回落免费档，绝不沿用缓存或
+        // 上一次成功结果放行 PRO 额度。展示态保留（离线体验不受影响），异常按原语义
+        // 继续抛出交给调用方处理。
+        if (gen === refreshGeneration) serverVerifiedPaid = false
+        throw err
+      }
       // 已被 clear() 或更新的 refresh() 取代：丢弃旧结果，绝不覆盖状态/写回缓存
       if (gen !== refreshGeneration) return currentEntitlement.value
       currentEntitlement.value = e
+      // #36：决策态只在服务端明确返回 isPaid 时放行；缓存 / 展示态赋值影响不了它
+      serverVerifiedPaid = e.isPaid === true
       try {
         safeSetItem(ENTITLEMENT_CACHE_KEY, JSON.stringify(e))
         safeSetItem(LEGACY_ENTITLEMENT_CACHE_KEY, JSON.stringify(e))
@@ -113,6 +135,7 @@ export function useEntitlement() {
   function clear(): void {
     ++refreshGeneration
     loadingEntitlement.value = false
+    serverVerifiedPaid = false // 门禁一并失效（退出登录/切换账号不得残留 PRO 决策态）
     currentEntitlement.value = {
       planId: 'free',
       planName: 'free',
@@ -131,7 +154,8 @@ export function useEntitlement() {
    * - 免费版用户：每日免费体验 3 次
    */
   function checkAiEnrichQuota(): { allowed: boolean; remaining: number; total: number; isPro: boolean } {
-    if (currentEntitlement.value.isPaid) {
+    // #36：门禁只认服务端 refresh 确认的决策态，不认展示态/缓存的 isPaid
+    if (serverVerifiedPaid) {
       return { allowed: true, remaining: 999999, total: 999999, isPro: true }
     }
     const key = getTodayKey()
@@ -150,7 +174,8 @@ export function useEntitlement() {
    * 消耗 1 次 AI 智能提取额度
    */
   function consumeAiEnrichQuota(): boolean {
-    if (currentEntitlement.value.isPaid) return true
+    // #36：同上，PRO 免消耗额度只认服务端确认的决策态
+    if (serverVerifiedPaid) return true
     const quota = checkAiEnrichQuota()
     if (!quota.allowed) return false
     const key = getTodayKey()

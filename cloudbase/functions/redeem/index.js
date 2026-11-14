@@ -149,18 +149,25 @@ const server = http.createServer(async (req, res) => {
     const db = getDb()
 
     // 限流 fail-closed
+    // 2026-11-14 审计 #31：限流键只按 uid（IP 可伪造，换头即绕过猜码闸门）。
+    // 另加一个全局共享桶兜底，防止攻击者轮换账号批量试 8 位兑换码。
     const rl = await db.rpc('consume_rate_limit', {
-      p_key: `redeem:${uid}:${sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)}`,
+      p_key: `redeem:${uid}`,
       p_limit: REDEEM_LIMIT,
       p_window_secs: REDEEM_WINDOW_SEC,
     })
-    if (rl.error) {
-      console.error('[redeem] rate limit failed (fail-closed):', rl.error)
+    const globalRl = await db.rpc('consume_rate_limit', {
+      p_key: 'redeem:global',
+      p_limit: REDEEM_LIMIT * 20,
+      p_window_secs: REDEEM_WINDOW_SEC,
+    })
+    if (rl.error || globalRl.error) {
+      console.error('[redeem] rate limit failed (fail-closed):', rl.error || globalRl.error)
       sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
       return
     }
     // 已知坑：拒绝时 data 可能是 {} 而非 false —— 必须显式判 true
-    if (rl.data !== true) {
+    if (rl.data !== true || globalRl.data !== true) {
       sendJson(res, 429, { error: 'rate_limited' }, { ...cors, 'Retry-After': String(REDEEM_WINDOW_SEC) })
       return
     }

@@ -371,12 +371,17 @@ function toggleEditProfile() {
 async function saveProfile() {
   saving.value = true
   try {
-    await auth.updateProfile({
+    const ok = await auth.updateProfile({
       nickname: profileForm.nickname,
       avatar: profileForm.avatar,
     })
-    toast(t('settings.profileSavedToast'))
-    isEditing.value = false
+    if (ok) {
+      toast(t('settings.profileSavedToast'))
+      isEditing.value = false
+    } else {
+      // 云端保存失败：不再无条件弹「已保存」，保持编辑态供用户重试
+      toast(t('common.failed'), false)
+    }
   } catch (err) {
     console.error('Failed to save profile', err)
   } finally {

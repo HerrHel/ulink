@@ -144,3 +144,21 @@ describe('useScrollHeader 核心契约护栏', () => {
     w.unmount()
   })
 })
+
+// #8（待验证）：单 tick 内 isMobile 回翻属真机时序问题，难在 jsdom 稳定复现，
+// 这里以接线不变式钉住「回调开头代次校验」不被删除（防漂移）。
+describe('attachWhenReady 代次校验（#8 接线不变式）', () => {
+  it('nextTick 与两层 rAF 回调开头均有 if (!ui.isMobile) return', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const src = readFileSync(
+      join(process.cwd(), 'src/composables/interaction/useScrollHeader.ts'),
+      'utf8',
+    )
+    const start = src.indexOf('function attachWhenReady()')
+    const end = src.indexOf('const stopWatch', start)
+    const body = src.slice(start, end > start ? end : undefined)
+    // nextTick 回调 + 第一层 rAF + 第二层 rAF，共 3 处代次校验
+    expect((body.match(/if \(!ui\.isMobile\) return/g) || []).length).toBeGreaterThanOrEqual(3)
+  })
+})

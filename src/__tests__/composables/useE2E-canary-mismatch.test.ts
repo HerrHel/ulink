@@ -85,7 +85,7 @@ vi.mock('../../stores/app.js', () => ({
   saveAppData: vi.fn(),
 }))
 
-import { useE2E } from '../../composables/domain/useE2E.js'
+import { useE2E, canaryQueryError, clearCanaryQueryError } from '../../composables/domain/useE2E.js'
 import { useDataStore } from '../../stores/data.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { deriveKey, generateCanary, encrypt, decryptPasswordWithKey } from '../../crypto.js'
@@ -109,6 +109,7 @@ beforeEach(() => {
   _supabaseStub.maybeSingleRes = { data: null, error: null }
   _supabaseStub.upsertResHandler.mockReset()
   _supabaseStub.upsertResHandler.mockResolvedValue({ error: null })
+  clearCanaryQueryError() // canaryQueryError 是模块级 ref，用例间复位
 })
 
 function setAuthUser(id = 'user-1') { _authState.user = { id } }
@@ -303,5 +304,96 @@ describe('adoptCloudCanary — 统一主密码（切到云端 canary）', () => 
   it('未登录 → 云端读不到 → 返 false', async () => {
     const ok = await useE2E().adoptCloudCanary()
     expect(ok).toBe(false)
+  })
+})
+
+/**
+ * #4 回归：云端 canary 查询失败（res.error / 抛异常）必须与「确实无行」区分。
+ * 旧实现 .catch(()=>null) 且不读 res.error，把查询失败当成「云端无 canary」：
+ *  - ensureCloudCanarySynced 会用本地 canary 覆盖云端真实 canary（锁死其他设备）；
+ *  - detectCloudCanaryMismatch 不弹冲突弹窗、换设备被引导重设主密码。
+ */
+describe('#4 云端 canary 查询失败三态（不静默、跳过覆盖/判定）', () => {
+  // maybeSingleRes.error 初始为 null；直接 mutate 置错误对象模拟 Postgrest 查询失败
+  function setCloudQueryError(msg = 'network down') {
+    ;(_supabaseStub.maybeSingleRes as any).error = { message: msg }
+  }
+
+  it('ensureCloudCanarySynced：res.error 时跳过覆盖，绝不把本地 canary 推上云覆盖云端真值', async () => {
+    setAuthUser()
+    const local = makeCanary('deviceA.canary', [5, 6])
+    localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(local))
+    setCloudQueryError()
+
+    await useE2E().ensureCloudCanarySynced()
+
+    expect(_supabaseStub.upsertResHandler).not.toHaveBeenCalled()
+    expect(canaryQueryError.value).toBeTruthy() // 可见提示，不静默
+  })
+
+  it('ensureCloudCanarySynced：查询抛异常时也跳过覆盖并给出可见提示', async () => {
+    setAuthUser()
+    const local = makeCanary('deviceA.canary', [5, 6])
+    localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(local))
+    const { supabase } = await import('../../lib/supabase.js')
+    vi.mocked(supabase.from).mockImplementationOnce(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.reject(new Error('boom')) }) }),
+    } as any))
+
+    await useE2E().ensureCloudCanarySynced()
+
+    expect(_supabaseStub.upsertResHandler).not.toHaveBeenCalled()
+    expect(canaryQueryError.value).toBeTruthy()
+  })
+
+  it('detectCloudCanaryMismatch：查询失败时跳过冲突判定（mismatch=false、不弹窗）+ 可见提示', async () => {
+    setAuthUser()
+    localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(makeCanary('local.canary', [1, 1])))
+    setCloudQueryError()
+
+    const r = await useE2E().detectCloudCanaryMismatch()
+
+    expect(r.mismatch).toBe(false)
+    expect(canaryQueryError.value).toBeTruthy()
+  })
+
+  it('adoptCloudCanary：查询失败时返 false 且不覆盖本地 canary', async () => {
+    setAuthUser()
+    const local = makeCanary('local.canary', [1, 1])
+    localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(local))
+    setCloudQueryError()
+
+    const ok = await useE2E().adoptCloudCanary()
+
+    expect(ok).toBe(false)
+    expect(JSON.parse(localStorage.getItem(E2E_CANARY_KEY) || '{}')).toEqual(local)
+    expect(canaryQueryError.value).toBeTruthy()
+  })
+
+  it('查询恢复成功（error=null）后可见提示自动清除', async () => {
+    setAuthUser()
+    localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(makeCanary('local.canary', [1, 1])))
+    setCloudQueryError()
+    await useE2E().ensureCloudCanarySynced()
+    expect(canaryQueryError.value).toBeTruthy()
+
+    // 网络恢复：云端有 canary，error 归 null
+    setCloudCanary(makeCanary('cloud.canary', [2, 2]))
+    const r = await useE2E().detectCloudCanaryMismatch()
+
+    expect(canaryQueryError.value).toBeNull()
+    expect(r.hasCloud).toBe(true)
+  })
+
+  it('确实无行（error=null, data=null）不算查询失败：正常推本地 canary 上云且无错误提示', async () => {
+    setAuthUser()
+    const local = makeCanary('deviceA.canary', [5, 6])
+    localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(local))
+    // beforeEach 已把 maybeSingleRes 置为 { data: null, error: null }（确实无行）
+
+    await useE2E().ensureCloudCanarySynced()
+
+    expect(_supabaseStub.upsertResHandler).toHaveBeenCalledTimes(1)
+    expect(canaryQueryError.value).toBeNull()
   })
 })

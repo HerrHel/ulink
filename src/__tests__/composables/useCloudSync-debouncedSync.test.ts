@@ -19,6 +19,7 @@
  * 触发 RLS 拒绝；漏 clearTimeout → 快速连点编辑多次堆 timer，3s 后多个 withLock 并发推送。
  *
  * 纯加测试零源文件改动：debouncedSync 经 useCloudSync().debouncedSync() 暴露。
+ * #11: debouncedSync 改为 async（await 入队），本文件各用例相应 await 后推进 fake timers。
  * mock：syncPush 整模块（enqueueDirtyAsOps/pushFromQueue spy 控制 + 隔离真实队列/端口）+
  * withLock（spy 不真执行 Web Locks）+ useAuth（isLoggedIn ref 可控 true/false）+ supabase（import 副作用 stub）。
  * 用 fake timers 钉 setTimeout(3000)/clearTimeout/3s 后 withLock tail-call 触发确定性。
@@ -122,38 +123,38 @@ describe('debouncedSync 4 步编排护栏', () => {
     vi.useRealTimers()
   })
 
-  it('门控 ①：autoSync=false → no-op（不 enqueue + 不布 timer + 3s 后不调 withLock）', () => {
+  it('门控 ①：autoSync=false → no-op（不 enqueue + 不布 timer + 3s 后不调 withLock）', async () => {
     syncStore.setAutoSync(false)
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).not.toHaveBeenCalled()
     // 推进 3s 后 withLock 不应被调用
     vi.advanceTimersByTime(3000)
     expect(_lock.withLockSpy).not.toHaveBeenCalled()
   })
 
-  it('门控 ① 优先阻断：autoSync=false 时即使有 dirty id 也不推（核心用户契约：关自动同步后本地改动不推云）', () => {
+  it('门控 ① 优先阻断：autoSync=false 时即使有 dirty id 也不推（核心用户契约：关自动同步后本地改动不推云）', async () => {
     syncStore.setAutoSync(false)
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     vi.advanceTimersByTime(3000)
     expect(_push.enqueueSpy).not.toHaveBeenCalled()
     expect(_push.pushFromQueueSpy).not.toHaveBeenCalled()
     expect(_lock.withLockSpy).not.toHaveBeenCalled()
   })
 
-  it('门控 ②：isLoggedIn=false → no-op（enqueue + timer + withLock 全不调，未登录不真去推云触 RLS 拒绝）', () => {
+  it('门控 ②：isLoggedIn=false → no-op（enqueue + timer + withLock 全不调，未登录不真去推云触 RLS 拒绝）', async () => {
     _auth.isLoggedInRef.value = false
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).not.toHaveBeenCalled()
     vi.advanceTimersByTime(3000)
     expect(_lock.withLockSpy).not.toHaveBeenCalled()
   })
 
-  it('正常路径：enqueueDirtyAsOps 调一次 + 3s 后 withLock("linkvault-sync", pushFromQueue) 调一次', () => {
+  it('正常路径：enqueueDirtyAsOps 调一次 + 3s 后 withLock("linkvault-sync", pushFromQueue) 调一次', async () => {
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).toHaveBeenCalledTimes(1)
     // 3s 之前 withLock 未调
     vi.advanceTimersByTime(2999)
@@ -166,23 +167,23 @@ describe('debouncedSync 4 步编排护栏', () => {
     expect(_push.pushFromQueueSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('enqueue 先于 withLock：enqueueDirtyAsOps 同步执行，withLock 在 3s setTimeout 后才执行（编排顺序）', () => {
+  it('enqueue 先于 withLock：enqueueDirtyAsOps 同步执行，withLock 在 3s setTimeout 后才执行（编排顺序）', async () => {
     const callOrder: string[] = []
     _push.enqueueSpy.mockImplementation(() => { callOrder.push('enqueue') })
     _lock.withLockSpy.mockImplementation(async () => { callOrder.push('withLock') })
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(callOrder).toEqual(['enqueue'])
     vi.advanceTimersByTime(3000)
     expect(callOrder).toEqual(['enqueue', 'withLock'])
   })
 
-  it('防抖 timer：3s 窗口内二次调用 clearTimeout 旧 timer、旧 timer 不重复触发（去重契约 N→1）', () => {
+  it('防抖 timer：3s 窗口内二次调用 clearTimeout 旧 timer、旧 timer 不重复触发（去重契约 N→1）', async () => {
     vi.spyOn(globalThis, 'clearTimeout')
     const { debouncedSync } = useCloudSync()
-    debouncedSync() // 布置 timer1（t0 设，t0+3s 触发）
+    await debouncedSync() // 布置 timer1（t0 设，t0+3s 触发）
     vi.advanceTimersByTime(1000) // 推进 1s，仍在 timer1 的 3s 窗口内
-    debouncedSync() // 应 clearTimeout(timer1) 布置 timer2（t1+3s 触发）；timer1 被清不应触发
+    await debouncedSync() // 应 clearTimeout(timer1) 布置 timer2（t1+3s 触发）；timer1 被清不应触发
     // clearTimeout 真被调（核心去重动作）
     expect(globalThis.clearTimeout).toHaveBeenCalled()
     // 推进到 timer2 之前（t1+3s = t0+4s，已推进 1s，再推进 2999ms 仍未到）
@@ -193,49 +194,49 @@ describe('debouncedSync 4 步编排护栏', () => {
     expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('快速连点 N 次：clearTimeout 防堆多 timer，最终只在最后一次调用后 3s 触发一次 withLock', () => {
+  it('快速连点 N 次：clearTimeout 防堆多 timer，最终只在最后一次调用后 3s 触发一次 withLock', async () => {
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     vi.advanceTimersByTime(1000)
-    debouncedSync()
+    await debouncedSync()
     vi.advanceTimersByTime(1000)
-    debouncedSync()
+    await debouncedSync()
     vi.advanceTimersByTime(1000)
-    debouncedSync()
+    await debouncedSync()
     // 4 次调用后已过 3s，但最后一次(t4) timer 在 t4+3s=3s 后；此时 withLock 不应已被触发
     expect(_lock.withLockSpy).not.toHaveBeenCalled()
     vi.advanceTimersByTime(3000) // 满 t4+3s
     expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('enqueueDirtyAsOps 每次调用都执行一次（不像 withLock 被防抖抑制）—— 防抖仅作用于 timer 不作用于 enqueue', () => {
+  it('enqueueDirtyAsOps 每次调用都执行一次（不像 withLock 被防抖抑制）—— 防抖仅作用于 timer 不作用于 enqueue', async () => {
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
-    debouncedSync()
-    debouncedSync()
+    await debouncedSync()
+    await debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).toHaveBeenCalledTimes(3)
   })
 
-  it('门控隔离：autoSync=false 后再次切 true 调用走完整 4 步（门控是每次调用重判非 setup 快照）', () => {
+  it('门控隔离：autoSync=false 后再次切 true 调用走完整 4 步（门控是每次调用重判非 setup 快照）', async () => {
     syncStore.setAutoSync(false)
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).not.toHaveBeenCalled()
     // 切 true 后再调用走正常路径
     syncStore.setAutoSync(true)
-    debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(3000)
     expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('isLoggedIn 切换：false→true 后 debouncedSync 走正常路径（门控每次调用重判响应式 isLoggedIn）', () => {
+  it('isLoggedIn 切换：false→true 后 debouncedSync 走正常路径（门控每次调用重判响应式 isLoggedIn）', async () => {
     _auth.isLoggedInRef.value = false
     const { debouncedSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).not.toHaveBeenCalled()
     _auth.isLoggedInRef.value = true
-    debouncedSync()
+    await debouncedSync()
     expect(_push.enqueueSpy).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(3000)
     expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
@@ -243,7 +244,7 @@ describe('debouncedSync 4 步编排护栏', () => {
 
   it('fullSync 执行时主动清除挂起的 debouncedSync 计时器，避免 3 秒后重复触发冗余推送', async () => {
     const { debouncedSync, fullSync } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(_lock.withLockSpy).not.toHaveBeenCalled()
 
     await fullSync()
@@ -256,7 +257,7 @@ describe('debouncedSync 4 步编排护栏', () => {
 
   it('syncImmediate 执行时主动清除挂起的 debouncedSync 计时器', async () => {
     const { debouncedSync, syncImmediate } = useCloudSync()
-    debouncedSync()
+    await debouncedSync()
     expect(_lock.withLockSpy).not.toHaveBeenCalled()
 
     await syncImmediate()

@@ -119,10 +119,35 @@ if (import.meta.env.PROD) {
     // 故仅当「页面已受旧 SW 控制」被替换时才刷，首装跳过。
     let refreshing = false
     const hadController = !!navigator.serviceWorker.controller
+    // 2026-11-14 审计 #50：SW 换代的无条件 reload 会丢掉用户正在编辑的输入。
+    // 有活跃输入控件时延迟刷新（每秒检查一次，最多等 30s），既不打断编辑，
+    // 也保证最终所有 chunk 同代。
+    function hasUnsavedInput(): boolean {
+      const el = document.activeElement as HTMLElement | null
+      if (!el) return false
+      if (el.tagName === 'TEXTAREA' || el.isContentEditable) {
+        return Boolean((el as HTMLTextAreaElement).value || el.textContent?.trim())
+      }
+      if (el.tagName === 'INPUT') {
+        const input = el as HTMLInputElement
+        return ['text', 'search', 'password', 'email', 'url'].includes(input.type) && Boolean(input.value)
+      }
+      return false
+    }
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing || !hadController) return
       refreshing = true
-      window.location.reload()
+      if (!hasUnsavedInput()) {
+        window.location.reload()
+        return
+      }
+      const startedAt = Date.now()
+      const timer = window.setInterval(() => {
+        if (!hasUnsavedInput() || Date.now() - startedAt > 30_000) {
+          window.clearInterval(timer)
+          window.location.reload()
+        }
+      }, 1000)
     })
   }).catch(() => { /* virtual:pwa-register 在非 PWA 构建中可能不可用 */ })
   }

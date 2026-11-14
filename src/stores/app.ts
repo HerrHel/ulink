@@ -36,18 +36,37 @@ export function _fingerprint(data: AppData): string {
     // 之后的普通编辑把 updatedAt 设为 now（仍小于 max），指纹不变会导致 save() 静默跳过落盘。
     updSum = (updSum + (v % 2147483647)) % 2147483647
   }
+  // #25: _syncMaps() 会把孤儿 bookmark 的 categoryId/parentId、group 的 categoryId
+  // 就地改写为兜底值，_normalizeCategoryOrders 改 order，软删/恢复改 deletedAt —— 这些
+  // 改写都不触发 onWrite、也不 bump updatedAt，旧指纹（长度+实体数+updatedAt+useCount）
+  // 完全捕捉不到，save() 命中 fp===_lastSavedFingerprint 早退 → 内存与 IDB 分叉、刷新回退。
+  // 把这些结构字段按 (id + 字段值) 顺序敏感地折进校验和，任何改写都改变指纹、强制落盘。
+  let structSum = 0
+  const mix = (v: unknown) => {
+    const s = v == null ? '' : String(v)
+    for (let i = 0; i < s.length; i++) structSum = (structSum * 31 + s.charCodeAt(i)) | 0
+    structSum = (structSum * 31 + 7) | 0 // 字段分隔符，防 ['ab','c'] 与 ['a','bc'] 碰撞
+  }
   let useCounts = 0
   for (const b of bms) {
     bump(b.updatedAt)
     useCounts += b.useCount || 0
+    mix(b.id); mix(b.order); mix(b.categoryId); mix(b.parentId); mix(b.deletedAt)
   }
   for (const g of grps) {
     bump(g.updatedAt)
     useCounts += g.useCount || 0
+    mix(g.id); mix(g.order); mix(g.categoryId); mix(g.deletedAt)
   }
-  for (const c of cats) bump(c.updatedAt)
-  for (const a of attrs) bump(a.updatedAt)
-  const base = `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${updSum}|${useCounts}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+  for (const c of cats) {
+    bump(c.updatedAt)
+    mix(c.id); mix(c.order); mix(c.deletedAt)
+  }
+  for (const a of attrs) {
+    bump(a.updatedAt)
+    mix(a.id); mix(a.deletedAt)
+  }
+  const base = `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${updSum}|${useCounts}|${structSum}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
   if (!data._masterCanary) return base
   const canaryPart = typeof data._masterCanary === 'object' && data._masterCanary !== null
     ? `${data._masterCanary.data || ''}:${data._masterCanary.iv || ''}`

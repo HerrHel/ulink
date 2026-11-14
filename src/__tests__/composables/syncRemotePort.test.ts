@@ -312,12 +312,34 @@ describe('createSupabaseSyncPort — 生产 error→{message,code} 映射 + coun
 
     const call = fake.calls.find(c => c.op === 'upsert')
     expect(call).toBeDefined()
-    // 只传 row、不传 options：一旦有人把 onConflict 加回来，args 长度变 2，契约破裂。
+    // 只传 row + count 选项、不传 onConflict：一旦有人把 onConflict 加回来，
+    // args[1] 带该键即契约破裂。count:'exact'(#27) 不影响 PostgREST 取当前主键。
     // onConflict 指定的列组必须与库内某个唯一约束精确匹配，写死就会与主键 DDL 耦合，
     // 而 DDL 与前端资源无法原子切换，迁移前后必有一段不匹配窗口。
-    expect(call!.args).toHaveLength(1)
+    expect(call!.args).toHaveLength(2)
     // 不指定冲突目标时 PostgREST 用主键定位，故 row 必须带齐主键列 id + user_id
     expect(call!.args[0]).toEqual({ id: 'b1', user_id: 'u1' })
+    expect(call!.args[1]).toEqual({ count: 'exact' })
+    expect(call!.args[1]).not.toHaveProperty('onConflict')
+  })
+
+  // #27: upsert 带 count 返回，0 行如实透传供 syncPush 判失败（不再恒 undefined）
+  it('upsert 透传 count=0（RLS 静默 0 行）+ 带 count 请求选项', async () => {
+    const fake = makeFakeSupabase({ bookmarks: { upsert: { data: null, error: null, count: 0 } } })
+    setSupabase(fake)
+    port = createSupabaseSyncPort()
+    const r = await port.upsert('bookmarks', { id: 'b1', user_id: 'u1' })
+    expect(r.error).toBeNull()
+    expect(r.count).toBe(0)
+    const call = fake.calls.find(c => c.op === 'upsert')
+    expect(call!.args[1]).toEqual({ count: 'exact' })
+  })
+
+  it('upsert 命中 N 行 → count=N 如实透传', async () => {
+    setSupabase(makeFakeSupabase({ bookmarks: { upsert: { data: [], error: null, count: 2 } } }))
+    port = createSupabaseSyncPort()
+    const r = await port.upsert('bookmarks', { id: 'b1', user_id: 'u1' })
+    expect(r.count).toBe(2)
   })
 
   it('update 返 error+count → error 映射 + count 透传（核心契约门：syncPush 据 count 区分静默失败）', async () => {

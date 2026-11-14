@@ -65,7 +65,9 @@ BEGIN
   END IF;
 
   INSERT INTO public.usage_ledger (user_id, metric, amount, ref, period, kind)
-  VALUES (p_uid, p_metric, p_amount, p_ref, period, 'reserve');
+  -- 2026-11-14 审计修正：原为裸列名 `period`（PL/pgSQL 里会报 42703），
+  -- 已改为参数 p_period。线上热修见 20261114000001_fix_reserve_quota_period.sql。
+  VALUES (p_uid, p_metric, p_amount, p_ref, p_period, 'reserve');
 
   RETURN jsonb_build_object('ok', true, 'used', v_used + p_amount, 'limit', v_limit);
 END;

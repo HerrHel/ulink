@@ -69,12 +69,20 @@ function verifyJwtWithJwks(token, jwks, opts = {}) {
     return { ok: false, reason: "bad_alg", detail: String(parsed.header.alg ?? "none") };
   }
   const exp = parsed.payload.exp;
-  if (typeof exp === "number" && exp * 1e3 + tol < now) {
+  if (typeof exp !== "number" || !Number.isFinite(exp)) {
+    return { ok: false, reason: "rejected", detail: "missing or invalid exp" };
+  }
+  if (exp * 1e3 + tol < now) {
     return { ok: false, reason: "expired" };
   }
   const nbf = parsed.payload.nbf;
-  if (typeof nbf === "number" && nbf * 1e3 - tol > now) {
-    return { ok: false, reason: "rejected", detail: "nbf in future" };
+  if (nbf !== void 0) {
+    if (typeof nbf !== "number" || !Number.isFinite(nbf)) {
+      return { ok: false, reason: "rejected", detail: "invalid nbf" };
+    }
+    if (nbf * 1e3 - tol > now) {
+      return { ok: false, reason: "rejected", detail: "nbf in future" };
+    }
   }
   const kid = typeof parsed.header.kid === "string" ? parsed.header.kid : "";
   const jwk = kid ? jwks.find((k) => k.kid === kid) : (

@@ -64,6 +64,7 @@ vi.mock('../../lib/ai/siteActions.js', () => ({
 import { useAiChat } from '../../composables/domain/useAiChat.js'
 import { askMiMoStream } from '../../lib/ai/mimoClient.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
+import { confirmDestructiveTool, resetDestructiveConfirmations } from '../../composables/domain/useAiChatAgent.js'
 
 const streamMock = vi.mocked(askMiMoStream)
 const cmdMock = vi.mocked(dispatchSiteCommand)
@@ -71,12 +72,13 @@ const cmdMock = vi.mocked(dispatchSiteCommand)
 describe('useAiChat — merge_duplicates confirm 参数落地执行分发', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetDestructiveConfirmations() // #9：确认许可为模块级状态，用例间复位
     cmdMock.mockImplementation(async (cmd: string) =>
       cmd.startsWith('/') ? { handled: true, reply: `工具结果:${cmd}` } : { handled: false, reply: '' },
     )
   })
 
-  it('merge_duplicates 传 confirm: true 时，调用 mergeDuplicateBookmarks 执行落地合并', async () => {
+  it('#9 merge_duplicates confirm:true 未经用户显式确认 → 拒绝执行（不合并），仅生成待确认卡片', async () => {
     const ai = useAiChat()
     streamMock.mockResolvedValueOnce({
       reply: '准备合并',
@@ -91,6 +93,34 @@ describe('useAiChat — merge_duplicates confirm 参数落地执行分发', () =
           name: 'merge_duplicates',
           arguments: { confirm: true, reason: '用户要求全部一键合并' },
         },
+      ] as never,
+    })
+
+    ai.aiQuery.value = '方案A全部合并'
+    await ai.handleAiSubmit()
+
+    // #9 注入防护：模型参数里的 confirm:true 不算用户确认，绝不落地合并
+    expect(mockMergeDuplicateBookmarks).not.toHaveBeenCalled()
+    const lastTurn = ai.chatTurns.value[ai.chatTurns.value.length - 1]
+    expect(lastTurn.actionCard?.actionName).toBe('confirm_destructive_tool')
+    expect(lastTurn.toolResults?.[0]?.resultText).toContain('未执行')
+  })
+
+  it('#9 用户经 confirmDestructiveTool 显式确认后，同一 confirm:true 调用才落地合并', async () => {
+    const args = { confirm: true, reason: '用户要求全部一键合并' }
+    // UI 点击 actionCard 确认按钮 → 登记一次性许可（模型无法伪造）
+    confirmDestructiveTool({ name: 'merge_duplicates', arguments: args })
+
+    const ai = useAiChat()
+    streamMock.mockResolvedValueOnce({
+      reply: '准备合并',
+      reasoning: '',
+      cleanText: '准备合并',
+      candidates: [],
+      rawText: '准备合并',
+      model: 'test-model',
+      toolCalls: [
+        { id: 'call_dedup_confirm_2', name: 'merge_duplicates', arguments: args },
       ] as never,
     })
 

@@ -401,3 +401,27 @@ describe('UserPopover.vue', () => {
     wrapper.unmount()
   })
 })
+
+// #45 调用方：updateProfile 返回 false 时不得无条件弹「已保存」
+describe('UserPopover 保存失败不弹「已保存」（#45）', () => {
+  it('updateProfile 返回 false → 弹失败提示且保持编辑态', async () => {
+    const { toast } = await import('../../lib/toast.js')
+    ;(toast as any).mockClear?.()
+    const popoverStore = useUserPopoverStore()
+    const authStore = useAuthStore()
+    vi.spyOn(authStore, 'updateProfile').mockResolvedValue(false)
+    authStore.user = { id: 'u1', email: 'alice@example.com' } as any
+    popoverStore.show()
+    const wrapper = mount(UserPopover, { attachTo: document.body })
+    await nextTick()
+    ;(document.querySelector('.up-edit-btn') as HTMLButtonElement).click()
+    await nextTick()
+    ;(document.querySelector('.up-edit-box .btn-primary') as HTMLButtonElement).click()
+    await new Promise((r) => setTimeout(r, 0))
+    await nextTick()
+    expect(toast).not.toHaveBeenCalledWith('个人资料已更新')
+    expect(toast).toHaveBeenCalledWith('操作失败', false)
+    expect(document.querySelector('.up-edit-box')).not.toBeNull()
+    wrapper.unmount()
+  })
+})

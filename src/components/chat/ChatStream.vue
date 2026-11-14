@@ -7,6 +7,20 @@
             </svg>
             <p class="chat-empty-lead">{{ t('ai.emptyLead') }}</p>
             <p class="chat-empty-sub">{{ t('ai.emptySub') }}</p>
+            <!-- 2026-11-14 审计 #19：情境感知提示胶囊。数据（dynamicQuickHints）、
+                 quickFill 事件、CSS 样式一直都在，唯独迁移到 ChatStream 后模板没接回，
+                 导致功能对用户不可见、测试被 it.skip 掩盖。补回渲染。 -->
+            <div v-if="dynamicQuickHints && dynamicQuickHints.length" class="chat-hint-list">
+              <button
+                v-for="(hint, i) in dynamicQuickHints"
+                :key="i"
+                type="button"
+                class="hint-text-btn"
+                @click="emit('quickFill', hint.query)"
+              >
+                <span class="hint-pill-icon" aria-hidden="true">✦</span>{{ hint.label }}
+              </button>
+            </div>
 
           </div>
         </div>

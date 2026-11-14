@@ -220,7 +220,9 @@ async function queryOrder(outTradeNo) {
       ? 'SUCCESS'
       : node.trade_status,
     channelOrderId: node.trade_no || null,
-    paidCents: yuanToCents(node.total_amount),
+    // 2026-11-14 审计 #35：必须取「实付」而非订单总额。有折扣/优惠时
+    // total_amount 仍是原价，用它过金额校验等于少付也发货。
+    paidCents: yuanToCents(node.buyer_pay_amount ?? node.total_amount),
     successTime: node.send_pay_date || null,
     raw: node,
   }

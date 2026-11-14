@@ -99,11 +99,19 @@ export function useScrollHeader() {
   /** E3-002：DOM 就绪后再挂；失败时下一帧再试 */
   function attachWhenReady() {
     nextTick(() => {
+      // 代次校验：nextTick/rAF 排队期间 isMobile 可能在同一 tick 内回翻
+      // （PC↔移动切换），此时回调不该再挂监听，否则会在非移动端错误挂上滚动监听。
+      if (!ui.isMobile) return
       if (attach()) return
       retryRaf = requestAnimationFrame(() => {
         retryRaf = 0
+        if (!ui.isMobile) return
         if (!attach()) {
-          retryRaf = requestAnimationFrame(() => { retryRaf = 0; attach() })
+          retryRaf = requestAnimationFrame(() => {
+            retryRaf = 0
+            if (!ui.isMobile) return
+            attach()
+          })
         }
       })
     })

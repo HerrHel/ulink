@@ -460,8 +460,11 @@ describe('syncPull 其余守门分支', () => {
     expect(syncStore.syncError).toBe('网络离线')
   })
 
-  it('远端 softDeleted 查询失败 → warn 后 continue 不软删该类，不阻断 pull', async () => {
+  // #2: 软删批次任一表查询失败必须整轮中止，绝不再 warn+continue 后推进游标 / 记成功
+  it('远端 softDeleted 查询失败 → 中止本轮：pull=false、游标不推进、不记成功（#2）', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const syncStore = useSyncStore()
+    syncStore.setLastSyncAt(12345)
     const ds = useDataStore()
     ds.addBookmark(makeBm({ id: 'bm-alive' }) as any)
     ds._dirtyIds.clear()
@@ -477,11 +480,13 @@ describe('syncPull 其余守门分支', () => {
     setSyncRemotePort(port as any)
 
     const ok = await useCloudSync().pullFromCloud(false)
-    // softDeleted 查询失败不阻断（continue 跳过该表软删），pull 仍成功
-    expect(ok).toBe(true)
+    expect(ok).toBe(false)
+    expect(syncStore.syncStatus).toBe('error')
+    expect(syncStore.syncError).toBe('softDeleted probe failed')
+    // 关键契约：游标保持不变（未推进 lastSyncAt），删除不会落在下次 gt(since) 之外
+    expect(syncStore.lastSyncAt).toBe(12345)
+    // 本地存活项不被软删（保留「本地 dirty 不被远端软删覆盖」守门）
     expect(ds.bookmarkMap['bm-alive']?.deletedAt).toBeUndefined()
-    const warns = warnSpy.mock.calls.map(c => String(c[0]))
-    expect(warns.some(c => c.includes('deletion sync query failed'))).toBe(true)
     warnSpy.mockRestore()
   })
 

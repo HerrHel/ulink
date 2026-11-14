@@ -160,3 +160,28 @@ describe('运行中「会话消失」事件的抢救', () => {
     expect(calls).not.toContain('refreshSession')
   })
 })
+
+// #38：init() 的 getSession 报错抢救必须与 recoverSession 共用 30s 节流/单飞，
+// 防 SDK 紧接发无会话事件时二次刷新同一 refresh_token。
+describe('init() 抢救与 recoverSession 共用节流（#38）', () => {
+  it('init 抢救成功后紧接的无会话事件不再二次刷新', async () => {
+    let refreshCount = 0
+    const { driver, calls, emit } = makeDriver({
+      onGetSession: async () => ({ session: null, error: { message: 'invalid jwt' } }),
+      onRefresh: async () => {
+        refreshCount++
+        return { session: fakeSession(), error: null }
+      },
+    })
+    __setAuthDriverForTest(driver)
+    const store = useAuthStore()
+    await store.init()
+    expect(store.isLoggedIn).toBe(true)
+    expect(refreshCount).toBe(1)
+    // SDK 紧接着又发无会话事件：init 已登记 _lastRecoverAt，节流应挡住第二次刷新
+    emit(null)
+    await vi.waitFor(() => expect(store.isLoggedIn).toBe(false))
+    expect(refreshCount).toBe(1)
+    expect(calls.filter((c) => c === 'refreshSession')).toHaveLength(1)
+  })
+})

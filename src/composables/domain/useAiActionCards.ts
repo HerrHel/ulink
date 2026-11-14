@@ -10,6 +10,7 @@
  * 共享状态由 useAiChat Facade 显式注入，行为与拆分前逐字一致。
  */
 import { toast } from '../../lib/toast.js'
+import { confirmDestructiveTool } from './useAiChatAgent.js'
 import {
   dispatchSiteCommand,
   mergeDuplicateBookmarks,
@@ -431,6 +432,18 @@ export function useAiActionCards(context: AiActionCardsContext) {
           } else {
             toast(res.message || t('ai.actionFailed'), false)
           }
+        }
+      } else if (card.actionName === 'confirm_destructive_tool') {
+        // 2026-11-14 审计 #9：破坏性写工具（删除/移动/清空回收站/导出/合并去重）
+        // 必须由用户显式确认。这里登记一次性许可，并提示用户重发上一条指令，
+        // 让模型续轮重新发起同一个 tool call 时通过 useAiChatAgent 的门槛。
+        const toolCall = (card.payload as {
+          toolCall?: { name: string; arguments?: Record<string, any> }
+        } | null)?.toolCall
+        if (toolCall) {
+          confirmDestructiveTool(toolCall)
+          card.completed = true
+          toast(t('ai.destructiveToolConfirmed'), true)
         }
       }
     } catch (err: any) {

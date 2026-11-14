@@ -44,12 +44,17 @@ describe('DetailPanel — AI 交互体验升维 (Action Card & Context Hints & T
     localStorage.clear()
   })
 
-  // ⚠️ 暂时跳过（2026-10-28）：AI 情境提示胶囊的渲染已从 DetailPanel 迁往
-  // ChatStream（后者通过 props.dynamicQuickHints 接收数据），但 ChatStream 的
-  // template 尚未把 .hint-text-btn 接回来（CSS 样式与 QuickHint 类型已就位）。
-  // 该用例测的元素在当前组件树里不存在，属重构未收尾，不是逻辑回归。
-  // 待 ChatStream 补上渲染后，把这两个用例迁到 src/__tests__/components/ChatStream.test.ts。
-  it.skip('情境感知：聚焦在某个笔记组时，优先推荐专属工具与查重清理', async () => {
+  // #19（审计 2026-11-14）：原两条 it.skip 以「重构未收尾」为由把「AI 情境提示胶囊」
+  // 洗成跳过、CI 全绿。核查结论：数据层没丢 —— useAiChat 的 dynamicQuickHints
+  // computed 仍按聚焦组/分类生成提示，DetailPanel 也照常把它传给 ChatStream
+  // （DetailPanel.vue:38 `:dynamic-quick-hints`）；真正缺的是 ChatStream.vue 空态
+  // template 里 .hint-text-btn 元素的渲染（CSS .hint-text-btn 与 QuickHint 类型都在，
+  // 唯独模板未接回，dynamicQuickHints prop 目前无消费者）。
+  // ChatStream.vue 不在本次可写清单，故不越界改生产代码；下面两条用例改为对
+  // 「DetailPanel 传给 ChatStream 的 dynamicQuickHints」这一组件间契约做真实断言，
+  // 让情境提示的数据来源在默认套件里被真实执行，而不是用 skip 掩盖。
+  // UI 渲染缺口的补法见任务报告（需在 ChatStream.vue 空态区补 .hint-text-btn 列表）。
+  it('情境感知：聚焦笔记组时，传给 ChatStream 的 dynamicQuickHints 含组名专属提示与查重清理', async () => {
     const ds = useDataStore()
     const ui = useUIStore()
 
@@ -72,13 +77,19 @@ describe('DetailPanel — AI 交互体验升维 (Action Card & Context Hints & T
     const wrapper = mount(DetailPanel)
     await nextTick()
 
-    const hintButtons = wrapper.findAll('.hint-text-btn')
-    expect(hintButtons.length).toBeGreaterThan(0)
-    expect(hintButtons[0].text()).toContain('AI绘画')
+    const stream = wrapper.findComponent({ name: 'ChatStream' })
+    expect(stream.exists()).toBe(true)
+    const hints = stream.props('dynamicQuickHints') as { label: string; query: string }[]
+    expect(hints.length).toBeGreaterThan(0)
+    const joined = hints.map((h) => `${h.label} ${h.query}`).join(' | ')
+    // 聚焦组专属：组名进入提示（中英文 query 都带完整组名）
+    expect(joined).toContain('AI绘画精选')
+    // 同批给出查重清理类提示（中英文两版措辞都覆盖）
+    expect(joined).toMatch(/查重|重复|Deduplicate|duplicate/i)
     wrapper.unmount()
   })
 
-  it.skip('情境感知：选定特定分类时，优先推荐该分类的探索提示', async () => {
+  it('情境感知：选定特定分类时，传给 ChatStream 的 dynamicQuickHints 含该分类探索提示', async () => {
     const ds = useDataStore()
     const ui = useUIStore()
 
@@ -96,9 +107,13 @@ describe('DetailPanel — AI 交互体验升维 (Action Card & Context Hints & T
     const wrapper = mount(DetailPanel)
     await nextTick()
 
-    const hintButtons = wrapper.findAll('.hint-text-btn')
-    expect(hintButtons.length).toBeGreaterThan(0)
-    expect(hintButtons[0].text()).toContain('设计灵感')
+    const stream = wrapper.findComponent({ name: 'ChatStream' })
+    expect(stream.exists()).toBe(true)
+    const hints = stream.props('dynamicQuickHints') as { label: string; query: string }[]
+    expect(hints.length).toBeGreaterThan(0)
+    const joined = hints.map((h) => `${h.label} ${h.query}`).join(' | ')
+    // 分类专属探索提示：分类名进入 label / query
+    expect(joined).toContain('设计灵感')
     wrapper.unmount()
   })
 

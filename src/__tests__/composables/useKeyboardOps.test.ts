@@ -1255,6 +1255,63 @@ describe('useKeyboardOps — Ctrl+J / Cmd+J 唤起/收起 AI 助手抽屉', () =
   })
 })
 
+// #40：多层弹窗焦点陷阱必须锁定「最上层」open mask，且焦点逃到背景时拉回 first
+describe('#40 Tab 焦点陷阱取最上层 open mask + 焦点归属', () => {
+  function makeTwoLayer() {
+    document.querySelectorAll('.modal-mask.open').forEach((m) => m.remove())
+    setActiveElement(document.body)()
+    // 背景 modal（DOM 顺序在前）
+    const bg = document.createElement('div')
+    bg.className = 'modal-mask open'
+    const bgModal = document.createElement('div')
+    bgModal.className = 'modal'
+    const bgInput = document.createElement('input')
+    bgModal.appendChild(bgInput)
+    bg.appendChild(bgModal)
+    // 顶层 ConfirmModal（DOM 顺序在后）
+    const top = document.createElement('div')
+    top.className = 'modal-mask open'
+    const topModal = document.createElement('div')
+    topModal.className = 'modal'
+    const topFirst = document.createElement('button')
+    const topLast = document.createElement('button')
+    topModal.appendChild(topFirst)
+    topModal.appendChild(topLast)
+    top.appendChild(topModal)
+    document.body.appendChild(bg)
+    document.body.appendChild(top)
+    return { bg, top, bgInput, topFirst, topLast }
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+  })
+
+  it('焦点逃到背景 modal 时把焦点拉回最上层 modal 的 first', () => {
+    const { bg, top, bgInput, topFirst } = makeTwoLayer()
+    setActiveElement(bgInput) // 焦点在背景（旧实现会把背景 modal 当作唯一陷阱）
+    const e = makeKey('Tab', { code: 'Tab' })
+    const focusSpy = vi.spyOn(topFirst, 'focus')
+    _onGlobalKeydown(e)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect(focusSpy).toHaveBeenCalledTimes(1)
+    bg.remove(); top.remove(); setActiveElement(document.body)()
+  })
+
+  it('Tab wrap 限定在最上层 modal（不 wrap 到背景）', () => {
+    const { bg, top, topFirst, topLast } = makeTwoLayer()
+    setActiveElement(topLast)
+    const e = makeKey('Tab', { code: 'Tab' })
+    const focusSpy = vi.spyOn(topFirst, 'focus')
+    _onGlobalKeydown(e)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect(focusSpy).toHaveBeenCalledTimes(1)
+    bg.remove(); top.remove(); setActiveElement(document.body)()
+  })
+})
+
 
 
 

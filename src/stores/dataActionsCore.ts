@@ -36,12 +36,18 @@ export const coreActions = {
     const hasCats = this.categories.length > 0
     for (const b of this.bookmarks) {
       if (hasCats && b.categoryId && b.categoryId !== CAT_UNCATEGORIZED && b.categoryId !== CAT_ALL && (!catMap[b.categoryId] || catMap[b.categoryId].deletedAt)) {
+        // 2026-11-14 审计 #25：这类「清洗孤儿引用」是真实改写，必须入脏并 bump
+        // 时间戳，否则内存改了但 IDB/云端还是旧引用；指纹校验随后才不会早退。
         b.categoryId = CAT_UNCATEGORIZED
+        b.updatedAt = Date.now()
+        this._markDirty(b.id)
       }
       if (b.parentId) {
         const parent = bmMap[b.parentId]
         if (b.parentId === b.id || !parent) {
           b.parentId = null
+          b.updatedAt = Date.now()
+          this._markDirty(b.id)
         } else {
           // 深度防环：检测祖先链中是否回溯到自身或存在间接成环
           let ancestorId: string | null = b.parentId
@@ -57,6 +63,8 @@ export const coreActions = {
           }
           if (hasCycle) {
             b.parentId = null
+            b.updatedAt = Date.now()
+            this._markDirty(b.id)
           } else if (!parent.deletedAt && !b.deletedAt) {
             if (!childIdx[b.parentId]) childIdx[b.parentId] = []
             childIdx[b.parentId].push(b.id)
@@ -67,6 +75,8 @@ export const coreActions = {
     for (const g of this.siblingGroups) {
       if (hasCats && g.categoryId && g.categoryId !== CAT_UNCATEGORIZED && g.categoryId !== CAT_ALL && (!catMap[g.categoryId] || catMap[g.categoryId].deletedAt)) {
         g.categoryId = CAT_UNCATEGORIZED
+        g.updatedAt = Date.now()
+        this._markDirty(g.id)
       }
     }
     this._childrenIdx = childIdx

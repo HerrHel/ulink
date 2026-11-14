@@ -13,8 +13,9 @@
  *   0 = 线上 commit === 本地 HEAD（且工作区干净、安全头/元数据完整）
  *   1 = 不一致（线上落后 / 本地落后 / 分叉）
  *   2 = 线上没有 /version.json（部署早于该机制，属旧版本）
- *   3 = 网络或解析失败（含安全头探测失败，避免假绿）
- *   4 = 版本一致，但线上安全防护不完整（/app 的 CSP frame-ancestors、XCTO 缺失，或首页/法律页 CSP 缺失）
+ *   3 = 网络/解析/本地 git 命令失败（含安全头探测失败，避免假绿）
+ *   4 = 版本一致，但线上安全防护不完整（/app 的 CSP frame-ancestors、XCTO 缺失，或首页/法律页/
+ *       privacy.html/terms.html/extension-guide.html 的 CSP 缺失）
  *   5 = 版本一致，但本地工作区有未提交修改（HEAD 不代表线上/本地实际代码）
  *
  * 注：不用 process.exit() —— Node 24 + Windows 下 fetch 的 undici 句柄会在退出时
@@ -25,11 +26,18 @@ import { readFileSync } from 'node:fs'
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
+/**
+ * 执行 git 命令（#59）。
+ * 旧版吞掉任何异常返回空串：git 不可用 / 不在仓库 / 命令报错时，
+ * `git status --porcelain` 会得到 '' → localDirty=false，绕过「工作区有未提交修改」判定，
+ * 把「拿不到本地状态」误报成「干净」。现改为失败即抛，由 main 统一报错并非零退出。
+ */
 function sh(cmd) {
   try {
-    return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
-  } catch {
-    return ''
+    return execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
+  } catch (e) {
+    const detail = String((e && e.stderr) || (e && e.message) || e).trim().slice(0, 300)
+    throw new Error(`git 命令执行失败：${cmd}${detail ? `\n  ${detail}` : ''}`)
   }
 }
 
@@ -85,6 +93,18 @@ async function probePage(url) {
 // 旧版首页探测失败会抛错 → sec=null → printSecurity 返回 [] → main 返回 0（假绿）。
 const SEC_PROBE_FAILED = { probeFailed: true }
 
+// #51：安全自检原来只探 3 个入口（/ /app /legal/privacy-policy.html）。
+// public/ 下的 privacy.html / terms.html / extension-guide.html 是线上真实可访问的页面
+// （旧地址重定向页 + 扩展说明页）；CloudBase 静态托管不下发 `_headers`，这三页实测没有 CSP。
+// 这里补进自检并**如实报缺失**：不放宽断言、不为让自检变绿而跳过或豁免这些页面。
+// 真正补齐 CSP 需给这三个 public/*.html 加 `<meta http-equiv="Content-Security-Policy">`
+// （本批次越界，见修复报告）；在补齐前，`npm run check:prod` 会如实返回 4。
+const EXTRA_SECURITY_PAGES = [
+  { key: 'privacy', label: '隐私 /privacy.html', path: '/privacy.html' },
+  { key: 'terms', label: '条款 /terms.html', path: '/terms.html' },
+  { key: 'extensionGuide', label: '扩展 /extension-guide.html', path: '/extension-guide.html' },
+]
+
 async function checkSecurity(base) {
   let root
   try {
@@ -97,7 +117,13 @@ async function checkSecurity(base) {
   let legal = null
   try { app = await probePage(`${base}/app?t=${Date.now()}`) } catch { /* 保留 null，报告缺失 */ }
   try { legal = await probePage(`${base}/legal/privacy-policy.html?t=${Date.now()}`) } catch { /* 同上 */ }
-  return { root, app, legal }
+  const extraPages = []
+  for (const p of EXTRA_SECURITY_PAGES) {
+    let probe = null
+    try { probe = await probePage(`${base}${p.path}?t=${Date.now()}`) } catch { /* 保留 null，报告缺失 */ }
+    extraPages.push({ ...p, probe })
+  }
+  return { root, app, legal, extraPages }
 }
 
 function printSecurity(sec) {
@@ -106,7 +132,7 @@ function printSecurity(sec) {
     console.log(`\n安全防护：⚠ 探测失败${sec && sec.error ? `（${sec.error}）` : '（网络错误）'}`)
     return SEC_PROBE_FAILED
   }
-  const { root, app, legal } = sec
+  const { root, app, legal, extraPages = [] } = sec
   const fmt = (v) => (v ? '✓' : '✗')
   console.log('\n安全防护：')
   console.log(`  首页 /        CSP  ${root.cspMeta ? '<meta>' : fmt(root.cspHeader)}   Referrer ${fmt(root.referrer || root.referrerMeta)}`)
@@ -117,6 +143,13 @@ function printSecurity(sec) {
   if (!(app && app.frameAncestors)) missing.push('frame-ancestors')
   if (!(app && app.xcto)) missing.push('X-Content-Type-Options')
   if (!(legal && legal.xcto)) missing.push('X-Content-Type-Options(legal)')
+  // #51：新增页面的 CSP 断言，与其它入口一样严格（缺即计入 missing → 返回 4）。
+  // 探测失败（probe=null）同样按「缺失」计入，保持 fail-closed，不制造假绿。
+  for (const p of extraPages) {
+    const hasCsp = !!(p.probe && (p.probe.cspHeader || p.probe.cspMeta))
+    console.log(`  ${p.label}  CSP  ${fmt(hasCsp)}`)
+    if (!hasCsp) missing.push(`CSP(${p.key})`)
+  }
   return missing
 }
 
@@ -129,10 +162,20 @@ async function main() {
     console.warn(`\n⚠⚠ 警告：本次使用自定义 base=${base}（来自 ${baseArg ? 'argv' : 'ULINK_BASE_URL'}），并非默认生产地址 https://ulink.ren`)
     console.warn('   结果不能代表线上正式环境的版本/安全头状态，请确认目标地址无误。')
   }
-  const localCommit = sh('git rev-parse HEAD')
+  // #59：git 命令失败必须显式报错并非零退出，不能让 localDirty 判定被静默绕过。
+  // 返回 3（与网络/解析失败同码，语义是「无法可靠判定」），避免假绿。
+  let localCommit
+  let localBranch
+  let localDirty
+  try {
+    localCommit = sh('git rev-parse HEAD')
+    localBranch = sh('git rev-parse --abbrev-ref HEAD') || 'unknown'
+    localDirty = sh('git status --porcelain') !== ''
+  } catch (err) {
+    console.error(`✗ 本地 git 信息不可用，无法判定版本一致性：${err instanceof Error ? err.message : String(err)}`)
+    return 3
+  }
   const localShort = localCommit ? localCommit.slice(0, 7) : 'unknown'
-  const localBranch = sh('git rev-parse --abbrev-ref HEAD') || 'unknown'
-  const localDirty = sh('git status --porcelain') !== ''
 
   const url = `${base}/version.json?t=${Date.now()}`
   let remote
@@ -200,7 +243,11 @@ async function main() {
   }
 
   if (isGitSha(remoteCommit) && isAncestor(remoteCommit, localCommit)) {
-    const behind = sh(`git rev-list --count ${remoteCommit}..HEAD`) || '?'
+    // 仅用于展示「落后几个提交」；sh() 现在会抛，取不到时保留 '?' 不影响主判定（仍返回 1）
+    let behind = '?'
+    try {
+      behind = sh(`git rev-list --count ${remoteCommit}..HEAD`) || '?'
+    } catch { /* 展示值，失败不升级为整体失败 */ }
     console.log(`\n✗ 线上落后本地 ${behind} 个提交（线上 ${remoteShort} → 本地 ${localShort}）`)
     console.log('  若刚推送过，确认 CI deploy job 是否成功（gh run list --limit 3）。')
     return 1

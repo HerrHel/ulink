@@ -123,9 +123,11 @@ describe('模块 3 审计修复护栏测试集 (Sync Engine & Conflict Resolutio
 
     resolveConflict('bm-conflict-1', true)
 
-    // keepLocal=true 不调 saveAppData，留给后续 push 统一落盘
-    expect(saveSpy).not.toHaveBeenCalled()
+    // #26: keepLocal=true 现在补 saveAppData 落盘 + 触发 debouncedSync 同步调度，
+    // 否则选择刷新回退 / 本地版本永不上云
+    expect(saveSpy).toHaveBeenCalledTimes(1)
     expect(store.conflicts.length).toBe(0)
+    // #26: 直接写 updatedAt=now 绕过 updateBookmark 内 Date.now() 的覆盖
     expect(ds.bookmarkMap['bm-conflict-1'].updatedAt).toBeGreaterThan(2000)
     expect(ds._dirtyIds.has('bm-conflict-1')).toBe(true)
   })

@@ -62,6 +62,10 @@ function makeFakeDb(respond: (call: Call) => FakeRow | Promise<FakeRow>) {
         call.filters.push({ method: 'eq', args })
         return b
       },
+      in(...args: unknown[]) {
+        call.filters.push({ method: 'in', args })
+        return b
+      },
       neq(...args: unknown[]) {
         call.filters.push({ method: 'neq', args })
         return b
@@ -117,16 +121,19 @@ function makeFakeDb(respond: (call: Call) => FakeRow | Promise<FakeRow>) {
 }
 
 describe('createCloudBaseSyncPort — upsert', () => {
-  it('显式传复合主键 onConflict: user_id,id', async () => {
+  it('显式传复合主键 onConflict: user_id,id（#27 另发一次 head count 回查）', async () => {
     const { client, calls } = makeFakeDb(() => ({ data: null, error: null }))
     const port = createCloudBaseSyncPort(client)
 
     await port.upsert('bookmarks', { id: 'b1', user_id: 'u1', title: 'x' })
 
-    expect(calls).toHaveLength(1)
+    expect(calls).toHaveLength(2)
     expect(calls[0].op).toBe('upsert')
     expect(calls[0].table).toBe('bookmarks')
     expect(calls[0].args[1]).toEqual({ onConflict: 'user_id,id' })
+    // #27: CloudBase .upsert() 不返回行，按 onConflict 复合主键回查一次 head count
+    expect(calls[1].op).toBe('select')
+    expect(calls[1].selectOpts).toEqual({ count: 'exact', head: true })
   })
 
   it('数组批量 upsert 原样透传', async () => {
@@ -137,6 +144,52 @@ describe('createCloudBaseSyncPort — upsert', () => {
     await port.upsert('bookmarks', rows)
 
     expect(calls[0].args[0]).toEqual(rows)
+  })
+
+  // #27: 「按 onConflict 后回查」可行方案 —— 后端 .upsert() 不返回行/count，
+  // 回查 head count 拿到 0 行即如实透传，syncPush 与 update 同口径判失败。
+  it('回查 0 行 → count=0 如实返回（RLS 静默 0 行供 syncPush 判失败）', async () => {
+    const { client, calls } = makeFakeDb((call) => {
+      if (call.op === 'upsert') return { data: null, error: null }
+      return { data: null, error: null, count: 0 }
+    })
+    const port = createCloudBaseSyncPort(client)
+
+    const r = await port.upsert('bookmarks', { id: 'b1', user_id: 'u1', title: 'x' })
+
+    expect(r.error).toBeNull()
+    expect(r.count).toBe(0)
+    const readback = calls.find((c) => c.op === 'select')
+    expect(readback?.selectOpts).toEqual({ count: 'exact', head: true })
+    expect(readback?.filters).toEqual([
+      { method: 'eq', args: ['user_id', 'u1'] },
+      { method: 'in', args: ['id', ['b1']] },
+    ])
+  })
+
+  it('批量 upsert 回查按 in(ids) 命中 N 行 → count=N', async () => {
+    const { client, calls } = makeFakeDb((call) => {
+      if (call.op === 'upsert') return { data: null, error: null }
+      return { data: null, error: null, count: 2 }
+    })
+    const port = createCloudBaseSyncPort(client)
+    const rows = [{ id: 'b1', user_id: 'u1' }, { id: 'b2', user_id: 'u1' }]
+
+    const r = await port.upsert('bookmarks', rows)
+
+    expect(r.count).toBe(2)
+    const readback = calls.find((c) => c.op === 'select')
+    expect(readback?.filters).toContainEqual({ method: 'in', args: ['id', ['b1', 'b2']] })
+  })
+
+  it('无 user_id 的行跳过回查（不产生 count、不新增请求）', async () => {
+    const { client, calls } = makeFakeDb(() => ({ data: null, error: null }))
+    const port = createCloudBaseSyncPort(client)
+
+    const r = await port.upsert('bookmarks', { id: 'b1' })
+
+    expect(r.count).toBeNull()
+    expect(calls).toHaveLength(1)
   })
 })
 

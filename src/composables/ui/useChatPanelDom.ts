@@ -128,10 +128,14 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
   function onSwipeMove(e: TouchEvent) {
     if (!_swipeStartY) return
     const dy = e.touches[0].clientY - _swipeStartY
+    // 全量更新：dy<=0（上推取消）时 translateY 必须归零，否则会停留在上一次
+    // 下拉的旧正值，松手后被误判为超过 30% 阈值而关闭面板。
+    translateY.value = Math.max(0, dy)
     if (dy > 0) {
       e.preventDefault()
       isSwiping.value = true
-      translateY.value = dy
+    } else {
+      isSwiping.value = false
     }
   }
   function onSwipeEnd() {

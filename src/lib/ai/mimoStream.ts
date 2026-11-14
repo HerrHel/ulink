@@ -12,7 +12,7 @@ import { ULINK_AGENT_TOOLS } from './tools.js'
 import { isSupabaseConfigured } from '../supabase.js'
 import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { getApiToken } from '../authDriver.js'
-import { buildUlinkSystemPrompt, type DynamicContextSlice } from './mimoPrompt.js'
+import { buildUlinkSystemPrompt, wrapUntrustedData, type DynamicContextSlice } from './mimoPrompt.js'
 import { parseMiMoReply } from './mimoReply.js'
 import { isAiEnabled } from './aiEnabled.js'
 
@@ -266,7 +266,15 @@ export async function askMiMoStream(
   const messages: MiMoChatMessage[] = [{ role: 'system', content: systemPrompt }]
 
   // 加入最近几轮历史上下文（裁剪规则见 selectHistorySlice，与发送摘要共用同一真源）
-  messages.push(...selectHistorySlice(context.history || []))
+  // #9：工具结果（尤其 read_webpage 抓回的网页正文）是提示词注入的主要载体，
+  // 以 role:'tool' 回传前统一包进不可信数据隔离标记。wrapUntrustedData 幂等，
+  // 已在结果里包过标记的不会重复包裹；system prompt 已声明标记内指令不得执行。
+  const slicedHistory = selectHistorySlice(context.history || []).map((h) =>
+    h.role === 'tool' && typeof h.content === 'string'
+      ? { ...h, content: wrapUntrustedData('tool_result', h.content) }
+      : h,
+  )
+  messages.push(...slicedHistory)
 
   // userQuery 为空表示 Agent 循环续轮（历史已含 tool 结果，无需新用户消息）
   if (userQuery) {

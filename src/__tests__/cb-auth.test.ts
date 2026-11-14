@@ -116,9 +116,10 @@ describe('verifyJwtWithJwks — 正常路径', () => {
     if (!r.ok) expect(r.reason).toBe('unknown_kid')
   })
 
-  it('无 exp 的令牌不因过期被拒（由调用方决定是否强制）', () => {
+  it('无 exp 的令牌直接拒绝（2026-11-14 审计 #37：缺过期声明不再 fail-open）', () => {
     const r = verifyJwtWithJwks(mint({ sub: 'u' }), jwks)
-    expect(r.ok).toBe(true)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.reason).toBe('rejected')
   })
 })
 

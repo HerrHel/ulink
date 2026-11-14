@@ -225,6 +225,9 @@ watch(() => auth.authModalOpen, (open) => {
 })
 
 async function onSendCode() {
+  // busy 早退：@keydown.enter 与连续点击会绕过按钮 disabled，OTP 一次性，
+  // 并发两次会把后一次判失败甚至触发平台限流。对照 onPasswordLogin 的 pwBusy。
+  if (sending.value) return
   const e = emailTrim.value
   if (!e) return
   const remain = cooldownSec.value
@@ -258,6 +261,9 @@ async function onOAuth(provider: 'github' | 'google') {
 }
 
 async function onVerify() {
+  // busy 早退：@keydown.enter="onVerify" 绕过按钮 disabled，OTP 一次性，
+  // 并发两次会把后一次判失败甚至触发锁定。对照 onPasswordLogin 的 pwBusy。
+  if (verifying.value) return
   const c = code.value.trim()
   if (c.length < 6) return
   const lockRemain = lockSec.value

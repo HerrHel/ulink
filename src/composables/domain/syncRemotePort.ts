@@ -41,8 +41,15 @@ export function createSupabaseSyncPort(): SyncRemotePort {
       // 约束，否则 PostgREST 报 "no unique or exclusion constraint matching"）。
       // 交给 PostgREST 读当前主键即可两个阶段都正确：迁移前 (id)、迁移后 (user_id, id)。
       // 前提：row 必须携带全部主键列——toRemoteRow 已输出 id 与 user_id，满足。
-      const r = await supabase.from(table).upsert(row)
-      return { data: r.data, error: r.error ? { message: r.error.message, code: r.error.code } : null }
+      const r = await supabase.from(table).upsert(row, { count: 'exact' })
+      return {
+        data: r.data,
+        error: r.error ? { message: r.error.message, code: r.error.code } : null,
+        // #27: 透传受影响行数。此前 upsert 不带 count → syncPush 的 `count===0`
+        // 判据恒 false，RLS 静默 0 行会被误判成功永久出队。仍不写死 onConflict
+        //（见上注释），count 选项不影响 PostgREST 取当前主键作冲突目标。
+        count: r.count,
+      }
     },
     async update(table, id, userId, patch) {
       // 带 count:'exact' 区分无匹配更新（count=0）与成功更新（count>=1）。
@@ -166,6 +173,8 @@ export function __resetDefaultSyncPortForTest(): void {
 /** 内存 fake：单测推演 per-op / 死信 / pull / reconcile */
 export function createMemorySyncPort(opts?: {
   upsertError?: (table: SyncTable, row: Record<string, unknown>) => SyncPortError
+  /** upsert 受影响行数：默认 1（单条）/ 行数（批量）；注入 0 模拟「RLS 静默 0 行」(#27) */
+  upsertCount?: () => number | null
   updateError?: () => SyncPortError
   deleteError?: () => SyncPortError
   /** update 受影响行数：默认 1（命中）；传 0 模拟「无匹配 update」（远端行已删/不存在/RLS 拒绝） */
@@ -192,17 +201,20 @@ export function createMemorySyncPort(opts?: {
     updates,
     deletes,
     async upsert(table, row) {
+      // #27: 与生产 port 一致带 count。默认命中（单条 1 / 批量行数），
+      // 测试可注入 upsertCount()=0 让 syncPush 的 `count===0` 判据生效。
+      const count = opts?.upsertCount ? opts.upsertCount() : undefined
       if (Array.isArray(row)) {
         for (const r of row) {
           const err = opts?.upsertError?.(table, r) ?? null
           if (!err) upserts.push({ table, row: r })
-          if (err) return { data: null, error: err }
+          if (err) return { data: null, error: err, count }
         }
-        return { data: null, error: null }
+        return { data: null, error: null, count: count ?? row.length }
       }
       const err = opts?.upsertError?.(table, row) ?? null
       if (!err) upserts.push({ table, row })
-      return { data: null, error: err }
+      return { data: null, error: err, count: count ?? 1 }
     },
     async update(table, id, _userId, patch) {
       const err = opts?.updateError?.() ?? null

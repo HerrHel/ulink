@@ -18,6 +18,7 @@ import { _saveHistory, _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort, type SyncPortResult } from './syncRemotePort.js'
 import { _markPendingSync, _clearPendingSync, rememberDeadDelete, forgetDeadDelete, listDeadDeletes } from './syncPending.js'
 import { recordSyncFailure, recordSyncSuccess, classifySyncError } from './syncCircuit.js'
+import { safeGetItem, safeSetItem } from '../../lib/storageSafe.js'
 
 /** 单条 sync op 最大推送重试次数 */
 export const MAX_PUSH_RETRIES = 3
@@ -196,6 +197,100 @@ export async function enqueueDirtyAsOps(): Promise<void> {
     }
     void refreshPendingCount()
   }
+}
+
+// ── 非 delete 死信（upsert）补偿记录（#10）──────────────────────────────
+// delete 死信走 syncPending.rememberDeadDelete（本地已无该实体，pull 需跳过远端行）。
+// 非 delete（upsert）死信不同：本地实体仍在、只是本轮编辑推送失败出队，dirty 已被
+// drain 清空。若不持久化，clearAllSyncOps()（熔断恢复/重建队列）后 _enqueueMissingToCloud
+// 见「云端已有该 id 且本地非 dirty」判 false，这条领先远端的本地新值永久分叉、补不回来。
+// 故独立记录（不与 delete 墓碑共用 key/语义，避免 pull 误把存活行当已删跳过），
+// 由 _enqueueMissingToCloud 据此补推；push 成功后 forget。
+const DEAD_UPSERTS_KEY = 'lv_sync_dead_upserts'
+const MAX_DEAD_UPSERTS = 1000
+const DEAD_UPSERT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
+export interface DeadUpsertEntry {
+  table: string
+  itemId: string
+  /** 死信产生时本地项的 updatedAt（补推时判断本地值是否仍领先） */
+  updatedAt: number
+  ts: number
+}
+
+let _deadUpsertsCache: DeadUpsertEntry[] | null = null
+let _deadUpsertsCacheAt = 0
+const DEAD_UPSERTS_CACHE_MS = 2000
+
+function _readDeadUpserts(): DeadUpsertEntry[] {
+  if (_deadUpsertsCache && Date.now() - _deadUpsertsCacheAt < DEAD_UPSERTS_CACHE_MS) {
+    return _deadUpsertsCache
+  }
+  try {
+    const raw = safeGetItem(DEAD_UPSERTS_KEY)
+    if (!raw) {
+      _deadUpsertsCache = []
+      _deadUpsertsCacheAt = Date.now()
+      return _deadUpsertsCache
+    }
+    const list = JSON.parse(raw)
+    if (!Array.isArray(list)) {
+      _deadUpsertsCache = []
+      _deadUpsertsCacheAt = Date.now()
+      return _deadUpsertsCache
+    }
+    const now = Date.now()
+    _deadUpsertsCache = list.filter((d): d is DeadUpsertEntry =>
+      !!d && typeof d.table === 'string' && typeof d.itemId === 'string' &&
+      typeof d.updatedAt === 'number' && typeof d.ts === 'number' &&
+      now - d.ts < DEAD_UPSERT_MAX_AGE_MS,
+    )
+    _deadUpsertsCacheAt = Date.now()
+    return _deadUpsertsCache
+  } catch {
+    return []
+  }
+}
+
+function _writeDeadUpserts(list: DeadUpsertEntry[]): void {
+  const capped = list.slice(-MAX_DEAD_UPSERTS)
+  _deadUpsertsCache = capped
+  _deadUpsertsCacheAt = Date.now()
+  safeSetItem(DEAD_UPSERTS_KEY, JSON.stringify(capped))
+}
+
+/** 记录一条非 delete 死信（幂等，同 key 覆盖） */
+export function rememberDeadUpsert(table: string, itemId: string, updatedAt: number): void {
+  if (!table || !itemId) return
+  const list = _readDeadUpserts().filter((d) => !(d.table === table && d.itemId === itemId))
+  list.push({ table, itemId, updatedAt, ts: Date.now() })
+  _writeDeadUpserts(list)
+}
+
+/** 推送成功后清除死信 */
+export function forgetDeadUpsert(table: string, itemId: string): void {
+  if (!table || !itemId) return
+  const before = _readDeadUpserts()
+  if (!before.some((d) => d.table === table && d.itemId === itemId)) return
+  _writeDeadUpserts(before.filter((d) => !(d.table === table && d.itemId === itemId)))
+}
+
+/**
+ * 该 id 是否为「本地 updatedAt 领先云端却推送失败」的死信。
+ * 仅当本地项 updatedAt 不早于死信记录（仍是那次未上云的编辑或之后的新编辑）时补推，
+ * 避免本地已被远端覆盖/回滚到更旧值时误把旧值推回。
+ */
+export function isDeadUpsert(table: string, itemId: string, updatedAt: number): boolean {
+  return _readDeadUpserts().some((d) =>
+    d.table === table && d.itemId === itemId && updatedAt >= d.updatedAt,
+  )
+}
+
+/** 测试专用：清空非 delete 死信（与 __testPendingSync / __resetSyncCircuit 同惯例） */
+export function __resetDeadUpserts(): void {
+  _deadUpsertsCache = []
+  _deadUpsertsCacheAt = Date.now()
+  safeSetItem(DEAD_UPSERTS_KEY, '[]')
 }
 
 /** 已在本会话补推过的死信 delete key（防 online/visible 高频触发重复入队） */
@@ -462,8 +557,9 @@ export async function pushFromQueue(): Promise<boolean> {
     // 收集 retry+1 后的 raw id 写回队列（非死信路径）
     const retryUpdateOps: Array<{ id: number; retries: number }> = []
     for (const r of results) {
-      // 无匹配 update 视失败：Supabase update 不命中行时返 { data:null, error:null }，
-      // 仅靠 error 会被误判成功而永久出队，丢本地变更。port 层透传 count：0=无匹配行。
+      // 无匹配 update/upsert 视失败：Supabase 不命中行时返 { data:null, error:null }，
+      // 仅靠 error 会被误判成功而永久出队，丢本地变更。port 层透传 count：0=无匹配行
+      //（#27: upsert 也带 count/select 返回，RLS 静默 0 行同样落入此处判失败）。
       // 例外：delete 的 count=0 表示远端行本就不存在，删除目标已达成，按成功处理。
       const noMatch = r.result.count === 0 && r.op.action !== 'delete'
       if (r.result.error || noMatch) {
@@ -480,7 +576,17 @@ export async function pushFromQueue(): Promise<boolean> {
           console.warn(`[sync] op 达到重试上限(${MAX_PUSH_RETRIES})，移出队列 table=${r.op.table} id=${r.op.itemId}`)
           // delete 死信必须留墓碑：本地已无该实体，常规补推找不到它；墓碑用于后续重新入队
           // 并在 pull 时忽略云端存活行，避免彻底删除项被拉回。
-          if (r.op.action === 'delete') rememberDeadDelete(r.op.table, r.op.itemId)
+          if (r.op.action === 'delete') {
+            rememberDeadDelete(r.op.table, r.op.itemId)
+          } else {
+            // #10: 非 delete 死信也持久化 —— 本地实体仍在、dirty 已 drain，不记录则
+            // clearAllSyncOps 后 _enqueueMissingToCloud 见「云端已有该 id」判 false，
+            // 这条领先远端的本地新值永久分叉、手动全量同步也补不回来。
+            rememberDeadUpsert(
+              r.op.table, r.op.itemId,
+              Number(r.op.data?.updatedAt) || r.op.ts || Date.now(),
+            )
+          }
           for (const rw of keyRaws) if (rw.id != null) deadIds.push(rw.id)
         } else {
           for (const rw of keyRaws) if (rw.id != null) retryUpdateOps.push({ id: rw.id, retries: nextRetry })
@@ -494,6 +600,8 @@ export async function pushFromQueue(): Promise<boolean> {
       const nextRetry = (f.op.retries || 0) + 1
       const keyRaws = rawsOf(f.table, f.itemId)
       if (nextRetry >= MAX_PUSH_RETRIES) {
+        // #10: 加密阶段失败达上限同样是非 delete 死信，持久化供后续补推
+        rememberDeadUpsert(f.table, f.itemId, Number(f.op.data?.updatedAt) || f.op.ts || Date.now())
         for (const rw of keyRaws) if (rw.id != null) deadIds.push(rw.id)
       } else {
         for (const rw of keyRaws) if (rw.id != null) retryUpdateOps.push({ id: rw.id, retries: nextRetry })
@@ -513,7 +621,9 @@ export async function pushFromQueue(): Promise<boolean> {
       const noMatch = r.result.count === 0 && r.op.action !== 'delete'
       if (!r.result.error && !noMatch) {
         ds._newIds.delete(r.op.itemId)
+        // #10: 推送成功即清除该 id 的非 delete 死信（分叉已愈合）
         if (r.op.action === 'delete') forgetDeadDelete(r.op.table, r.op.itemId)
+        else forgetDeadUpsert(r.op.table, r.op.itemId)
       }
     }
 

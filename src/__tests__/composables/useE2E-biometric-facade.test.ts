@@ -391,14 +391,28 @@ describe('useE2E 小函数委托', () => {
     expect(_e2eState.cryptoKey).toBeNull()
   })
 
-  it('cancelSetup 推进 _setupGen（setupMasterPassword 各 await 后判 gen 短路）', () => {
+  it('cancelSetup 作废在途 setup：setupMasterPassword 返 cancelled 且零状态写回', async () => {
     const e2e = useE2E()
-    // 首次调用后 cancelSetup 推进 gen
+    // 启动一次真实 setup（首个 await 是 PBKDF2 派生）：async 函数同步执行到该 await 后挂起，
+    // 此时立刻取消 → _setupGen 推进；派生恢复后 setupMasterPassword 命中
+    // `gen !== _setupGen` 短路返 'cancelled'，不会走到 _saveCanaryData / setEnabled / _setKey。
+    // 这是「代次推进」唯一可观测的途径（_setupGen 是闭包级 let，不对外暴露）：
+    // 断言取消后旧异步流程不会写回状态，而非恒真的 expect(true)。
+    const pending = e2e.setupMasterPassword('cancel-me-pw')
     e2e.cancelSetup()
-    // 无状态变化可断言，但 gen 推进后 setupMasterPassword 如被调用会在各 await 后返 'cancelled'
-    // 此测仅验证 cancelSetup 不抛、不副作用即可
-    expect(true).toBe(true)
-  })
+    const result = await pending
+
+    expect(result).toBe('cancelled')
+    // 取消后旧流程不得把任何启用/解锁/密钥状态写回 store
+    expect(_e2eState.setEnabledCalls).toEqual([])
+    expect(_e2eState.setUnlockedCalls).toEqual([])
+    expect(_e2eState.setKeyCalls).toEqual([])
+    expect(_e2eState.setCloudCanaryStaleCalls).toEqual([])
+    expect(_e2eState.isE2EEnabled).toBe(false)
+    expect(_e2eState.isUnlocked).toBe(false)
+    // canary 也未落本地（_saveCanaryData 根本没被调用）
+    expect(localStorage.getItem('lv_e2e_canary')).toBeNull()
+  }, 20000)
 
   it('generateRecoveryKey 返 6 组 4 字符 recovery key 格式', () => {
     const e2e = useE2E()

@@ -148,14 +148,25 @@ export function verifyJwtWithJwks(
     return { ok: false, reason: 'bad_alg', detail: String(parsed.header.alg ?? 'none') }
   }
 
+  // 2026-11-14 审计 #37：exp 必须是数字且在有效期内。旧写法「typeof === number
+  // 才校验」会让缺 exp 的签名有效 JWT 被当成永不过期放行（fail-open）。
+  // 签名有效只能证明是谁签的，不能证明该令牌现在还有效。
   const exp = parsed.payload.exp
-  if (typeof exp === 'number' && exp * 1000 + tol < now) {
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) {
+    return { ok: false, reason: 'rejected', detail: 'missing or invalid exp' }
+  }
+  if (exp * 1000 + tol < now) {
     return { ok: false, reason: 'expired' }
   }
   // nbf 若存在也要卡（统一按秒比较）
   const nbf = (parsed.payload as { nbf?: unknown }).nbf
-  if (typeof nbf === 'number' && nbf * 1000 - tol > now) {
-    return { ok: false, reason: 'rejected', detail: 'nbf in future' }
+  if (nbf !== undefined) {
+    if (typeof nbf !== 'number' || !Number.isFinite(nbf)) {
+      return { ok: false, reason: 'rejected', detail: 'invalid nbf' }
+    }
+    if (nbf * 1000 - tol > now) {
+      return { ok: false, reason: 'rejected', detail: 'nbf in future' }
+    }
   }
 
   const kid = typeof parsed.header.kid === 'string' ? parsed.header.kid : ''

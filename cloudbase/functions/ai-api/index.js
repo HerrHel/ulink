@@ -13,6 +13,46 @@
  */
 
 const http = require('http')
+const crypto = require('crypto')
+
+// 2026-11-14 审计 #8：ai-api 直耗 MIMO_API_KEY，原先没有任何全局配额，
+// 且 cf-guard 的限流键取的是客户端可伪造的 CF-Connecting-IP（换头即绕过）。
+// 这里加一层 DB 计数的全局硬闸，fail-closed（与 check-link 同口径）。
+const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
+const API_KEY = process.env.CLOUDBASE_APIKEY || ''
+let _db = null
+function getDb() {
+  if (_db) return _db
+  const cloudbase = require('@cloudbase/node-sdk')
+  _db = cloudbase.init({ env: ENV_ID || cloudbase.SYMBOL_CURRENT_ENV, accessKey: API_KEY }).rdb()
+  return _db
+}
+
+/** 每 token（匿名共享桶）60s 窗口内的调用上限；DB 计数跨 isolate / 跨节点共享 */
+const AIAPI_LIMIT_AUTHED = 30
+const AIAPI_LIMIT_ANON = 10
+
+async function checkGlobalQuota(req, action) {
+  const auth = String(req.headers.authorization || '')
+  const token = /^Bearer\s+(\S+)/i.exec(auth)?.[1] || ''
+  const bucket = token
+    ? crypto.createHash('sha256').update(token).digest('hex').slice(0, 20)
+    : 'anon'
+  try {
+    const r = await getDb().rpc('consume_rate_limit', {
+      p_key: `ai-api:${action}:${bucket}`,
+      p_limit: token ? AIAPI_LIMIT_AUTHED : AIAPI_LIMIT_ANON,
+      p_window_secs: 60,
+    })
+    if (r.error) return { ok: false, status: 503, error: 'quota_unavailable' }
+    // consume_rate_limit 拒绝时返回 {} 而非 false，判定必须是 data !== true
+    if (r.data !== true) return { ok: false, status: 429, error: 'rate_limited' }
+    return { ok: true }
+  } catch (err) {
+    console.error('[ai-api] global quota rpc failed (fail-closed):', String(err))
+    return { ok: false, status: 503, error: 'quota_unavailable' }
+  }
+}
 
 // 派生产物（esbuild 从 functions/api/*.ts 生成，请勿手改）
 const candidates = require('./ai-candidates.js')
@@ -42,18 +82,18 @@ function readBody(req) {
 
 function buildHeaders(nodeHeaders) {
   const headers = new Headers()
+  // 客户端可伪造的 IP 头一律剥离：CloudBase 网关不回填可信 IP，原先 buildHeaders
+  // 原样复制 cf-connecting-ip / x-forwarded-for，使 cf-guard 的软限流键能被逐请求
+  // 换掉而完全绕过。剥掉后键退化为「白名单 Origin + path」（非白名单 Origin 会被
+  // guard 直接 403），配合上面的 DB 全局硬闸使用。
+  const SPOOFABLE_IP_HEADERS = new Set([
+    'cf-connecting-ip', 'x-forwarded-for', 'x-real-ip',
+    'x-client-ip', 'true-client-ip', 'forwarded',
+  ])
   for (const [key, value] of Object.entries(nodeHeaders || {})) {
+    if (SPOOFABLE_IP_HEADERS.has(key.toLowerCase())) continue
     if (typeof value === 'string') headers.set(key, value)
     else if (Array.isArray(value)) headers.set(key, value.join(','))
-  }
-  // 共享的 cf-guard 用 CF-Connecting-IP 做软限流键；CloudBase 网关不回填可信 IP，
-  // 这里用 X-Forwarded-For 末段兜底（可伪造，属已知技术债，仅作软闸）。
-  if (!headers.has('cf-connecting-ip')) {
-    const hops = String(nodeHeaders['x-forwarded-for'] || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (hops.length) headers.set('cf-connecting-ip', hops[hops.length - 1])
   }
   return headers
 }
@@ -108,6 +148,13 @@ const server = http.createServer(async (req, res) => {
 
     if (action !== 'candidates' && action !== 'extract') {
       sendJson(res, 400, { success: false, error: 'invalid_action' })
+      return
+    }
+
+    // 全局硬闸：先于转发到 MIMO，避免匿名/伪造 IP 无限消耗上游额度
+    const quota = await checkGlobalQuota(req, action)
+    if (!quota.ok) {
+      sendJson(res, quota.status, { success: false, error: quota.error })
       return
     }
 

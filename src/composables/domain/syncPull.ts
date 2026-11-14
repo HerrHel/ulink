@@ -60,6 +60,14 @@ export async function pullChanges(full = false): Promise<boolean> {
     for (const r of sinceResults) {
       if (r.error) throw new Error(r.error.message)
     }
+    // #2: 软删批次任一表查询失败必须整轮中止。旧实现只在逐表循环里
+    // `console.warn + continue`，末尾仍 setLastSyncAt / recordSyncSuccess —— 该表的
+    // 墓碑时间戳落在下次 gt(since) 之外，删除永久复活且 UI 显示「同步成功」。
+    // 与 sinceResults 同一 fail-fast 口径：throw 走 catch（不推进游标、不记成功），
+    // 且在任何本地 merge / 入队之前拦下，避免留下半轮写入。
+    for (const r of softDelResults) {
+      if (r.error) throw new Error(r.error.message)
+    }
 
     const ds = useDataStore()
     const e2e = useE2E()
@@ -237,7 +245,12 @@ export async function pullChanges(full = false): Promise<boolean> {
 
     // 去重产生的远端行墓碑入队：其余设备拉到后把各自副本软删进回收站，全设备收敛为一份。
     // 本地数据本身未变（只是跳过了 insert），不计入 localChanged。
-    if (dupTombstoneOps.length) await enqueueSyncOps(dupTombstoneOps)
+    // #12: enqueueSyncOps 返回 false（IDB 配额满/隐私模式）时中止本轮 —— 墓碑静默
+    // 不入队会让远端重复行一直留着，且末尾仍报 success。严格判 `=== false`，兼容
+    // 返回 undefined 的旧测试桩（视为成功）。throw 走 catch 保留游标、不记成功。
+    if (dupTombstoneOps.length && (await enqueueSyncOps(dupTombstoneOps)) === false) {
+      throw new Error('去重墓碑入队失败（IDB 不可写）')
+    }
 
     const isLocalAlive: Record<EntityType, (id: string) => boolean> = {
       bookmark: (id) => !!ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt,
@@ -254,7 +267,9 @@ export async function pullChanges(full = false): Promise<boolean> {
     for (let i = 0; i < SYNC_ENTITY_ORDER.length; i++) {
       const type = SYNC_ENTITY_ORDER[i]
       const res = softDelResults[i]
-      if (res.error) { console.warn('[sync] deletion sync query failed:', res.error); continue }
+      // #2 主防线已在三批查询返回后统一 fail-fast（见上方 softDelResults 检查），
+      // 此处 res.error 理论不可达；保留 throw 作双保险，绝不再 warn+continue 后推进游标。
+      if (res.error) throw new Error(res.error.message)
       for (const row of res.data || []) {
         const id = row.id
         // 与 reconcileDelete(122)/merge(115)/Realtime(52) 一致守门：本地 dirty/pending
@@ -349,7 +364,10 @@ export async function pullChanges(full = false): Promise<boolean> {
       }
       if (reassertOps.length) {
         console.warn(`[sync] 墓碑重申：${reassertOps.length} 项云端存活但早于本地删除时间，重新入队墓碑`)
-        await enqueueSyncOps(reassertOps)
+        // #12: 入队失败中止本轮，否则墓碑重申静默丢失、删除仍被复活却报 success
+        if ((await enqueueSyncOps(reassertOps)) === false) {
+          throw new Error('墓碑重申入队失败（IDB 不可写）')
+        }
       }
     }
 

@@ -11,6 +11,9 @@
   勿在此处重新写入正文。
 -->
 <title>隐私政策已迁移 · 与链 ulink</title>
+<!-- 2026-11-14 审计 #51：静态托管不下发 public/_headers，桩页原先完全没有 CSP。
+     与 vite.config.ts securityHeaders 同源（meta 不支持 frame-ancestors，故略去）。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; frame-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https: wss://*.supabase.co; font-src 'self' https://fonts.gstatic.com; form-action 'self'; base-uri 'self'">
 <meta name="robots" content="noindex,follow">
 <link rel="canonical" href="https://ulink.ren/legal/privacy-policy.html">
 <meta http-equiv="refresh" content="0;url=/legal/privacy-policy.html">

@@ -37,13 +37,84 @@ const ROOT = resolve('.')
 const FN_DIR = resolve('cloudbase/functions', fnName)
 if (!existsSync(FN_DIR)) throw new Error(`函数目录不存在: ${FN_DIR}`)
 
+/** 正则元字符转义（env 键名通常是 [A-Z_]+，仍做防御） */
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * 读取 .env.local 中的键（#48 多行 PEM 兼容）。
+ *
+ * 旧版单行正则 `^KEY\s*=\s*(.*)$`（无 s 标志）会把真换行的 PEM 截成第一行：
+ *   KEY="-----BEGIN PRIVATE KEY-----
+ *   MIIE...
+ *   -----END PRIVATE KEY-----"
+ * 只拿到 `"-----BEGIN PRIVATE KEY-----`，注入线上后支付验签静默失败，脚本却仍 exit 0。
+ *
+ * 支持三种写法，且**完整保留字面量 \n**（云函数的 pem() 会把它还原成真换行，既有兼容不变）：
+ *   KEY=value                                   单行无引号
+ *   KEY="a\nb"                                  双引号 + 字面量 \n（一行写完）
+ *   KEY="-----BEGIN ...<真换行>...-----END ..."  引号内跨行真换行
+ * 值内转义序列（含 \n、\"）原样保留、不在此 unescape，避免破坏既有字面量 \n 兼容。
+ */
 function readEnvLocal(key) {
+  let raw
   try {
-    const raw = readFileSync(resolve('.env.local'), 'utf8')
-    const m = raw.match(new RegExp(`^${key}\\s*=\\s*(.*)$`, 'm'))
-    return m ? m[1].trim() : undefined
+    raw = readFileSync(resolve('.env.local'), 'utf8').replace(/\r\n/g, '\n')
   } catch {
     return undefined
+  }
+  const start = raw.search(new RegExp(`^${escapeRe(key)}[ \\t]*=`, 'm'))
+  if (start < 0) return undefined
+  const rest = raw.slice(start)
+  let i = rest.indexOf('=') + 1
+  while (i < rest.length && (rest[i] === ' ' || rest[i] === '\t')) i++
+  if (i >= rest.length) return ''
+  const quote = rest[i] === '"' || rest[i] === "'" ? rest[i] : null
+  if (!quote) {
+    // 无引号：到行尾为止（真换行即结束）
+    const nl = rest.indexOf('\n', i)
+    return (nl < 0 ? rest.slice(i) : rest.slice(i, nl)).trim()
+  }
+  i++ // 跳过开引号
+  let buf = ''
+  let closed = false
+  while (i < rest.length) {
+    const ch = rest[i]
+    if (ch === '\\' && i + 1 < rest.length) {
+      // 原样保留转义序列：字面量 \n 必须交给云函数 pem() 还原，不能在这里吞掉反斜杠
+      buf += ch + rest[i + 1]
+      i += 2
+      continue
+    }
+    if (ch === quote) { closed = true; break }
+    buf += ch
+    i++
+  }
+  // 未闭合引号视为坏配置：返回 undefined，由缺变量 / PEM 校验显式暴露，绝不注入半截值
+  return closed ? buf : undefined
+}
+
+/**
+ * #48：注入前校验多行 PEM 首尾完整。
+ * 仅针对「看起来是 PEM」的值（含 -----BEGIN）：必须含同标签的 -----END 且以 END 收尾。
+ * 真换行被截成第一行、或引号未闭合导致的残缺 PEM 会在这里被拦下并非零退出，绝不把半截
+ * 密钥注入线上（否则支付验签静默失败而脚本 exit 0）。普通字符串值（APIV3_KEY / APPID 等）
+ * 无 BEGIN 标记，不受影响，避免误伤。
+ */
+function assertPemComplete(env) {
+  for (const [k, v] of Object.entries(env)) {
+    if (typeof v !== 'string' || !v.includes('-----BEGIN')) continue
+    const begin = /-----BEGIN ([A-Z0-9 ]+)-----/.exec(v)
+    const ends = [...v.matchAll(/-----END ([A-Z0-9 ]+)-----/g)].map((m) => m[1])
+    const label = begin ? begin[1] : '(未知)'
+    const complete = !!begin && ends.includes(label) && /-----END [A-Z0-9 ]+-----\s*$/.test(v.trim())
+    if (!complete) {
+      console.error(`✖ 环境变量 ${k} 疑似多行 PEM，但首尾不完整（缺 -----END ${label}----- 或已被截断）`)
+      console.error('  .env.local 请用引号包裹多行 PEM（KEY="-----BEGIN...\\n...-----END..."），或写成字面量 \\n；')
+      console.error('  拒绝注入残缺密钥，避免线上支付验签静默失败。')
+      process.exit(1)
+    }
   }
 }
 
@@ -54,6 +125,15 @@ if (!envId) throw new Error('缺少 VITE_CLOUDBASE_ENV_ID')
 // 这里直接报错退出 1
 if (envOnly && !apiKey) {
   console.error('✖ --env-only 需要 CLOUDBASE_APIKEY（密钥轮换唯一入口），未找到，拒绝继续')
+  process.exit(1)
+}
+// #18：普通部署（非 --env-only）缺 CLOUDBASE_APIKEY 时，第 2 步的 env 注入整块会被跳过，
+// 但代码包仍会 --force 上传、末尾照常打印「访问地址」并 exit 0 ——「更新成功但密钥没换」假绿。
+// 必须在上传代码包之前拒绝，避免留下「代码已更新、env 未注入」的半吊子线上状态。
+// --env-only 的口径保持上方原有分支不变（它本就要求 key）。
+if (!envOnly && !apiKey) {
+  console.error('✖ 未找到 CLOUDBASE_APIKEY：环境变量注入将被跳过，拒绝继续部署（避免「更新成功但密钥没换」假绿）')
+  console.error('  请在 .env.local 配置 CLOUDBASE_APIKEY（或 export 到环境）后重试；仅轮换密钥可用 --env-only。')
   process.exit(1)
 }
 
@@ -112,13 +192,17 @@ function tcb(cwd, argv) {
 }
 
 // ── 0) 先生成由 TS 真源派生的 JS（ssrf-guard 等），保证与真源同步 ──
+// #18：生成失败必须立即退出 1。旧版只打 warn 后继续 --force 部署，会把旧的 / 残缺的派生
+// JS 推上线（本地部署路径完全绕过 CI 的派生守卫），末尾却仍打印「访问地址」并 exit 0。
 try {
   execFileSync(process.execPath, [resolve('scripts/build-fn-assets.mjs')], {
     encoding: 'utf8',
   })
   console.log('已生成派生资产（build-fn-assets.mjs）')
 } catch (e) {
-  console.log('⚠ 派生资产生成失败（继续尝试部署）:', String(e.stdout || e.message).slice(0, 200))
+  const detail = String((e && (e.stdout || e.stderr)) || (e && e.message) || e).slice(-500)
+  console.error('✖ 派生资产生成失败（build-fn-assets.mjs），拒绝继续部署：', detail)
+  process.exit(1)
 }
 
 // ── 1) 部署（cwd = 函数目录，scf_bootstrap 才能被识别）──
@@ -330,8 +414,9 @@ const FN_EXTRA_ENV = {
     }
     const origins = readEnvLocal('ALLOWED_ORIGINS')
     if (origins) out.ALLOWED_ORIGINS = origins
-    // ⚠️ 多行 PEM 在 .env.local 里必须写成**字面量 \n**（真换行会被 readEnvLocal 的
-    // 单行正则截断成第一行），云函数里的 pem() 会把它还原成真换行。
+    // ⚠️ 多行 PEM 在 .env.local 里两种写法都支持：引号内**字面量 \n**（云函数 pem()
+    // 会还原成真换行，既有兼容不变）或引号内**真换行**（readEnvLocal 已支持跨行读取）。
+    // 无论哪种，assertPemComplete 都会在注入前校验首尾 -----BEGIN/-----END 完整，残缺即报错退出。
     const CHANNEL_ENV = {
       // 微信支付（Native 扫码）
       WXPAY_APPID: 'WXPAY_APPID',
@@ -392,6 +477,17 @@ const DEFAULT_PROFILE = { timeout: 20, memorySize: 128 }
 if (apiKey) {
   const rcPath = resolve(FN_DIR, 'cloudbaserc.json')
   const profile = { ...DEFAULT_PROFILE, ...(FN_PROFILE[fnName] || {}) }
+  const envVariables = {
+    CLOUDBASE_ENV_ID: envId,
+    CLOUDBASE_APIKEY: apiKey,
+    // 没有额外变量的函数（如 edge-headers）走空对象工厂；此处曾误把 {} 当函数调用
+    ...sanitizeEnvSalts(
+      typeof FN_EXTRA_ENV[fnName] === 'function' ? FN_EXTRA_ENV[fnName]() : {},
+    ),
+  }
+  // #48：写含密文件 / 注入之前先校验多行 PEM 首尾完整，残缺即报错退出，
+  // 不把半截密钥推到线上（否则支付验签静默失败而脚本仍可能打印成功）。
+  assertPemComplete(envVariables)
   const rc = {
     envId,
     functions: [
@@ -401,14 +497,7 @@ if (apiKey) {
         memorySize: profile.memorySize,
         runtime: 'Nodejs20.19',
         installDependency: true,
-        envVariables: {
-          CLOUDBASE_ENV_ID: envId,
-          CLOUDBASE_APIKEY: apiKey,
-          // 没有额外变量的函数（如 edge-headers）走空对象工厂；此处曾误把 {} 当函数调用
-          ...sanitizeEnvSalts(
-            typeof FN_EXTRA_ENV[fnName] === 'function' ? FN_EXTRA_ENV[fnName]() : {},
-          ),
-        },
+        envVariables,
       },
     ],
   }
@@ -430,7 +519,10 @@ if (apiKey) {
     console.log('已删除临时 cloudbaserc.json（含密，不落仓库）')
   }
 } else {
-  console.log('⚠ 未找到 CLOUDBASE_APIKEY，跳过环境变量注入')
+  // 理论上不可达：文件头部已对 --env-only / 普通部署两种场景分别做了 !apiKey 前置拒绝。
+  // 保留为防御性兜底，杜绝后续重构重新引入「跳过 env 注入仍 exit 0」的假绿。
+  console.error('✖ 未找到 CLOUDBASE_APIKEY，环境变量注入被跳过（不应到达此处）')
+  process.exit(1)
 }
 
 // ── 3) 修正路由上游类型：deploy 的 --path 默认建成 SCF（Event）类型，

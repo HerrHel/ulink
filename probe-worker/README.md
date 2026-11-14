@@ -57,21 +57,41 @@ curl -i "https://ulink-probe.<子域>.workers.dev/?url=http://127.0.0.1:8080"
 # 期望：400 {"error":"private_ip_forbidden","outcome":"error","status":0}
 ```
 
-## 接到前端
+> ⚠️ 上面这些 `*.workers.dev` 地址只用于本 Worker 形态的本地/备选验证，国内直连不可达，
+> **不要写进 `.env.production`、不要用于生产**（生产端点见下一节）。
 
-在 `.env.production` 增加一行（**必须是 GET 端点**，`probeOverseas` 用 GET）：
+## 接到前端（⚠️ 备选形态、国内不可直连、不要用于生产）
+
+> **本 Worker 只是「将来绑自有域名」时的备选实现，不是当前生产端点。**
+> 2026-11-13 实测（见文件头）：`*.workers.dev` 在国内 DNS 通、TCP 20s 不通，直连超时；
+> 把 workers.dev 地址写进 `.env.production` 会让探针**静默失效**（`probeOverseas` 4500ms
+> abort 后保持国内原判，用户无感知）。`*.pages.dev` 同条件 200 / 0.43s，故**生产走 Pages**。
+>
+> **当前生产实际值**（见仓库根 `.env.production`，`probeOverseas` 用 GET，必须是带端点路径的
+> 完整 GET 地址；只给 `*.pages.dev` 根路径会拿到 HTML / 404）：
+>
+> ```
+> VITE_OVERSEAS_PROBE_URL=https://ulink-probe.pages.dev/api/check-link
+> ```
+>
+> 请勿把 `VITE_OVERSEAS_PROBE_URL` / `VITE_CF_FN_BASE` 指向本文档的 `*.workers.dev` 地址，
+> 也不要照抄本页 curl 自测里的 `...workers.dev/?url=...` 根路径去配生产。
+
+只有在「已给 Worker 绑了国内可直连的自有域名、并实测可达」之后，才考虑把生产切到本
+Worker 形态。届时 `.env.production` 应写**完整的 GET 端点**（`VITE_OVERSEAS_PROBE_URL` 直接
+用完整 URL；若改用 `VITE_CF_FN_BASE` 只给基址，`src/config/urls.ts` 会拼 `/api/check-link`）：
 
 ```
-VITE_OVERSEAS_PROBE_URL=https://ulink-probe.<子域>.workers.dev/
+# 仅备选：需先验证该自有域名国内可达；不要指向 *.workers.dev、不要用于生产
+VITE_OVERSEAS_PROBE_URL=https://<你的自有域名>/api/check-link
 ```
 
-或只配基址让代码自己拼路径：
+> 注：`wrangler deploy` 打印的 `https://ulink-probe.<子域>.workers.dev` 与上面「先自测」里的
+> `...workers.dev/?url=...` 是 Worker 形态的根路径入口（其 `fetch` 不限路径），**仅用于本地
+> `wrangler dev` / 备选形态验证，不是生产探针端点**。
 
-```
-VITE_CF_FN_BASE=https://ulink-probe.<子域>.workers.dev
-```
-
-两者都不配 = 保持禁用（当前状态）。改完重新构建部署（`main` 由 CI 自动发布）。
+保持 `.env.production` 现有的 Pages 值 = 生产探针走 Pages（当前状态）。改完重新构建部署
+（`main` 由 CI 自动发布）。
 
 ## 边界与风险（务必了解）
 

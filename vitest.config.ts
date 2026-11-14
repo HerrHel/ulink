@@ -71,6 +71,18 @@ export default defineConfig({
         '**/*.test.js',
         'e2e/',
       ],
+      // #54（审计 2026-11-14）：coverage 此前无 thresholds 且从不进 CI，覆盖率断崖
+      // 下跌无红灯。这里设保守下限：能挡住「覆盖率归零 / 暴跌」，又明显低于健康基线，
+      // 不会必红。本机因 vitest 基线故障（默认 pool 注入失败，见任务报告）无法取得
+      // CI 真实覆盖率数值，故取偏低值；待 CI 首轮 `npm run coverage` 输出真实百分比后，
+      // 按审计报告建议上调到「略低于实际值」并锁定。
+      // CI 接入见 ci.yml 的「Unit Tests + Coverage (thresholds gate)」步骤。
+      thresholds: {
+        lines: 20,
+        functions: 20,
+        branches: 10,
+        statements: 20,
+      },
     },
   },
 })

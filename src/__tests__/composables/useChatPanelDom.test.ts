@@ -190,4 +190,25 @@ describe('useChatPanelDom 下滑关闭手势', () => {
     expect(h1.api.translateY.value).toBe(0)
     h1.wrapper.unmount()
   })
+
+  it('上推取消（dy<=0）：translateY 归零、isSwiping=false，松手不关闭面板', async () => {
+    const h1 = makeHarness(300)
+    const handle = h1.panel.querySelector('.detail-drag-handle') as HTMLElement
+    h1.panel.dispatchEvent(touchEvent('touchstart', 100, handle))
+    h1.panel.dispatchEvent(touchEvent('touchmove', 250, handle))
+    expect(h1.api.translateY.value).toBe(150)
+    expect(h1.api.isSwiping.value).toBe(true)
+    // 推回起点 dy=0
+    h1.panel.dispatchEvent(touchEvent('touchmove', 100, handle))
+    expect(h1.api.translateY.value).toBe(0)
+    expect(h1.api.isSwiping.value).toBe(false)
+    // 继续上推 dy<0，仍保持归零且非 swiping
+    h1.panel.dispatchEvent(touchEvent('touchmove', 60, handle))
+    expect(h1.api.translateY.value).toBe(0)
+    expect(h1.api.isSwiping.value).toBe(false)
+    h1.panel.dispatchEvent(touchEvent('touchend', 60, handle))
+    expect(useUIStore().panels.detail).toBe(true)
+    expect(h1.api.panelStyle.value).toBeUndefined()
+    h1.wrapper.unmount()
+  })
 })

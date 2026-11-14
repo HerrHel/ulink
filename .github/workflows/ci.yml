@@ -33,10 +33,15 @@ jobs:
       # F2-006：类型检查进入门禁（现串联主 tsconfig 与 e2e/config 专用 tsconfig.e2e.json）
       - name: Typecheck
         run: npm run typecheck
-      - name: Unit Tests
-        run: npm run test
+      # #54（审计 2026-11-14）：coverage 此前无 thresholds 且从不进 CI（覆盖率断崖
+      # 下跌无红灯）。把单测步骤升级为 `npm run coverage`：vitest.config.ts 的
+      # coverage.thresholds 会在覆盖率不达标时让该步骤非零退出 → CI 红。
+      # 复用同一轮全量测试，不额外再跑一遍，避免 CI 时间翻倍（与 #20 同源考量）。
+      - name: Unit Tests + Coverage (thresholds gate)
+        run: npm run coverage
       # CloudBase 形态定向单测：默认套件 VITE_BACKEND='' 使 isCloudBaseBackend()===true
-      # 分支在 CI 零执行，这里用独立配置单独跑一组契约子集补齐盲区。
+      # 分支在 CI 零执行；独立配置（vitest.cloudbase.config.ts，见 #20）按主要目录
+      # 覆盖 lib/composables/stores/components，让这些分支在 cloudbase 形态下被执行。
       - name: Unit Tests (CloudBase)
         run: npm run test:cloudbase
       # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错。
@@ -48,8 +53,14 @@ jobs:
       # dev 工具链（vitest / @cloudbase/manager-node 的传递依赖）有已知 high 漏洞，
       # 但不进入生产产物，且 decode-uri-component 的修复需要 breaking 升级部署 CLI。
       # 保留可见性、不阻塞发布；清单与处置计划见 docs/TECH_DEBT.md「依赖」一节。
+      # #52：改用 GitHub 原生 continue-on-error，而非 `|| echo` 吞退出码 ——
+      # audit 的真实退出码与完整输出仍如实上报到本 step（CI 界面显示为失败但 job 继续），
+      # 不再用恒 0 的假绿遮掩 high 漏洞。
+      # TODO(复查到期日 2026-12-31)：完成 dev 依赖 breaking 升级后移除本豁免，
+      # 恢复与 prod-only 一致的 blocking 门禁。
       - name: Dependency Audit (dev toolchain, advisory)
-        run: npm audit --audit-level=high || echo "::warning::dev 工具链存在已知漏洞（不进入生产产物），见 docs/TECH_DEBT.md"
+        continue-on-error: true
+        run: npm audit --audit-level=high
       # 派生 JS 资产一致性守卫：由 TS 真源重新生成派生资产，若与提交产物有 diff
       # （手改/漏跑生成器）立即红灯，杜绝部署漂移版本。diff 范围必须覆盖两个生成器的
       # **全部**产出：build-fn-assets.mjs（云函数 + video-worker 清单）与
@@ -77,12 +88,14 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      # 非阻塞诊断：vite.config 依赖 marked。注意 marked v18 的 exports 不导出
-      # package.json，`require('marked/package.json')` 会假性报缺失 —— 用动态 import 判断。
+      # #53（审计 2026-11-14）：原 `ls ... || echo` 与 `.catch(console.log)` 都吞掉失败、
+      # 恒 0 退出，构建期依赖缺失不会红灯。改为阻塞守卫：目录缺失或动态 import 失败
+      # 都必须显式 exit 1（marked v18 的 exports 不导出 package.json，故用动态 import
+      # 而非 require('marked/package.json') 判断，避免假性报缺失）。
       - name: Verify build deps present
         run: |
-          ls -d node_modules/marked 2>/dev/null || echo "::warning::node_modules/marked 目录不存在"
-          node -e "import('marked').then(()=>console.log('marked dynamic import OK')).catch(e=>console.log('marked import failed:', e.code))"
+          test -d node_modules/marked || { echo "::error::node_modules/marked 目录不存在，构建期依赖缺失"; exit 1; }
+          node -e "import('marked').then(() => console.log('marked dynamic import OK')).catch(e => { console.error('::error::marked 动态 import 失败:', e.code || e.message); process.exit(1) })"
       # C1-002 / F2-002：Playwright 进入 PR 门禁；缓存 Chromium 运行时避免每次全量下载
       - name: Cache Playwright browser
         uses: actions/cache@v4
@@ -112,9 +125,15 @@ jobs:
           CI: true
       # test:e2e:prod（PurgeCSS/minify 回归）此前从未进 CI：默认 test:e2e 走 dev server，
       # 复现不了仅生产构建生效的问题。LV_E2E_PROD=1 让 webServer 改走 build + preview，
-      # 只跑 app / landing 两个核心文件控制耗时（全量 prod 太慢）。
+      # 产物按 .env.production 构建（VITE_BACKEND=cloudbase，即线上后端形态）。
+      # #58：白名单原先只有 app / landing 两个纯 UI 文件，后端形态从未覆盖生产产物。
+      # 现纳入 e2e/prod-backend-shape.spec.ts：不注入任何 mock，通过记录页面真实发出的
+      # 后端请求断言走 CloudBase 基址、不出现 Supabase Edge Function 特征。
+      # 未纳入 l1-sync-mock.spec.ts：其 Supabase 形态假会话注入在 prod CloudBase 产物上
+      # 实测不兼容（登录态无法恢复）；prod 构建 env 保持纯透传，不注入任何 VITE_* 覆盖，
+      # 以免产物与线上形态不一致。dev 形态的同步链路由默认 test:e2e 的 L1 mock 覆盖。
       - name: E2E Tests (prod build)
-        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts --config playwright.config.ts
+        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts e2e/prod-backend-shape.spec.ts --config playwright.config.ts
         env:
           CI: true
           LV_E2E_PROD: '1'
@@ -205,21 +224,49 @@ jobs:
           # --safe：发布前备份，上传失败自动回滚（省去跨洋 --verify 哈希对比耗时）
           $CLI hosting deploy ./dist -e "$ENV_ID" --safe
       # 部署后校验线上实际版本：带时间戳穿透缓存，比对 version.json.commit 与本次
-      # github.sha，杜绝「CI 全绿但线上仍是旧版本」（CDN 传播有秒级延迟，故少量重试）
+      # github.sha，杜绝「CI 全绿但线上仍是旧版本」（CDN 传播有秒级延迟，故少量重试）。
+      # #47：此前 3 次不匹配只 exit 1，CI 红但线上停在错误版本。现增加兜底：
+      # 首轮失败后「重传本轮 dist 再校验一轮」，而不是只报错。重传是幂等的（同一 dist），
+      # 且沿用 --safe（发布前备份）语义：重传失败不会破坏现网，线上保持原版本，
+      # 可用备份手动回滚。不改动 Deploy 步骤本身的流程。
       - name: Verify deployed version
         env:
           EXPECTED_SHA: ${{ github.sha }}
+          CLOUDBASE_APIKEY: ${{ secrets.CLOUDBASE_APIKEY }}
         run: |
-          for attempt in 1 2 3; do
-            URL="https://ulink.ren/version.json?t=$(date +%s)"
-            RESPONSE=$(curl -fsSL "$URL" 2>/dev/null) || RESPONSE=""
-            DEPLOYED_SHA=$(printf '%s' "$RESPONSE" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const c=JSON.parse(s).commit;if(typeof c==='string')process.stdout.write(c)}catch(e){}})")
-            if [ -n "$DEPLOYED_SHA" ] && [ "$DEPLOYED_SHA" = "$EXPECTED_SHA" ]; then
-              echo "::notice::线上版本校验通过：$DEPLOYED_SHA（第 $attempt 次）"
-              exit 0
-            fi
-            echo "::warning::第 $attempt 次线上版本未匹配（期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}）"
-            if [ "$attempt" -lt 3 ]; then sleep 5; fi
-          done
-          echo "::error::线上 version.json commit 与本次提交不一致：期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}；线上可能仍是旧版本"
+          CLI="npx --yes -p @cloudbase/cli tcb"
+          check_deployed() {
+            for attempt in 1 2 3; do
+              URL="https://ulink.ren/version.json?t=$(date +%s)"
+              RESPONSE=$(curl -fsSL "$URL" 2>/dev/null) || RESPONSE=""
+              DEPLOYED_SHA=$(printf '%s' "$RESPONSE" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const c=JSON.parse(s).commit;if(typeof c==='string')process.stdout.write(c)}catch(e){}})")
+              if [ -n "$DEPLOYED_SHA" ] && [ "$DEPLOYED_SHA" = "$EXPECTED_SHA" ]; then
+                echo "::notice::线上版本校验通过：$DEPLOYED_SHA（第 $attempt 次）"
+                return 0
+              fi
+              echo "::warning::第 $attempt 次线上版本未匹配（期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}）"
+              if [ "$attempt" -lt 3 ]; then sleep 5; fi
+            done
+            return 1
+          }
+
+          if check_deployed; then exit 0; fi
+
+          # 兜底：CDN 传播延迟 / 上次上传部分失败 → 重传本轮 dist 再校验一轮。
+          # 复用 Deploy 步骤已建立的 CloudBase 登录态；若已失效则重新登录后重传。
+          echo "::warning::首轮校验未通过，重传本轮 dist 后再校验一次（--safe 备份仍在，失败不影响现网）"
+          if ! $CLI hosting deploy ./dist -e "$ENV_ID" --safe; then
+            $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID" || {
+              echo "::error::重传前重新登录失败；线上保持原版本（--safe 备份可手动回滚）"
+              exit 1
+            }
+            $CLI hosting deploy ./dist -e "$ENV_ID" --safe || {
+              echo "::error::重传 dist 失败；线上保持原版本（--safe 备份可手动回滚）"
+              exit 1
+            }
+          fi
+          sleep 5
+          if check_deployed; then exit 0; fi
+
+          echo "::error::重传后线上 version.json commit 仍与本次提交不一致：期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}；请用 --safe 备份手动回滚并核查 CDN/部署链路"
           exit 1

@@ -9,6 +9,7 @@
  */
 import { computed, onUnmounted, ref, type Ref } from 'vue'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { useToastStore } from '../../stores/toast.js'
 import {
   loadSessions,
   saveSessions,
@@ -239,6 +240,12 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
     closeSessionMenu?.()
     const ok = await showConfirm(t('ai.clearAllConfirm'))
     if (!ok) return
+
+    // 清空前清理撤销栈：残留的「删除会话」undo toast 撤销闭包持有 deletedForUndo，
+    // 点撤销会把刚清空的会话重新写回磁盘（复活）。先清空数组 + 定时器，再 dismiss toast。
+    deletedForUndo.length = 0
+    if (undoBatchTimer) { clearTimeout(undoBatchTimer); undoBatchTimer = null }
+    try { useToastStore().dismissUndo() } catch { /* Pinia 未初始化 */ }
 
     clearAllSessions()
     sessions.value = []

@@ -179,10 +179,21 @@ function headersPlugin(): Plugin {
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
         Object.entries(securityHeaders).forEach(([k, v]) => res.setHeader(k, v));
-        if (/\.html?$/.test(req.url!) || req.url === '/') {
+        const url = (req.url || '').split('?')[0];
+        // #51：SW 与 PWA 注册脚本必须 no-cache，不能套下面「一年 immutable」的静态资源规则。
+        // sw.js 文件名固定、靠字节比对更新；注册脚本由 `virtual:pwa-register` 生成，构建期
+        // 落在 /assets/virtual_pwa-register-*.js（兼容旧的 /registerSW.js 形态）。给它们下发
+        // 一年 immutable 会与 public/_headers 里 sw.js 的 no-cache 直接矛盾，导致 SW 永不更新。
+        const isSwOrRegisterScript =
+          /(?:^|\/)sw\.js$/i.test(url) ||
+          /registerSW(?:-[^/]*)?\.js$/i.test(url) ||
+          /virtual_pwa-register[^/]*\.js$/i.test(url);
+        if (/\.html?$/.test(url) || url === '/') {
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        } else if (/\.(js|css|svg|woff2|png|jpg|ico)$/.test(req.url!)) {
+        } else if (isSwOrRegisterScript) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else if (/\.(js|css|svg|woff2|png|jpg|ico)$/.test(url)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         }
         next();
@@ -1462,6 +1473,9 @@ export default defineConfig({
     metadataExtractorPlugin(),
     vue(),
     VitePWA({
+      // #50：保持 autoUpdate，不改成 prompt（会改变产品行为）。此处只负责 SW 换代自动
+      // skipWaiting；换代后的整页 reload 由 src/main.ts 的 controllerchange 监听触发，
+      // 「未保存编辑」判断需改该处（本批次越界），详见下方 runtimeCaching 的说明。
       registerType: 'autoUpdate',
       manifest: {
         name: '与链',
@@ -1507,13 +1521,27 @@ export default defineConfig({
           // 网络失败（离线）回退最近缓存的页面。10s 内网络无响应也回退缓存（慢网保护）。
           // 排除 /s/*：分享页响应带 `Cache-Control: private, no-store`（含验密后的私密内容），
           // Workbox 的 NetworkFirst 只按 status 200 落盘、不读 Cache-Control，若不排除，
-          // 已撤销/已加密码的分享会在同一浏览器残留 7 天，离线时可被回放。
+          // 已撤销/已加密码的分享会在同一浏览器残留，离线时可被回放。
+          //
+          // #50 白屏风险：每次部署 dist 会整目录替换，旧 hashed JS 被清理；离线回退若命中
+          // 缓存里的旧 HTML，其引用的旧 hashed asset 已 404 → 白屏。旧值 7 天 + 20 条
+          // 让「7 天内任意一次部署」都可能留下可回放的过期 HTML。这里保守收敛为 1 天 +
+          // 10 条，把可回放窗口压到最短（不代表根除：离线且恰好跨部署仍可能白屏）。
+          // 真正的「revision 校验」（比对缓存 HTML 的 asset hash 与当前 precache 清单，
+          // 不一致则不回退）需要自定义 Workbox 插件或切 injectManifest，属改构建配置，
+          // 侵入过大，本批次不做。
+          //
+          // #50 换代刷新丢未保存编辑：registerType:'autoUpdate'（下方）只是让 SW 换代
+          // 自动 skipWaiting，真正无条件 `window.location.reload()` 在
+          // src/main.ts 的 controllerchange 监听里（非本文件生成）。给它加「未保存编辑」
+          // 判断需要改 src/ 生产代码（本批次越界），且不能在此注入内联脚本（CSP 为
+          // script-src 'self'，无 unsafe-inline）。见修复报告「需要产品决策」。
           urlPattern: ({ request, url }) => request.mode === 'navigate' && !url.pathname.startsWith('/s/'),
           handler: 'NetworkFirst',
           options: {
             cacheName: 'pages-cache',
             networkTimeoutSeconds: 10,
-            expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }
+            expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 }
           }
         }, {
           urlPattern: /^https:\/\/api\.xinac\.net\/icon\//i,

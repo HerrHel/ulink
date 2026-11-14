@@ -77,15 +77,25 @@ describe('分享只读态护栏', () => {
       expect(ds.groupMap['g1'].pinnedAt).toBeUndefined()
     })
 
-    it('分类 / 属性 / 批量销毁类 mutation 全部被拒', () => {
+    it('分类 / 属性 / 批量销毁类 mutation 全部被拒（emptyTrash 不误删回收站数据）', () => {
+      // 先在非分享态放一条数据进回收站（软删：仍留在数组里且带 deletedAt）
+      ui.shareMode = null
+      ds.addBookmark(bm('b-trash'))
+      ds.deleteBookmark('b-trash')
+      const trashed = ds.bookmarks.find((b) => b.id === 'b-trash')
+      expect(trashed?.deletedAt).toBeTruthy()
+
       enterShare('group', 'g1')
       ds.addCategory(cat('c1'))
       expect(ds.categories).toHaveLength(0)
       ds.addAttribute({ id: 'a1', name: 'A', type: 'boolean' } as any)
       expect(ds.customAttributes).toHaveLength(0)
+      // 分享只读态下 emptyTrash 必须被 _denyWrite 拦下：回收站数据仍在，
+      // 绝不能被误删（否则访问一次分享链接就清掉了访问者自己的回收站）。
+      // #21：把恒真的 expect(true) 换成对回收站数据存活的真实断言。
       ds.emptyTrash()
-      // 无异常即通过
-      expect(true).toBe(true)
+      expect(ds.bookmarks.some((b) => b.id === 'b-trash' && !!b.deletedAt)).toBe(true)
+      expect(ds.bookmarks.find((b) => b.id === 'b-trash')?.deletedAt).toBeTruthy()
     })
 
     it('importFromData 整集导入被拒', () => {

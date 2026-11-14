@@ -73,6 +73,69 @@ async function callMimoForEval(c: GoldenCase, token: string): Promise<GoldenRepl
   return { content: String(message.content || ''), toolCalls }
 }
 
+/**
+ * #55（审计 2026-11-14）：真模型评测默认整体 describe.skipIf、独立 ai-eval 配置也不进
+ * CI，导致该文件在默认套件里 0 执行。这里把「golden expectation 可解析性」做成
+ * **不受 AI_EVAL_REQUIRE 门控**的结构性检查，纳入默认 `npm run test`：
+ * 零网络、零凭据、零费用，但能挡住「配置写错（工具名拼错 / 期望为空 / 数组元素非法）
+ * 导致真模型评测永远失败、而默认套件全绿却无人发现」这类假绿。
+ * 真模型调用仍由下方 describe.skipIf 门控，绝不在 CI 跑（需凭据 + 计费）。
+ * 注：vitest.ai-eval.config.ts 同样 include 本文件，届时 ENABLED=true，两类一起跑，无副作用。
+ */
+describe('golden expectation 结构性校验（默认套件常跑，零网络）', () => {
+  const toolNames = new Set(ULINK_AGENT_TOOLS.map((t) => t.function.name))
+
+  it('每条用例 id 唯一、query / note 非空', () => {
+    const ids = GOLDEN_CASES.map((c) => c.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const c of GOLDEN_CASES) {
+      expect(c.id.trim(), '用例 id 不能为空').not.toBe('')
+      expect(c.query.trim(), `用例 ${c.id} 的 query 不能为空`).not.toBe('')
+      expect(c.note.trim(), `用例 ${c.id} 的 note 不能为空`).not.toBe('')
+    }
+  })
+
+  it('expect 至少含一项有效判据，且数组字段都是非空字符串数组', () => {
+    for (const c of GOLDEN_CASES) {
+      const e = c.expect
+      const hasExpectation = !!(
+        e.allOf?.length || e.anyOf?.length || e.noneOf?.length || e.noneOfExact?.length ||
+        e.expectToolCall || e.expectCard || e.expectEnglish
+      )
+      expect(hasExpectation, `用例 ${c.id} 缺少关键要素期望（空期望会恒真通过）`).toBe(true)
+      for (const key of ['allOf', 'anyOf', 'noneOf', 'noneOfExact'] as const) {
+        const arr = e[key]
+        if (arr === undefined) continue
+        expect(Array.isArray(arr), `用例 ${c.id} 的 ${key} 必须是数组`).toBe(true)
+        for (const item of arr) {
+          expect(typeof item, `用例 ${c.id} 的 ${key} 元素必须是字符串`).toBe('string')
+          expect((item as string).trim(), `用例 ${c.id} 的 ${key} 元素不能为空串`).not.toBe('')
+        }
+      }
+    }
+  })
+
+  it('expectToolCall 必须是 ULINK_AGENT_TOOLS 里真实存在的工具名（真跑才可能命中）', () => {
+    for (const c of GOLDEN_CASES) {
+      if (!c.expect.expectToolCall) continue
+      expect(
+        toolNames.has(c.expect.expectToolCall),
+        `用例 ${c.id} 期望的工具 ${c.expect.expectToolCall} 不在 ULINK_AGENT_TOOLS 中，真模型评测必 FAIL`,
+      ).toBe(true)
+    }
+  })
+
+  it('每条期望可被 checkGoldenExpectation 解析出区分度（空回复必至少 1 条失败）', () => {
+    for (const c of GOLDEN_CASES) {
+      const failures = checkGoldenExpectation({ content: '', toolCalls: [] }, c.expect, {
+        categories: c.categories,
+        attributes: c.customAttributes,
+      })
+      expect(failures.length, `用例 ${c.id} 的期望对空回复无区分度（恒真）`).toBeGreaterThan(0)
+    }
+  })
+})
+
 describe.skipIf(!ENABLED)('AI 真模型 golden 回归评测（手动门控）', () => {
   let token = ''
 

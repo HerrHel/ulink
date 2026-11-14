@@ -41,5 +41,7 @@
 # PWA Service Worker——必须 no-cache，否则浏览器缓存住旧 SW 永不更新
 /sw.js
   Cache-Control: no-cache
-/registerSW.js
-  Cache-Control: no-cache
+# 说明（#51）：不存在根路径 /registerSW.js。vite-plugin-pwa 的注册脚本实际是
+# 构建期生成的 /assets/virtual_pwa-register-*.js（带内容 hash，随内容变化即换名），
+# 已由上方 /assets/* 的 immutable 规则覆盖，无需也不应单列无效规则。
+# 注册脚本本身由 hash 保证新鲜度；sw.js 才必须 no-cache（SW 文件名固定、靠字节比对更新）。

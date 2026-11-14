@@ -569,8 +569,16 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    // 用户身份：能验签就按 uid 计量；验不到（未登录 / 老客户端）回退 IP 限流，不阻断使用
-    const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID }).catch(() => null)
+    // 用户身份：能验签就按 uid 计量；未带 token 才走匿名 IP 限流。
+    // 2026-11-14 审计 #7：带 Bearer 但验签失败原先静默降级匿名，导致已登录用户
+    // 主动带坏 token 即可跳过每日次数/预扣/结算白嫖 AI。现在一律 401。
+    const authHeader = req.headers.authorization
+    const hasBearer = typeof authHeader === 'string' && /^Bearer\s+\S+/i.test(authHeader)
+    const auth = hasBearer ? await verifyCbToken(authHeader, { envId: ENV_ID }).catch(() => null) : null
+    if (hasBearer && !(auth && auth.ok)) {
+      sendJson(res, 401, { error: 'invalid_token', message: '登录态已失效，请重新登录' }, cors)
+      return
+    }
     uid = auth && auth.ok ? auth.uid : null
     db = getDb()
     // 每个长 await 后检查连接是否已关闭：断连则尽早收口，不再继续预扣/空耗上游
@@ -705,8 +713,17 @@ const server = http.createServer(async (req, res) => {
           p_ref: ref,
         })
         if (r.error) {
-          // fail-open：配额系统故障不误伤用户（沿用原 ai_quota_check 口径），仅留痕
-          logEvent('warn', 'reserve_error', { tokens: reserveAmount, errorKind: 'reserve_rpc_failed', error: String(r.error) })
+          // 2026-11-14 审计 #1：原先 fail-open，线上 reserve_quota 的 42703 被静默
+          // 吞掉，月度 token 配额整体失效（线上账本一度 0 行）。配额系统故障必须
+          // fail-closed：宁可短暂 503，也不放行无限消耗上游额度。
+          logEvent('error', 'reserve_error', {
+            tokens: reserveAmount, errorKind: 'reserve_rpc_failed', error: String(r.error),
+          })
+          sendJson(res, 503, {
+            error: 'quota_unavailable',
+            message: '额度服务暂时不可用，请稍后重试',
+          }, cors)
+          return
         } else if (r.data?.ok === false) {
           logEvent('warn', 'quota_exceeded', { status: 429, tokens: reserveAmount, errorKind: r.data.reason || 'quota_exceeded' })
           sendJson(res, 429, {

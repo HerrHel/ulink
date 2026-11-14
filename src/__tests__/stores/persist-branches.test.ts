@@ -32,23 +32,28 @@ describe('persist - 分支补测', () => {
   })
 
   describe('loadData 编排函数（IDB 命中 / localStorage 回退 / 回填）', () => {
-    it.skip('IDB 命中时返回 IDB 数据并同步写 localStorage（R23：不递增 _writeSeq）', async () => {
+    // #56（审计 2026-11-14）：原 it.skip 断言「IDB 命中会同步写 localStorage 且保留 _writeSeq=7」，
+    // 但当前 loadData（persist.ts:147）IDB 命中即 `return idbData`，从不写 localStorage，
+    // 该断言与实现早已不符、被无原因 skip 掩盖。这里对齐到当前真实契约：
+    // loadData 是只读编排，IDB 命中直接返回权威数据，不产生任何写副作用
+    // （不写 localStorage 缓存、不回填 IDB、不递增进程内 _writeSeq）——这正是 R23
+    // 「读取不得推高写序号、避免多端据序号误判新旧」的可观测证据。
+    it('IDB 命中：loadData 只读返回 IDB 数据，零写副作用（R23 不递增 _writeSeq）', async () => {
       const idbData: AppData = {
         bookmarks: [{ id: 'b1', title: 'IDB数据', url: 'https://t.com', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }],
         siblingGroups: [], categories: DEFAULTS.categories.map(c => ({ ...c })), customAttributes: [],
-        _dataVersion: 7, _writeSeq: 7, _savedAt: 999,
+        // 钉到当前 schema 版本（= migrations.ts 的 CURRENT_SCHEMA_VERSION）：runMigrations
+        // 判定无需迁移 → loadFromIDB 不会因 needsm 触发 saveData 回写，保证「零写副作用」稳定。
+        _schemaVersion: 3, _writeSeq: 7, _savedAt: 999,
       } as AppData
       _idbGet.mockResolvedValue(idbData)
       const result = await persist.loadData()
-      // 返回 IDB 数据
+      // 返回 IDB 权威数据
       expect(result.bookmarks[0].id).toBe('b1')
       expect(result.bookmarks[0].title).toBe('IDB数据')
-      // IDB 命中分支同步写 localStorage，保留 IDB 原始数据（含 _writeSeq 不递增）
-      const lsRaw = localStorage.getItem(STORAGE_KEY)
-      expect(lsRaw).not.toBeNull()
-      const lsParsed = JSON.parse(lsRaw!)
-      expect(lsParsed._writeSeq).toBe(7) // R23：不递增，保留 IDB 原序号
-      expect(lsParsed.bookmarks[0].id).toBe('b1')
+      // 只读契约：不写 localStorage 缓存、不回填 IDB（不递增 _writeSeq）
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+      expect(_idbSet).not.toHaveBeenCalled()
     })
 
     it('IDB 命中但 localStorage 同步失败（配额满）静默不抛、仍返回 IDB 数据', async () => {

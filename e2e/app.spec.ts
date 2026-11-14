@@ -168,14 +168,15 @@ test.describe('LinkVault 核心功能', () => {
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })
 
-  // 登录/OTP 依赖真实 Supabase 测试后端，本地无凭据时 skip
-  test.skip('登录 OTP 流（需测试后端）', async () => {
-    // 预留：有 VITE_E2E_AUTH_* 时再启用
-  })
-
-  test.skip('云同步成功路径（需测试后端）', async () => {
-    // 预留：登录后触发同步并断言 lastSync 文案
-  })
+  // #57（审计 2026-11-14）：原两条空函数 test.skip 既不执行、也无原因，是「占位假绿」。
+  // 已删除，不保留 skip 掩盖；相关链路的覆盖归属如下：
+  //   · 云同步成功路径 → e2e/l1-sync-mock.spec.ts「假 session + 手动同步 happy path」
+  //     （page.route mock REST，默认套件常跑）与 e2e/l2-sync-real.spec.ts
+  //     （真会话 fullSync，LV_E2E_L2=1 + 凭据时启用，自带明确 skip 原因）。
+  //   · 登录态 → 同上 L1（注入假会话）/ L2（导出真会话）覆盖；真 OTP 发送与验证码
+  //     校验依赖真实短信/邮件通道，成本与 flake 高，e2e 有意不覆盖，
+  //     相关逻辑由 src/__tests__ 的 auth 单测兜底。
+  // 需要真 OTP 流时按 L2 §8 Track B 的手动 checklist 执行，不用空 test.skip 占位。
 
   // fake canary UI 门闩：仅证明 canary JSON 存在时设置页显示「已锁定」并弹出解锁模态。
   // 不测真实解密路径（见 e2e/l0-e2e-crypto.spec.ts）。

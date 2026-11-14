@@ -20,17 +20,21 @@ export default mergeConfig(
         VITE_CLOUDBASE_ENV_ID: 'test-env',
         VITE_PUBLISHABLE_KEY: 'test-publishable-key',
       },
-      // CloudBase 契约子集：以下文件均经 Glob 确认真实存在（仓库无 cloudbase*.test.ts /
-      // dbApi*.test.ts 命名，故取真实的契约测试）；依赖注入或 vi.mock 了云侧模块，
-      // 与 .env 真值解耦，可在 cloudbase 形态下稳定通过。
-      // cloudbaseEnvSwitch 是唯一**不 mock 开关本身**的真源断言（双形态共用文件，
-      // 在本套件断言 CloudBase 分支、在默认套件断言 Supabase 分支），排在首位。
+      // #20（审计 2026-11-14）：原 include 硬编码 5 文件，约 5800 测中绝大多数从未
+      // 在 cloudbase（生产）形态下跑过。改为按目录覆盖主要测试目录，让
+      // isCloudBaseBackend()===true 的分支在更大面上被执行，而非只靠 5 个白名单文件。
+      //
+      // 为何不直接 src/__tests__/**/*.test.ts 全量：① 默认套件已把同一批测试在
+      // Supabase 形态下全量跑过一遍，全量再跑一遍会让 CI 时间翻倍（#20 明确要求
+      // 「别让 CI 时间爆炸」）；② ai-eval 真模型评测走 vitest.ai-eval.config.ts
+      // 独立门控，不在此重复（其结构性检查已在默认套件常跑，见 #55）。
+      // 故取 lib / composables / stores / components 四个主要目录，覆盖后端形态敏感的
+      // 绝大多数单测，增量可控。e2e / node_modules / .workbuddy 由 baseConfig.exclude 继承排除。
       include: [
-        'src/__tests__/lib/cloudbaseEnvSwitch.test.ts',
-        'src/__tests__/composables/syncRemotePort.cloudbase.test.ts',
-        'src/__tests__/lib/authDriver.cloudbase.test.ts',
-        'src/__tests__/composables/usePurchasePlans.test.ts',
-        'src/__tests__/composables/billing-module7-audit-fixes.test.ts',
+        'src/__tests__/lib/**/*.test.ts',
+        'src/__tests__/composables/**/*.test.ts',
+        'src/__tests__/stores/**/*.test.ts',
+        'src/__tests__/components/**/*.test.ts',
       ],
     },
   }),

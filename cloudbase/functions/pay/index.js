@@ -223,8 +223,11 @@ async function handleAuthed(req, res, action, body, cors) {
     }
 
     // 限流 fail-closed（真正新建订单时才消费限流计数）
+    // 2026-11-14 审计 #31：限流键只按 uid，不混入客户端可控 IP。
+    // 旧实现把 clientIp(req)（优先信任 x-real-ip）哈希进 key，换一次请求头就换一个
+    // 限流桶，10 次/10 分钟防刷单形同虚设。
     const rl = await db.rpc('consume_rate_limit', {
-      p_key: `pay-create:${uid}:${sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)}`,
+      p_key: `pay-create:${uid}`,
       p_limit: CREATE_LIMIT,
       p_window_secs: CREATE_WINDOW_SEC,
     })
@@ -288,11 +291,19 @@ async function handleAuthed(req, res, action, body, cors) {
 
     const qrCode = payResult.codeUrl || payResult.qrCode || payResult.payUrl
     const payUrl = payResult.payUrl || null
-    await db.rpc('attach_pay_payload', {
+    // 2026-11-14 审计 #33：原实现不检查返回值，RPC 失败仍把内存里的二维码交给
+    // 前端（DB 里 pay_payload 为空 → 查单拿不到码、订单复用查询恒不命中而重复建单）。
+    const attached = await db.rpc('attach_pay_payload', {
       p_order_id: order.order_id,
       p_payload: { qrCode, payUrl, channel },
       p_channel_order_id: null,
     })
+    if (attached.error || attached.data?.ok === false) {
+      console.error('[pay] attach_pay_payload failed:', attached.error || attached.data)
+      await db.rpc('fail_payment_order', { p_order_id: order.order_id, p_reason: 'attach_failed' }).catch(() => {})
+      sendJson(res, 503, { error: 'order_attach_failed' }, cors)
+      return
+    }
 
     sendJson(
       res,
@@ -343,7 +354,13 @@ async function handleAuthed(req, res, action, body, cors) {
 
     const expired = row.expiresAt ? new Date(row.expiresAt).getTime() < Date.now() : false
     if (expired && row.status === 'pending') {
-      await db.rpc('fail_payment_order', { p_order_id: orderId, p_reason: 'expired' }).catch(() => {})
+      // 2026-11-14 审计 #32：原实现 `.catch(()=>{})` 后无条件把 row.status 改成
+      // failed，RPC 失败也照报；若后续人工补发权益，前端见 failed 即停轮询。
+      const failed = await db.rpc('fail_payment_order', { p_order_id: orderId, p_reason: 'expired' }).catch((e) => ({ error: e }))
+      if (failed.error || failed.data?.ok === false) {
+        sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
+        return
+      }
       row.status = 'failed'
     }
 
@@ -538,7 +555,11 @@ async function handleWxpayNotify(req, res) {
   // 说明发生「已扣款但无法发货」——必须高标准日志 + 回 FAIL 让渠道持续重试提示人工介入，
   // 绝不能静默回 SUCCESS 吞掉这笔钱。
   const alreadyPaid = data.reason === 'already_settled' || (data.reason === 'not_pending' && data.status === 'paid')
-  const unfulfillable = data.reason === 'not_pending' && data.status !== 'paid'
+  // 2026-11-14 审计 #32：order_expired 也是「渠道已扣款但无法发货」，
+  // 必须与 not_pending 一样触发 CRITICAL 人工退款告警，否则回调重推 8 次
+  // 全部静默失败，钱扣了、货没发、没人知道。
+  const unfulfillable = data.reason === 'order_expired' ||
+    (data.reason === 'not_pending' && data.status !== 'paid')
   const ok = data.ok === true || alreadyPaid
   if (unfulfillable) {
     console.error('[pay] CRITICAL: paid callback for closed order, manual refund required (wechat):', JSON.stringify(data))
@@ -587,7 +608,11 @@ async function handleAlipayNotify(req, res) {
   // 同微信侧：只有「本已 paid」才算幂等成功；failed/refunded 订单收到真实付款
   // 属不可履约，必须留 CRITICAL 日志并回 failure 触发渠道重试，禁止静默吞单。
   const alreadyPaid = data.reason === 'already_settled' || (data.reason === 'not_pending' && data.status === 'paid')
-  const unfulfillable = data.reason === 'not_pending' && data.status !== 'paid'
+  // 2026-11-14 审计 #32：order_expired 也是「渠道已扣款但无法发货」，
+  // 必须与 not_pending 一样触发 CRITICAL 人工退款告警，否则回调重推 8 次
+  // 全部静默失败，钱扣了、货没发、没人知道。
+  const unfulfillable = data.reason === 'order_expired' ||
+    (data.reason === 'not_pending' && data.status !== 'paid')
   const ok = data.ok === true || alreadyPaid
   if (unfulfillable) {
     console.error('[pay] CRITICAL: paid callback for closed order, manual refund required (alipay):', JSON.stringify(data))
