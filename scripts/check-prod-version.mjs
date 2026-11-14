@@ -14,8 +14,8 @@
  *   1 = 不一致（线上落后 / 本地落后 / 分叉）
  *   2 = 线上没有 /version.json（部署早于该机制，属旧版本）
  *   3 = 网络/解析/本地 git 命令失败（含安全头探测失败，避免假绿）
- *   4 = 版本一致，但线上安全防护不完整（/app 的 CSP frame-ancestors、XCTO 缺失，或首页/法律页/
- *       privacy.html/terms.html/extension-guide.html 的 CSP 缺失）
+ *   4 = 版本一致，但线上安全防护不完整（入口页 CSP 缺失、或网关未下发 XFO/XCTO，
+ *       含 / privacy.html / terms.html / extension-guide.html 各页）
  *   5 = 版本一致，但本地工作区有未提交修改（HEAD 不代表线上/本地实际代码）
  *
  * 注：不用 process.exit() —— Node 24 + Windows 下 fetch 的 undici 句柄会在退出时
@@ -63,13 +63,19 @@ function fmt(iso) {
 }
 
 /**
- * 线上安全防护探测（2026-10-31 更新）。
+ * 线上安全防护探测（2026-11-14 更新，对齐 11-12 定稿的网关拓扑）。
  *
- * CloudBase 静态托管不支持自定义响应头，`public/_headers` 只对 Cloudflare Pages 生效：
- * - 首页 `/`：构建期 `<meta>` CSP + Referrer（静态托管兜底）；
- * - `/app` 与 `/legal/*`：经 `edge-headers` 云函数反代，带真实响应头（CSP frame-ancestors / XCTO / XFO / HSTS）；
- * - 分享页 `/s/*`：share-ssr 自带 XCTO / XFO。
- * 这里同时认「响应头」与「meta」，并检查入口页的关键头。
+ * 现在的真实形态（别再按旧的 edge-headers 反代假设来判）：
+ * - `/`、`/app`、`/legal/*` 全部是 **静态托管直连**，不再经云函数反代；
+ * - XCTO / XFO / HSTS / Referrer-Policy 由**网关「自定义域名 → Headers 设置」统一注入**，
+ *   与具体页面无关（连 404 页都带）；
+ * - CSP 只存在于**页面 `<meta>`**（构建期注入）。域名层刻意不加 CSP，否则会与各页策略取交集。
+ *
+ * ⚠️ `frame-ancestors` **不能**通过 `<meta>` 交付（CSP 规范明确忽略），所以「点击劫持防护」
+ * 在 meta-only 形态下只能靠 `X-Frame-Options`。旧版自检找 CSP 头里的 frame-ancestors，
+ * 在拓扑切换后必然恒红 —— 假警报会让真回归被忽略，故改为直接校验 XFO。
+ *
+ * - 分享页 `/s/*`：share-ssr 自带 XCTO / XFO + `X-Robots-Tag: noindex`。
  */
 async function probePage(url) {
   // 带 Cache-Control: no-cache 请求头，避免 CDN/浏览器缓存把过期的安全头探测结果当成最新
@@ -136,13 +142,19 @@ function printSecurity(sec) {
   const fmt = (v) => (v ? '✓' : '✗')
   console.log('\n安全防护：')
   console.log(`  首页 /        CSP  ${root.cspMeta ? '<meta>' : fmt(root.cspHeader)}   Referrer ${fmt(root.referrer || root.referrerMeta)}`)
-  console.log(`  应用 /app     CSP  ${fmt(app && app.cspHeader)} frame-ancestors ${fmt(app && app.frameAncestors)}  XCTO ${fmt(app && app.xcto)}  HSTS ${fmt(app && app.hsts)}`)
-  console.log(`  法律 /legal   CSP  ${fmt(legal && legal.cspHeader)} frame-ancestors ${fmt(legal && legal.frameAncestors)}  XCTO ${fmt(legal && legal.xcto)}`)
+  const cspOf = (p) => (!p ? '-' : p.cspHeader ? 'header' : p.cspMeta ? '<meta>' : '✗')
+  console.log(`  应用 /app     CSP  ${cspOf(app)}  XFO ${fmt(app && app.xfo)}  XCTO ${fmt(app && app.xcto)}  HSTS ${fmt(app && app.hsts)}`)
+  console.log(`  法律 /legal   CSP  ${cspOf(legal)}  XFO ${fmt(legal && legal.xfo)}  XCTO ${fmt(legal && legal.xcto)}`)
   const missing = []
-  if (!(app && app.cspHeader) && !root.cspMeta) missing.push('CSP')
-  if (!(app && app.frameAncestors)) missing.push('frame-ancestors')
-  if (!(app && app.xcto)) missing.push('X-Content-Type-Options')
-  if (!(legal && legal.xcto)) missing.push('X-Content-Type-Options(legal)')
+  // CSP：每个入口各自必须有（header 或 meta 皆可，静态直连形态下 meta 是唯一通道）
+  if (!(root.cspMeta || root.cspHeader)) missing.push('CSP(/)')
+  if (!(app && (app.cspHeader || app.cspMeta))) missing.push('CSP(/app)')
+  if (!(legal && (legal.cspHeader || legal.cspMeta))) missing.push('CSP(/legal)')
+  // 点击劫持：meta 交付不了 frame-ancestors，只能靠 XFO 响应头（网关域名层注入）
+  if (!(app && app.xfo)) missing.push('X-Frame-Options(/app)')
+  if (!(legal && legal.xfo)) missing.push('X-Frame-Options(/legal)')
+  if (!(app && app.xcto)) missing.push('X-Content-Type-Options(/app)')
+  if (!(legal && legal.xcto)) missing.push('X-Content-Type-Options(/legal)')
   // #51：新增页面的 CSP 断言，与其它入口一样严格（缺即计入 missing → 返回 4）。
   // 探测失败（probe=null）同样按「缺失」计入，保持 fail-closed，不制造假绿。
   for (const p of extraPages) {
