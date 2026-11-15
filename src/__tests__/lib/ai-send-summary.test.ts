@@ -157,3 +157,49 @@ describe('buildSendSummary — 发送摘要组装', () => {
     )
   })
 })
+
+describe('披露总字符数包含媒体与多模态历史', () => {
+  const baseInput = {
+    categories: CATEGORIES,
+    customAttributes: ATTRIBUTES,
+    contextSlice: {},
+    history: [] as MiMoChatMessage[],
+    userPrompt: 'PROMPT',
+  }
+
+  it('mediaChars 如实计入 estimatedTotalChars（纯文本轮仍为 0）', () => {
+    const plain = buildSendSummary(baseInput)
+    expect(plain.mediaChars).toBe(0)
+    const withMedia = buildSendSummary({ ...baseInput, mediaPartsCount: 3, mediaChars: 250_000 })
+    expect(withMedia.mediaChars).toBe(250_000)
+    expect(withMedia.estimatedTotalChars).toBe(plain.estimatedTotalChars + 250_000)
+  })
+
+  it('多模态数组 content 按序列化长度计，不再只数元素个数', () => {
+    const parts = [
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,' + 'A'.repeat(10_000) } },
+      { type: 'text', text: '描述' },
+    ]
+    const history: MiMoChatMessage[] = [{ role: 'user', content: parts as never }]
+    const s = buildSendSummary({ ...baseInput, history })
+    const expectedChars = JSON.stringify(parts).length
+    expect(s.estimatedTotalChars).toBeGreaterThan(plainBaseline(baseInput) + expectedChars - 100)
+  })
+
+  it('无媒体块时即使调用方误传非空 mediaChars 也归零（不虚报载荷）', () => {
+    const s = buildSendSummary({ ...baseInput, mediaPartsCount: 0, mediaChars: 4 })
+    expect(s.mediaChars).toBe(0)
+    expect(s.estimatedTotalChars).toBe(plainBaseline(baseInput))
+  })
+
+  it('非法 mediaChars（NaN/负数）不污染总量', () => {
+    const s = buildSendSummary({ ...baseInput, mediaChars: Number.NaN })
+    expect(s.mediaChars).toBe(0)
+    const neg = buildSendSummary({ ...baseInput, mediaChars: -5 })
+    expect(neg.mediaChars).toBe(0)
+  })
+})
+
+function plainBaseline(input: Parameters<typeof buildSendSummary>[0]): number {
+  return buildSendSummary(input).estimatedTotalChars
+}

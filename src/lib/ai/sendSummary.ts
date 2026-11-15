@@ -45,6 +45,8 @@ export interface AiSendSummary {
   toolsSchemaChars: number
   /** 本轮媒体块个数（图片 / 音视频，历史实现漏统计） */
   mediaPartsCount: number
+  /** 本轮媒体载荷序列化字符数（可选，兼容旧快照 fixture） */
+  mediaChars?: number
   /** 历史上下文实际注入条数（经最近轮次 + 字符预算裁剪后） */
   historyTurnsIncluded: number
   /** 本轮用户提问（含附件展开）字符数 */
@@ -71,6 +73,8 @@ export interface AiSendSummaryInput {
   profilePrompt?: string
   /** 本轮媒体块个数（图片 / 音视频） */
   mediaPartsCount?: number
+  /** 本轮媒体载荷序列化字符数；缺省 0（纯文本轮） */
+  mediaChars?: number
 }
 
 /** 汇总本次发送给 AI 的数据摘要（与实际请求同口径组装） */
@@ -83,12 +87,21 @@ export function buildSendSummary(input: AiSendSummaryInput): AiSendSummary {
     profilePrompt: input.profilePrompt,
   })
   const historySlice = selectHistorySlice(input.history || [])
-  const historyChars = historySlice.reduce((n, m) => n + (m.content || '').length, 0)
+  // mimoStream 已修过同类问题：content 可能是多模态数组，.length 只数元素个数
+  // （4 张 data URL 实为约 25 万字符），摘要与预算都会严重偏低。
+  const contentChars = (c: MiMoChatMessage['content']): number =>
+    typeof c === 'string' ? c.length : c == null ? 0 : JSON.stringify(c).length
+  const historyChars = historySlice.reduce((n, m) => n + contentChars(m.content), 0)
   const vaultKnowledgeChars = slice.retrievedVaultKnowledge?.length || 0
   const userPromptChars = (input.userPrompt || '').length
   const systemPromptChars = systemPrompt.length
   const toolsSchemaChars = JSON.stringify(ULINK_AGENT_TOOLS).length
   const mediaPartsCount = input.mediaPartsCount || 0
+  // 纯文本轮（无媒体块）必须为 0：调用方对空数组做 JSON.stringify 会得到 '[]' 的
+  // 4 个字符，凭空虚报载荷，违背「披露的即所发」。
+  const mediaChars = mediaPartsCount > 0 && Number.isFinite(input.mediaChars)
+    ? Math.max(0, Number(input.mediaChars))
+    : 0
   // 媒体块体积无法在此纯函数里准确估算（data URL / base64 由调用方生成），
   // 只计字符占位：避免摘要对外宣称「披露的即所发」却漏掉整块多模态载荷。
   const mentalModelChars = slice.mentalModelPrompt?.length || 0
@@ -128,10 +141,13 @@ export function buildSendSummary(input: AiSendSummaryInput): AiSendSummary {
     trashedInjected: slice.trashedBookmarks?.length || 0,
     toolsSchemaChars,
     mediaPartsCount,
+    mediaChars,
     historyTurnsIncluded: historySlice.length,
     userPromptChars,
     systemPromptChars,
+    // 「披露的即所发」：媒体载荷过去只展示了个数、没进总量，带图/音视频的轮次
+    // 对外披露的总字符数会比真实请求小数十万字符。
     estimatedTotalChars:
-      systemPromptChars + userPromptChars + historyChars + vaultKnowledgeChars + toolsSchemaChars,
+      systemPromptChars + userPromptChars + historyChars + vaultKnowledgeChars + toolsSchemaChars + mediaChars,
   }
 }

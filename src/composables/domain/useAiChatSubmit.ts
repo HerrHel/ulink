@@ -666,6 +666,10 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 // 多模态载荷过去完全没进「披露的即所发」统计
                 mediaPartsCount:
                   (unifiedMedia.images?.length || 0) + (unifiedMedia.mediaParts?.length || 0),
+                // 与实际发送的媒体块同源：图片 data URL / 音视频 part 的序列化体积
+                mediaChars:
+                  JSON.stringify(unifiedMedia.images || []).length +
+                  JSON.stringify(unifiedMedia.mediaParts || []).length,
               })
             }
 
