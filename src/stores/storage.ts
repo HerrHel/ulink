@@ -126,10 +126,14 @@ export async function drainSyncOps(): Promise<SyncOp[]> {
   }
 }
 
-export async function removeSyncOpsByItemId(itemId: string): Promise<void> {
+export async function removeSyncOpsByItemId(itemId: string, table?: string): Promise<void> {
   if (!itemId) return
   try {
-    await db.syncOps.where('itemId').equals(itemId).delete()
+    const matched = await db.syncOps.where('itemId').equals(itemId).toArray()
+    // 不同表可能复用同一 id（种子里分类 'ai' 与属性 'ai' 就是结构性碰撞）。
+    // 旧实现按裸 id 全删，会把另一张表尚未推送的 op 一并抹掉 → 本地编辑永不上云。
+    const targets = table ? matched.filter((op) => op.table === table) : matched
+    await db.syncOps.bulkDelete(targets.map((op) => op.id).filter((id): id is number => typeof id === 'number'))
   } catch (e) {
     console.warn('[IDB] removeSyncOpsByItemId error:', e)
   }

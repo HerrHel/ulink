@@ -1268,8 +1268,9 @@ describe('模块 3 审计修复护栏测试集 (Sync Engine & Conflict Resolutio
 
     // 验证 pendingSync 已被清除
     expect(_isPendingSync('bm-conf-del')).toBe(false)
-    // 验证 removeSyncOpsByItemId 被调用，防旧本地 op 推上云覆盖
-    expect(removeSpy).toHaveBeenCalledWith('bm-conf-del')
+    // 验证 removeSyncOpsByItemId 被调用，防旧本地 op 推上云覆盖；
+    // 第二参是表名：同 id 跨表碰撞时只删本表的 op，不误删另一张表的未推送编辑
+    expect(removeSpy).toHaveBeenCalledWith('bm-conf-del', 'bookmarks')
   })
 
   it('38. _deleteWithoutEcho 在遇到循环引用子孙链时不发生死循环', async () => {

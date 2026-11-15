@@ -13,6 +13,7 @@ import { useCloudSync } from './useCloudSync.js'
 import { EditorManager } from '../../lib/editor.js'
 import { _clearPendingSync } from './syncPending.js'
 import { removeSyncOpsByItemId } from '../../stores/storage.js'
+import { entityTypeToTable } from './syncMappingTables.js'
 import { markConflictResolved } from '../../lib/syncResolvedConflicts.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
 
@@ -74,7 +75,7 @@ export function resolveConflict(id: string, keepLocal: boolean) {
     ds._newIds.delete(id)
     ds._changedFields.delete(id)
     _clearPendingSync([id])
-    void removeSyncOpsByItemId(id)
+    void removeSyncOpsByItemId(id, entityTypeToTable[conflict.type])
     _safeSave()
   } else {
     _clearPendingSync([id])

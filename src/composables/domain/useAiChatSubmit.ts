@@ -228,6 +228,12 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       extraPrompt: '',
     }
     if (attachedFiles.some((f) => f.type === 'image' || f.type === 'video' || f.type === 'audio')) {
+      // 总闸只拦「非斜杠」输入；`/help` 带附件仍会走到这里上传私有媒体到云端，
+      // 违背「关闭后零网络请求」承诺。在真正外发前二次把关。
+      if (isAiEnabled() === false) {
+        toast(t('settings.aiDisabledTip'), false)
+        return
+      }
       loadingTextKey.value = 'ai.deepProcessing'
       const authStore = useAuthStore()
       try {
@@ -379,6 +385,11 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       loadingTextKey.value = isVideo ? 'ai.extracting' : isUrl ? 'ai.analyzing' : 'ai.thinking'
 
       if (isVideo) {
+        // 同理：服务端解析被挡下后会降级 fetchPageContentViaJina 把 URL 发给第三方
+        if (isAiEnabled() === false) {
+          toast(t('settings.aiDisabledTip'), false)
+          return
+        }
         const res = await extractBookmarksFromVideo(raw, ds.categories, ds.customAttributes)
         if (controller.signal.aborted) return
         assistantTurn.loading = false

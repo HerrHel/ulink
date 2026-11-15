@@ -177,7 +177,10 @@ export function selectHistorySlice(history: MiMoChatMessage[]): MiMoChatMessage[
   let budget = MAX_HISTORY_CHARS
   let end = history.length
   for (let i = history.length - 1; i >= start; i--) {
-    const size = (history[i].content || '').length + 1
+    // content 可能是多模态数组（4 张 data URL 约 25 万字符），
+    // 直接 .length 只数出 4，字符预算形同虚设、可能撑爆 512KB 入站上限。
+    const c = history[i].content
+    const size = (typeof c === 'string' ? c.length : c == null ? 0 : JSON.stringify(c).length) + 1
     if (budget - size < 0 && i < end - 1) {
       start = i + 1
       // 若新起点落在 tool 链中间，回退到链头

@@ -29,6 +29,16 @@ describe('persist', () => {
     _idbSet.mockReset(); _idbSet.mockResolvedValue(true)
   })
 
+  describe('序列化失败（不可写快照）', () => {
+    it('循环引用时 saveData 返回 false 而不是 reject，且不触碰 IDB / localStorage', async () => {
+      const bad: any = { bookmarks: [], siblingGroups: [], categories: [], customAttributes: [] }
+      bad.self = bad // JSON.stringify 会抛 TypeError
+      await expect(persist.saveData(bad as AppData)).resolves.toBe(false)
+      expect(_idbSet).not.toHaveBeenCalled()
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+    })
+  })
+
   describe('saveToLocalStorage', () => {
     it('应保存数据到 localStorage', () => {
       const data: AppData = {

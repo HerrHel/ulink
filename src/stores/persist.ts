@@ -72,7 +72,16 @@ async function _saveDataCore(data: AppData, space: Space = 'main'): Promise<bool
   // L14 修复：旧实现先 JSON.parse(JSON.stringify(stamped)) 给 IDB 再 JSON.stringify(stamped)
   // 写 localStorage，同一 stamped 对象走两遍 JSON 字符串化，大数据集下是双倍序列化主线程开销。
   // 复用同一份 raw 字符串：IDB 走 JSON.parse(raw) 得纯对象，localStorage 直接存 raw。
-  const raw = JSON.stringify(stamped)
+  // 旧实现把 stringify 放在 try 外：循环引用 / BigInt / 抛错 getter 会直接 reject，
+  // 调用方（app.save / switchSpace）没有 onRejected → unhandled rejection + 静默丢写。
+  // 序列化失败与 IDB 写入失败一样如实返回 false。
+  let raw
+  try {
+    raw = JSON.stringify(stamped)
+  } catch (e) {
+    console.error('[persist] 快照序列化失败，数据未保存:', e)
+    return false
+  }
   const idbKey = _keyOf(space, 'idb')
   const lsKey = _keyOf(space, 'ls')
 

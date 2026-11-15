@@ -112,7 +112,14 @@ export const ioActions = {
     }
     _cancelPendingHist()
     // 1) 当前空间落盘（防切换中途丢失未提交改动）
-    await persist.saveData(this._dataSnapshot(), cur)
+    // 必须捕获：序列化/IDB 异常若冒泡，后面会继续改 curSpace 与内存数组，
+    // 形成「空间键已切、数据仍是上一个空间」的半切换态并可能被下次 save 写错键。
+    try {
+      await persist.saveData(this._dataSnapshot(), cur)
+    } catch (e) {
+      console.error('[switchSpace] 当前空间落盘失败，中止切换:', e)
+      throw e
+    }
     // 1.1) 离开主页前把内存 dirty 落成持久化 sync op（离线也能写入 IDB 队列）。
     //      旧实现直接 clearAllSyncOps + 清 dirty，会把主页尚未推送的改动连同重试队列
     //      一起丢弃，且 queueBackedUp 守卫失效后全量对账可能把本地存活项误删。

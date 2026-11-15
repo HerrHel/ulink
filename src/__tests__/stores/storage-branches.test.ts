@@ -69,6 +69,17 @@ function makeTable(rowsRef: Record<string, unknown>[]) {
       if (fakeDB.errors.toArray) throw fakeDB.errors.toArray
       return [...rowsRef] as Record<string, unknown>[]
     },
+    where(field: string) {
+      return {
+        equals(value: unknown) {
+          const matched = () => rowsRef.filter((r) => r[field] === value)
+          return {
+            async toArray() { return [...matched()] },
+            async delete() { for (let i = rowsRef.length - 1; i >= 0; i--) { if (rowsRef[i][field] === value) rowsRef.splice(i, 1) } },
+          }
+        },
+      }
+    },
     orderBy(field: string) {
       return {
         async toArray() {
@@ -110,6 +121,7 @@ import {
   idbSet, idbGet,
   enqueueSyncOps, drainSyncOps, removeSyncOps, updateSyncOpRetry, syncOpsCount, clearAllSyncOps,
   fetchLocalHistory, getLocalHistoryVersion, localHistoryKey,
+  removeSyncOpsByItemId
 } from '../../stores/storage.js'
 import type { SyncOp } from '../../stores/storage.js'
 import { localStorageMock } from '../setup.js'
@@ -379,5 +391,31 @@ describe('storage.ts — 本地版本历史（纯 localStorage，无 IDB 依赖�
   it('getLocalHistoryVersion 无任何历史（getItem null）返回 null', () => {
     localStorageMock.getItem.mockReturnValueOnce(null)
     expect(getLocalHistoryVersion('bm-1', 1)).toBeNull()
+  })
+})
+
+describe('removeSyncOpsByItemId 跨表同 id 隔离', () => {
+  it('带 table 时只删本表 op，另一张表同 id 的未推送编辑保留', async () => {
+    fakeDB.reset()
+    fakeDB.opRows.push(
+      { id: 1, action: 'upsert', table: 'categories', itemId: 'ai', data: {}, ts: 1, retries: 0 },
+      { id: 2, action: 'upsert', table: 'custom_attributes', itemId: 'ai', data: {}, ts: 2, retries: 0 },
+      { id: 3, action: 'upsert', table: 'categories', itemId: 'other', data: {}, ts: 3, retries: 0 },
+    )
+    await removeSyncOpsByItemId('ai', 'categories')
+    expect(fakeDB.opRows.map((r) => `${r.table}:${r.itemId}:${r.id}`)).toEqual([
+      'custom_attributes:ai:2',
+      'categories:other:3',
+    ])
+  })
+
+  it('不传 table 时保持旧语义：按裸 id 全删（向后兼容调用点）', async () => {
+    fakeDB.reset()
+    fakeDB.opRows.push(
+      { id: 1, action: 'upsert', table: 'categories', itemId: 'ai', data: {}, ts: 1, retries: 0 },
+      { id: 2, action: 'upsert', table: 'custom_attributes', itemId: 'ai', data: {}, ts: 2, retries: 0 },
+    )
+    await removeSyncOpsByItemId('ai')
+    expect(fakeDB.opRows).toHaveLength(0)
   })
 })

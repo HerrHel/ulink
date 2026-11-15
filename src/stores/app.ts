@@ -296,6 +296,12 @@ export const useAppStore = defineStore('app', () => {
           }
         }
         return ok
+      }).catch((err) => {
+        // 防御：persist 已在内部把序列化/IDB 失败收敛成 false，但万一有漏网的
+        // reject，也不能变成 unhandled rejection + 静默丢写。
+        console.error('[app.save] 落盘异常:', err)
+        toast(t('msg.storageUnavailable'), false)
+        return false
       })
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
       return p

@@ -121,14 +121,24 @@ async function checkSecurity(base) {
   }
   let app = null
   let legal = null
-  try { app = await probePage(`${base}/app?t=${Date.now()}`) } catch { /* 保留 null，报告缺失 */ }
-  try { legal = await probePage(`${base}/legal/privacy-policy.html?t=${Date.now()}`) } catch { /* 同上 */ }
+  let probeError = ''
+  const probeOne = async (path) => {
+    try {
+      return await probePage(`${base}${path}?t=${Date.now()}`)
+    } catch (err) {
+      // 网络抖动/超时/404 是「无法判定」，不是「防护缺失」。旧实现保留 null 并计入
+      // missing → 返回 4，与首页同类失败返回 3 的语义矛盾，误导排查方向。
+      probeError = err instanceof Error ? err.message : String(err)
+      return null
+    }
+  }
+  app = await probeOne('/app')
+  legal = await probeOne('/legal/privacy-policy.html')
   const extraPages = []
   for (const p of EXTRA_SECURITY_PAGES) {
-    let probe = null
-    try { probe = await probePage(`${base}${p.path}?t=${Date.now()}`) } catch { /* 保留 null，报告缺失 */ }
-    extraPages.push({ ...p, probe })
+    extraPages.push({ ...p, probe: await probeOne(p.path) })
   }
+  if (probeError) return { ...SEC_PROBE_FAILED, error: `入口页探测失败：${probeError}` }
   return { root, app, legal, extraPages }
 }
 
