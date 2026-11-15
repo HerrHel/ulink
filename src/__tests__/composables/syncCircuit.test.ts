@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   canAttemptSync, recordSyncFailure, recordSyncSuccess, takeSyncRecovered,
   classifySyncError, getSyncCircuitSnapshot, __resetSyncCircuit,
-  SYNC_CIRCUIT_THRESHOLD, SYNC_CIRCUIT_BACKOFF_MS,
+  SYNC_CIRCUIT_THRESHOLD, SYNC_CIRCUIT_BACKOFF_MS, HALF_OPEN_STALE_MS
 } from '../../composables/domain/syncCircuit.js'
 
 const T0 = 1_700_000_000_000
@@ -122,5 +122,36 @@ describe('classifySyncError 错误分类启发式', () => {
   it('其余归 server（兜底，不误抛到前三类）', () => {
     expect(classifySyncError('database connection lost')).toBe('server')
     expect(classifySyncError('')).toBe('server')
+  })
+})
+
+describe('half-open 探活轮丢失后的自愈', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    __resetSyncCircuit()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('探活被无兜底触发源消费后，超时自动回 open 并重排短重试，不再永久卡死', () => {
+    for (let i = 0; i < SYNC_CIRCUIT_THRESHOLD; i++) recordSyncFailure('network down')
+    expect(getSyncCircuitSnapshot().state).toBe('open')
+
+    let now = T0 + SYNC_CIRCUIT_BACKOFF_MS[0]
+    expect(canAttemptSync(now)).toBe(true) // 放行一次探活 → half-open
+    expect(getSyncCircuitSnapshot(now).state).toBe('half-open')
+    expect(canAttemptSync(now + 1)).toBe(false) // 单飞：后续触发不再放行
+
+    // 模拟这一轮因空队列提前 return，没有任何 recordSync* 收尾
+    now += HALF_OPEN_STALE_MS - 1
+    expect(canAttemptSync(now)).toBe(false)
+    now += 2
+    expect(canAttemptSync(now)).toBe(false) // 本次按探活失败处理
+    expect(getSyncCircuitSnapshot(now).state).toBe('open')
+
+    // 短重试到期后能再次放行（自动同步恢复，而不是停摆）
+    now += 5_001
+    expect(canAttemptSync(now)).toBe(true)
+    expect(getSyncCircuitSnapshot(now).state).toBe('half-open')
   })
 })

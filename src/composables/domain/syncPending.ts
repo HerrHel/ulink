@@ -112,6 +112,11 @@ export function isDeadDelete(table: string, itemId: string): boolean {
   return _readDeadDeletes().some((d) => d.table === table && d.itemId === itemId)
 }
 
+/** 换账号/登出：清死信墓碑（含 2s 内存缓存），防 A 的墓碑被 B 用新 userId 推上云 */
+export function clearAllDeadDeletes(): void {
+  _writeDeadDeletes([])
+}
+
 export function listDeadDeletes(): DeadDeleteEntry[] {
   const list = _readDeadDeletes()
   _writeDeadDeletes(list)

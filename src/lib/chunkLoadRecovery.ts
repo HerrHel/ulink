@@ -27,6 +27,16 @@ export interface ChunkRecoveryDeps {
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null
   /** 诊断输出（默认 console.warn） */
   warn?: (message: string) => void
+  /** 同源判定（默认按 location.origin）；测试可注入 */
+  sameOrigin?: (url: string) => boolean
+}
+
+/** 默认同源判定：只认本站产物，第三方 CDN 恰好带 /assets/ 段也不能触发自愈 */
+function defaultSameOrigin(url: string): boolean {
+  try {
+    if (typeof location === 'undefined') return false
+    return new URL(url, location.href).origin === location.origin
+  } catch { return false }
 }
 
 /** 只清 Workbox 自己的缓存，避免误删同源其它 Cache Storage 数据 */
@@ -58,6 +68,7 @@ export function installChunkLoadRecovery(deps: ChunkRecoveryDeps = {}): () => vo
   const storage = deps.storage === undefined ? safeSessionStorage() : deps.storage
   const warn = deps.warn ?? ((m: string) => console.warn(m))
   const clearCaches = deps.clearCaches ?? clearWorkboxCaches
+  const sameOrigin = deps.sameOrigin ?? defaultSameOrigin
   const reload = deps.reload ?? (() => { if (typeof window !== 'undefined') window.location.reload() })
 
   let recovering = false
@@ -92,7 +103,8 @@ export function installChunkLoadRecovery(deps: ChunkRecoveryDeps = {}): () => vo
     const tag = target?.tagName
     if (tag !== 'SCRIPT' && tag !== 'LINK') return
     const url = String(target?.src || target?.href || '')
-    if (!ASSET_RE.test(url)) return
+    // 必须先判同源：第三方 CDN 的 `.../assets/x.js` 加载失败不该清空本站离线缓存
+    if (!ASSET_RE.test(url) || !sameOrigin(url)) return
     recover(`${tag} ${url}`)
   }
 

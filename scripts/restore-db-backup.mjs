@@ -95,10 +95,19 @@ function runSqlChecked(sql, label) {
   }
 }
 
-/** 取单值（Rows 元素是 JSON 数组字符串） */
-function scalar(sql) {
-  const rows = extractRows(runSql(sql))
+/** 从 tcb 输出里取单值（Rows 元素是 JSON 数组字符串） */
+function scalarFrom(out) {
+  const rows = extractRows(out)
   return rows.length ? rows[0][0] : null
+}
+
+function scalar(sql) {
+  return scalarFrom(runSql(sql))
+}
+
+/** 严格版：tcb 可能以 0 退出、把 SQL 失败塞进 --json 输出，scalar() 会静默返回 null */
+function scalarStrict(sql, label) {
+  return scalarFrom(runSqlStrict(sql, label))
 }
 
 // ── #15 分片暂存 + 单语句单事务执行 ──────────────────────────────────────────
@@ -553,9 +562,14 @@ if (apply) {
   // 恢复前先给「当前库」拍一张快照：万一选错日期或备份本身损坏，还有退路。
   // fn_create_db_backup 是 maintenance 每日调用的同一个函数（幂等，按 day 覆盖）。
   try {
-    const raw2 = scalar('SELECT public.fn_create_db_backup(30);')
+    // 必须严格：fn_create_db_backup 失败时 tcb 仍可能 exit 0 并把错误塞进 --json，
+    // 旧 scalar() 会返回 null → 下面照样 DELETE 重建 17 张业务表（不可逆）却没有退路。
+    const raw2 = scalarStrict('SELECT public.fn_create_db_backup(30);', '恢复前快照')
     const info = raw2 ? JSON.parse(String(raw2)) : null
-    console.log(`✔ 恢复前已为当前数据创建快照${info && info.day ? `（${info.day}）` : ''}，必要时可再跑一次回退`)
+    if (!info || !info.day) {
+      throw new Error('fn_create_db_backup 未返回有效 day：快照可能没落库，拒绝执行恢复')
+    }
+    console.log(`✔ 恢复前已为当前数据创建快照（${info.day}），必要时可再跑一次回退`)
   } catch (e) {
     console.error(`✖ 恢复前快照创建失败，拒绝执行恢复（没有退路）：${e.message}`)
     process.exit(1)

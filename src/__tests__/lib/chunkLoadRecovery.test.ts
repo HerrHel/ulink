@@ -27,6 +27,9 @@ function makeStorage(initial: Record<string, string> = {}) {
   }
 }
 
+// 测试里把 https://ulink.ren/ 视作本站（jsdom 的 location.origin 是 localhost）
+const SAME_ORIGIN = (u: string) => String(u).startsWith('https://ulink.ren/')
+
 function assetError(tagName: string, url: string) {
   return { target: { tagName, src: tagName === 'SCRIPT' ? url : undefined, href: tagName === 'LINK' ? url : undefined } }
 }
@@ -36,7 +39,7 @@ describe('installChunkLoadRecovery', () => {
     const { host, emit } = makeHost()
     const clearCaches = vi.fn().mockResolvedValue(undefined)
     const reload = vi.fn()
-    installChunkLoadRecovery({ window: host, clearCaches, reload, storage: makeStorage(), warn: () => {} })
+    installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN, window: host, clearCaches, reload, storage: makeStorage(), warn: () => {} })
 
     emit('error', assetError('SCRIPT', 'https://ulink.ren/assets/app-abc123.js'))
     await Promise.resolve()
@@ -50,7 +53,7 @@ describe('installChunkLoadRecovery', () => {
     const { host, emit } = makeHost()
     const clearCaches = vi.fn().mockResolvedValue(undefined)
     const reload = vi.fn()
-    installChunkLoadRecovery({ window: host, clearCaches, reload, storage: makeStorage(), warn: () => {} })
+    installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN, window: host, clearCaches, reload, storage: makeStorage(), warn: () => {} })
 
     emit('error', assetError('LINK', 'https://ulink.ren/assets/main-def456.css'))
     await Promise.resolve()
@@ -64,7 +67,7 @@ describe('installChunkLoadRecovery', () => {
     const clearCaches = vi.fn().mockResolvedValue(undefined)
     const reload = vi.fn()
     let t = 1_000_000
-    installChunkLoadRecovery({
+    installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN,
       window: host, clearCaches, reload, storage: makeStorage(), warn: () => {}, now: () => t,
     })
 
@@ -83,7 +86,7 @@ describe('installChunkLoadRecovery', () => {
     const { host, emit } = makeHost()
     const reload = vi.fn()
     let t = 1_000_000
-    installChunkLoadRecovery({
+    installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN,
       window: host, clearCaches: vi.fn().mockResolvedValue(undefined), reload,
       storage: makeStorage(), warn: () => {}, now: () => t,
     })
@@ -98,11 +101,13 @@ describe('installChunkLoadRecovery', () => {
   it('非本站 /assets/ 资源失败不触发（第三方脚本、图片等）', async () => {
     const { host, emit } = makeHost()
     const reload = vi.fn()
-    installChunkLoadRecovery({
+    installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN,
       window: host, clearCaches: vi.fn().mockResolvedValue(undefined), reload,
       storage: makeStorage(), warn: () => {},
     })
-    emit('error', assetError('SCRIPT', 'https://cdn.third-party.com/widget.js'))
+    // 关键回归：第三方 CDN 恰好带 /assets/ 段也不能触发自愈（否则会清掉本站离线缓存）
+    emit('error', assetError('SCRIPT', 'https://cdn.third-party.com/assets/widget.js'))
+    emit('error', assetError('LINK', 'https://cdn.third-party.com/assets/theme.css'))
     emit('error', assetError('IMG', 'https://ulink.ren/assets/logo.png'))
     await Promise.resolve(); await Promise.resolve()
     expect(reload).not.toHaveBeenCalled()
@@ -111,7 +116,7 @@ describe('installChunkLoadRecovery', () => {
   it('vite:preloadError → 自愈并 preventDefault（避免未捕获错误冒到全局）', async () => {
     const { host, emit, has } = makeHost()
     const reload = vi.fn()
-    installChunkLoadRecovery({
+    installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN,
       window: host, clearCaches: vi.fn().mockResolvedValue(undefined), reload,
       storage: makeStorage(), warn: () => {},
     })
@@ -126,7 +131,7 @@ describe('installChunkLoadRecovery', () => {
   it('清缓存失败也会刷新（不能因为清缓存抛错就停在白屏）', async () => {
     const { host, emit } = makeHost()
     const reload = vi.fn()
-    installChunkLoadRecovery({
+    installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN,
       window: host, clearCaches: vi.fn().mockRejectedValue(new Error('quota')), reload,
       storage: makeStorage(), warn: () => {},
     })
@@ -136,7 +141,7 @@ describe('installChunkLoadRecovery', () => {
   })
 
   it('无 window 宿主 → 返回 no-op disposer（SSR / 测试环境安全）', () => {
-    const dispose = installChunkLoadRecovery({ window: null })
+    const dispose = installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN, window: null })
     expect(typeof dispose).toBe('function')
     expect(() => dispose()).not.toThrow()
   })
@@ -144,7 +149,7 @@ describe('installChunkLoadRecovery', () => {
   it('disposer 卸载后不再响应事件', async () => {
     const { host, emit, has } = makeHost()
     const reload = vi.fn()
-    const dispose = installChunkLoadRecovery({
+    const dispose = installChunkLoadRecovery({ sameOrigin: SAME_ORIGIN,
       window: host, clearCaches: vi.fn().mockResolvedValue(undefined), reload,
       storage: makeStorage(), warn: () => {},
     })

@@ -267,6 +267,11 @@ export function rememberDeadUpsert(table: string, itemId: string, updatedAt: num
   _writeDeadUpserts(list)
 }
 
+/** 换账号/登出：清死信补推记录（含 2s 内存缓存），跨账号残留会误判本地值是否领先 */
+export function clearAllDeadUpserts(): void {
+  _writeDeadUpserts([])
+}
+
 /** 推送成功后清除死信 */
 export function forgetDeadUpsert(table: string, itemId: string): void {
   if (!table || !itemId) return

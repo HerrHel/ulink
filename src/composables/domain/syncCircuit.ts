@@ -35,9 +35,15 @@ let _state: CircuitState = 'closed'
 let _failures = 0
 let _openCount = 0
 let _reopenAt = 0
+let _halfOpenAt = 0
 let _inOutage = false
 let _recovered = false
 let _kind: SyncErrorKind | null = null
+
+/** 探活轮被无兜底触发源抢走后，超过这个时间仍没有 recordSync* 收尾就按失败处理 */
+export const HALF_OPEN_STALE_MS = 60_000
+/** 超时后不重新走完整退避，给一次短重试即可 */
+const HALF_OPEN_RETRY_MS = 5_000
 
 const backoffFor = (openCount: number): number =>
   SYNC_CIRCUIT_BACKOFF_MS[Math.min(openCount - 1, SYNC_CIRCUIT_BACKOFF_MS.length - 1)]
@@ -58,8 +64,20 @@ export function classifySyncError(message: string): SyncErrorKind {
 /** 编排层发起网络同步前询问；open 到期时转入 half-open 并放行一次探活。 */
 export function canAttemptSync(now: number = Date.now()): boolean {
   if (_state === 'closed') return true
+  if (_state === 'half-open') {
+    // debouncedSync / syncImmediate 也会消费「唯一一次探活」，却没有
+    // guardedBackgroundSync 的「轮末仍 half-open 就复位」兜底；若那一轮因空队列
+    // 提前 return、没登记成功/失败，状态会永久卡在 half-open、自动同步停摆。
+    // 超时按探活失败处理：回 open 并排一次短重试，下一轮仍有机会放行。
+    if (now - _halfOpenAt >= HALF_OPEN_STALE_MS) {
+      _state = 'open'
+      _reopenAt = now + HALF_OPEN_RETRY_MS
+    }
+    return false
+  }
   if (_state === 'open' && now >= _reopenAt) {
     _state = 'half-open'
+    _halfOpenAt = now
     return true
   }
   return false
@@ -92,6 +110,7 @@ export function recordSyncSuccess(): void {
   _state = 'closed'
   _inOutage = false
   _openCount = 0
+  _halfOpenAt = 0
   _recovered = wasOutage
 }
 
@@ -128,6 +147,7 @@ export function __resetSyncCircuit(): void {
   _failures = 0
   _openCount = 0
   _reopenAt = 0
+  _halfOpenAt = 0
   _inOutage = false
   _recovered = false
   _kind = null

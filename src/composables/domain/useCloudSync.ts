@@ -32,7 +32,7 @@ import { enqueueDirtyAsOps, pushFromQueue, reenqueueDeadDeletes, isDeadUpsert } 
 import { pullChanges } from './syncPull.js'
 import { _clearAllPendingSync } from './syncPending.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
-import { canAttemptSync, takeSyncRecovered, getSyncCircuitSnapshot, recordSyncSuccess } from './syncCircuit.js'
+import { __resetSyncCircuit, canAttemptSync, takeSyncRecovered, getSyncCircuitSnapshot, recordSyncSuccess } from './syncCircuit.js'
 import { withLock } from '../../lib/withLock.js'
 import { saveAppData } from '../../stores/app.js'
 import { _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
@@ -528,6 +528,16 @@ export function useCloudSync() {
     await clearAllSyncOps()
     _clearAllPendingSync()
     syncStore.setPendingCount(0)
+    // A 账号留下的死信墓碑（localStorage + 2s 内存缓存）会被 B 的 reenqueueDeadDeletes
+    // 用 B 的 userId 推上云，并让 isDeadDelete 在 pull 里跳过 B 的同 id 行；
+    // 残留的 open 熔断还会挡住 B 的自动同步。两者都必须随登出复位。
+    try {
+      const { clearAllDeadDeletes } = await import('./syncPending.js')
+      const { clearAllDeadUpserts } = await import('./syncPush.js')
+      clearAllDeadDeletes()
+      clearAllDeadUpserts()
+    } catch { /* 模块不可用时忽略，不阻断登出 */ }
+    __resetSyncCircuit()
   }
 
   return {

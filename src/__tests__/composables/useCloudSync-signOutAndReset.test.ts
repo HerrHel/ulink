@@ -11,6 +11,8 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useSyncStore } from '../../stores/sync.js'
 import { markConflictResolved, isConflictVersionResolved } from '../../lib/syncResolvedConflicts.js'
 import { _remoteSnapshots } from '../../composables/domain/useSyncConflict.js'
+import { rememberDeadDelete, isDeadDelete, clearAllDeadDeletes } from '../../composables/domain/syncPending.js'
+import { __resetSyncCircuit, recordSyncFailure, getSyncCircuitSnapshot } from '../../composables/domain/syncCircuit.js'
 
 const signOutMock = vi.hoisted(() => vi.fn())
 const clearOpsMock = vi.hoisted(() => vi.fn(async () => {}))
@@ -36,6 +38,13 @@ beforeEach(() => {
   sync.addConflict({ id: 'bm-1', type: 'bookmark', local: { title: 'L' }, remote: { title: 'R' } })
   markConflictResolved('bookmark', 'bm-1', 100)
   _remoteSnapshots.set('bookmark:bm-1', { stale: true })
+  // 再造 A 账号的死信墓碑与 open 熔断
+  clearAllDeadDeletes()
+  rememberDeadDelete('bookmarks', 'bm-dead-A')
+  __resetSyncCircuit()
+  recordSyncFailure('offline')
+  recordSyncFailure('offline')
+  recordSyncFailure('offline')
 })
 
 describe('signOutAndReset', () => {
@@ -51,6 +60,8 @@ describe('signOutAndReset', () => {
     expect(sync.conflicts).toHaveLength(0)
     expect(isConflictVersionResolved('bookmark', 'bm-1', 100)).toBe(false) // 裁决记忆已清
     expect(_remoteSnapshots.size).toBe(0) // 跨账号快照已清
+    expect(isDeadDelete('bookmarks', 'bm-dead-A')).toBe(false) // 死信墓碑已清
+    expect(getSyncCircuitSnapshot().state).toBe('closed') // 熔断已复位
   })
 
   it('远端登出成功同样清干净，且返回 true', async () => {

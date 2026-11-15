@@ -53,7 +53,15 @@ export function resolveConflict(id: string, keepLocal: boolean) {
     // 否则本地时间戳可能晚于他端后续更新，isRemoteNewer 判定反转导致静默拒收。
     const remoteTs = Number((conflict.remote as { updatedAt?: number })?.updatedAt)
     if (Number.isFinite(remoteTs) && remoteTs > 0) {
-      const arr = conflict.type === 'group' ? ds.siblingGroups : ds.bookmarks
+      // 旧实现只有 group/bookmarks 两分支：category/attribute 会去 bookmarks 里找 id，
+      // 找不到就不恢复，甚至可能误改同 id 的 bookmark 时间戳。四种类型各自定位。
+      const arrByType: Record<string, Array<{ id: string; updatedAt?: number }>> = {
+        bookmark: ds.bookmarks,
+        group: ds.siblingGroups,
+        category: ds.categories,
+        attribute: ds.customAttributes,
+      }
+      const arr = arrByType[conflict.type]
       const item = arr.find(x => x.id === id)
       if (item) (item as { updatedAt: number }).updatedAt = remoteTs
     }
