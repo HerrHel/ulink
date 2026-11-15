@@ -7,8 +7,10 @@ import { test, expect } from '@playwright/test'
  * 两者互不感知。未登录时按钮组多出登录入口（390px 视口实测 104→202px），左边界从
  * 272 推到 174，直接盖住居中的标题（182–208），重叠 34px。
  *
- * 修复（A+B）：三段正常流（汉堡 | 标题 | 按钮组）+ Stage 2 收起登录入口。
- * 本文件锁住两条契约：任何登录态下标题与搜索切换按钮都不相交；Stage 2 不出现登录入口。
+ * 修复（仅 B，保留严格居中）：Stage 2 收起登录入口，按钮组宽度回到 104~118px，
+ * 居中标题（182–208）不再被盖；另加 max-width + 省略号兜底长分类名。
+ * 本文件锁住三条契约：标题水平中心 ≈ 视口中心；标题与搜索切换按钮不相交；
+ * Stage 2 不出现登录入口。
  */
 
 const MOBILE = { width: 390, height: 844 }
@@ -58,6 +60,15 @@ test.describe('移动端 Stage 2 头部', () => {
     // 标题必须完整落在按钮组左侧，而不是被盖住一半
     expect(tb!.x).toBeGreaterThanOrEqual(0)
     expect(tb!.x + tb!.width).toBeLessThanOrEqual(sb!.x + 1)
+  })
+
+  test('标题严格水平居中于视口（方案 B 不改居中方式）', async ({ page }) => {
+    await enterStage2(page)
+    const tb = await page.locator('.panel-breadcrumb').boundingBox()
+    expect(tb).toBeTruthy()
+    const center = tb!.x + tb!.width / 2
+    // 绝对居中 left:50% + translateX(-50%)：中心应与视口中线重合（±2px 容差取整）
+    expect(Math.abs(center - MOBILE.width / 2)).toBeLessThanOrEqual(2)
   })
 
   test('Stage 2 不出现登录入口（未滚动时才可见）', async ({ page }) => {
