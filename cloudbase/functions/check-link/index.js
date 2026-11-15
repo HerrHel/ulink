@@ -22,6 +22,7 @@
 
 const http = require('http')
 const dns = require('dns').promises
+const { fetchPinned } = require('./pinned-fetch.js')
 const crypto = require('crypto')
 const {
   SsrfRejectError,
@@ -259,6 +260,9 @@ async function _validateUrl(raw) {
     }
     throw new SsrfRejectError('private_dns', '目标 DNS 解析到内网地址')
   }
+  // 把本次 DNS 预检通过的 IP 随 URL 一起带下去：fetchPinned 会把连接固定到它，
+  // 不再让全局 fetch 对同一域名做第二次解析（DNS rebinding TOCTOU）。
+  parsed.__pinnedRecords = check.records
   return parsed
 }
 
@@ -270,21 +274,16 @@ async function _fetchWithRedirectGuard(url, method, timeoutMs) {
   let currentMethod = method
   let lastResponse = null
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
-    try {
-      lastResponse = await fetch(current.href, {
-        method: currentMethod,
-        redirect: 'manual',
-        signal: controller.signal,
-        headers: {
-          'User-Agent': BROWSER_UA,
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      })
-    } finally {
-      clearTimeout(timeout)
-    }
+    // 逐跳都重新 _validateUrl，因此每一跳都带着自己的预检 IP；
+    // fetchPinned 用 lookup 固定连接目标，redirect 天然 manual（不跟随）。
+    lastResponse = await fetchPinned(current, {
+      method: currentMethod,
+      timeoutMs,
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    })
 
     if (lastResponse.status >= 300 && lastResponse.status < 400) {
       const loc = lastResponse.headers.get('Location')
