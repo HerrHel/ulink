@@ -17,8 +17,8 @@
                 <span class="conflict-item-name">{{ itemName(c) }}</span>
               </div>
               <div class="conflict-item-actions">
-                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-keep-local" @click="sync.resolveConflict(c.id, true)">{{ t('conflict.keepLocal') }}</button>
-                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-use-remote" @click="sync.resolveConflict(c.id, false)">{{ t('conflict.useRemote') }}</button>
+                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-keep-local" @click="sync.resolveConflict(c.id, true, c.type)">{{ t('conflict.keepLocal') }}</button>
+                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-use-remote" @click="sync.resolveConflict(c.id, false, c.type)">{{ t('conflict.useRemote') }}</button>
               </div>
             </div>
           </div>

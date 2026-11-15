@@ -78,9 +78,19 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   // 冲突管理
+  // 复合键：不同实体表复用同一个 id 是允许且真实存在的（种子里分类 'ai' 与属性 'ai'）。
+  // 旧实现只按裸 id 去重/查找：两表同时冲突会互相覆盖，解决时也只能删掉其中一条。
+  // 仍接受裸 id 调用（向后兼容），但传入 type 或 'type:id' 时做精确匹配。
+  function _matches(c: SyncConflict, idOrKey: string, type?: SyncConflict['type']): boolean {
+    if (type) return c.type === type && c.id === idOrKey
+    const sep = idOrKey.indexOf(':')
+    if (sep > 0) return c.type === idOrKey.slice(0, sep) && c.id === idOrKey.slice(sep + 1)
+    return c.id === idOrKey
+  }
+
   function addConflict(c: SyncConflict) {
     const list = conflicts.value
-    const idx = list.findIndex(item => item.id === c.id)
+    const idx = list.findIndex(item => item.id === c.id && item.type === c.type)
     if (idx >= 0) {
       list[idx] = c
     } else {
@@ -89,12 +99,12 @@ export const useSyncStore = defineStore('sync', () => {
     conflictBannerDismissed.value = false
   }
 
-  function removeConflict(id: string) {
-    conflicts.value = conflicts.value.filter(c => c.id !== id)
+  function removeConflict(idOrKey: string, type?: SyncConflict['type']) {
+    conflicts.value = conflicts.value.filter(c => !_matches(c, idOrKey, type))
   }
 
-  function getConflict(id: string): SyncConflict | undefined {
-    return conflicts.value.find(c => c.id === id)
+  function getConflict(idOrKey: string, type?: SyncConflict['type']): SyncConflict | undefined {
+    return conflicts.value.find(c => _matches(c, idOrKey, type))
   }
 
   function clearConflicts() {

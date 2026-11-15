@@ -43,10 +43,12 @@ export function _applyRemoteToLocal(type: EntityType, id: string, remote: Record
   apply[type]?.()
 }
 
-export function resolveConflict(id: string, keepLocal: boolean) {
+export function resolveConflict(idOrKey: string, keepLocal: boolean, type?: EntityType) {
   const store = useSyncStore()
-  const conflict = store.getConflict(id)
+  const conflict = store.getConflict(idOrKey, type)
   if (!conflict) return
+  // 之后所有按 id 的操作都用冲突记录里的真实 id（idOrKey 可能是 'type:id' 复合键）
+  const id = conflict.id
   const ds = useDataStore()
   if (!keepLocal) {
     _applyRemoteToLocal(conflict.type, id, conflict.remote as Record<string, unknown>)
@@ -117,12 +119,12 @@ export function resolveConflict(id: string, keepLocal: boolean) {
   // 不再重新判定冲突（否则横幅刚关就被挂回来）。
   markConflictResolved(conflict.type, id, Number((conflict.remote as { updatedAt?: number })?.updatedAt) || 0)
   _remoteSnapshots.delete(`${conflict.type}:${id}`)
-  store.removeConflict(id)
+  store.removeConflict(id, conflict.type)
 }
 
 export function resolveAllConflicts(keepLocal: boolean) {
   const store = useSyncStore()
   for (const c of store.conflicts.slice()) {
-    resolveConflict(c.id, keepLocal)
+    resolveConflict(c.id, keepLocal, c.type)
   }
 }

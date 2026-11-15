@@ -112,7 +112,7 @@ export function _permanentDeleteWithoutEcho(
   for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || affectedIds.has(cid)) ds._changedFields.delete(cid)
   for (const did of affectedIds) ds._newIds.delete(did)
   for (const did of ds._deletedIds.keys()) if (!deletedBefore.has(did) || affectedIds.has(did)) ds._deletedIds.delete(did)
-  try { useSyncStore().removeConflict(id) } catch { /* ignore */ }
+  try { useSyncStore().removeConflict(id, type) } catch { /* ignore */ }
 }
 
 /** 智能合并：远端 → 本地（decision → store 副作用）
@@ -175,7 +175,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         // 远端版本严格更新时（updatedAt 前进）仍然照常判定冲突。
         if (
           lItem
-          && !syncStore.getConflict(rItem.id)
+          && !syncStore.getConflict(rItem.id, type)
           && !isConflictVersionResolved(type, rItem.id, Number(rItem.updatedAt) || 0)
         ) {
           syncStore.addConflict({
