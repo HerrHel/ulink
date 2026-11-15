@@ -89,10 +89,13 @@ function buildMime(subject, body, from, to, replyTo, messageIdDomain) {
 }
 
 function withTimeout(p, ms, label) {
-  return Promise.race([
-    p,
-    new Promise((_, rej) => setTimeout(() => rej(new SmtpError(`${label} timeout after ${ms}ms`)), ms)),
-  ])
+  // 旧实现每次发信都留下一个 20s timer（即使会话 2s 内就完成），高频发信时
+  // 事件循环里堆一批空转句柄。race settle 后必须在 finally 清掉。
+  let timer
+  const timeout = new Promise((_, rej) => {
+    timer = setTimeout(() => rej(new SmtpError(`${label} timeout after ${ms}ms`)), ms)
+  })
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer))
 }
 
 class SmtpSession {

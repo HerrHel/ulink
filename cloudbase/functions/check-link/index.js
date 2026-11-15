@@ -49,6 +49,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Bo
 const DEFAULT_TIMEOUT_MS = parseInt(process.env.CHECK_LINK_TIMEOUT_MS || '10000', 10)
 /** 每 IP 限流（次/分钟）。原版是每用户 1200/min；v1 无用户身份，改为按 IP 限流，默认同为 1200/min/IP */
 const RATE_LIMIT_PER_MIN = parseInt(process.env.CHECK_LINK_RATE_LIMIT_PER_MIN || '1200', 10)
+// 与客户端 IP 无关的全局固定桶：X-Forwarded-For / X-Real-IP 可伪造，换一次请求头
+// 就是一个新的 1200/min 桶和新的匿名日额度桶。这一层保证出站请求总量有上限
+// （与 extract-video:1006 同口径），登录用户的 uid 额度不受影响。
+const RATE_LIMIT_GLOBAL_PER_MIN = parseInt(process.env.CHECK_LINK_GLOBAL_PER_MIN || '2400', 10)
 const MAX_REDIRECTS = 5
 /** 匿名手动死链检查日额度：无令牌时按 IP 哈希走独立匿名配额键，避免「直接放行」变成无限外呼 */
 const ANON_DAILY_LIMIT = parseInt(process.env.CHECK_LINK_ANON_DAILY_LIMIT || '20', 10)
@@ -343,6 +347,23 @@ const server = http.createServer(async (req, res) => {
     // ── 每 IP 限流（fail-closed：本函数会代用户发起出站请求，放行即外呼放大器）──
     const ipHash = sha256Hex(`${clientIp(req)}|${IP_HASH_SALT}`)
     const db = getDb()
+    // 全局硬闸必须先于任何按 IP 的计数：否则伪造 IP 仍可逐个新建桶外呼
+    if (RATE_LIMIT_GLOBAL_PER_MIN > 0) {
+      const grl = await db.rpc('consume_rate_limit', {
+        p_key: 'check-link:global',
+        p_limit: RATE_LIMIT_GLOBAL_PER_MIN,
+        p_window_secs: 60,
+      })
+      if (grl.error) {
+        console.error('[check-link] global rate limit rpc failed (fail-closed):', grl.error)
+        sendJson(res, 503, { error: 'Service temporarily unavailable' }, cors)
+        return
+      }
+      if (grl.data !== true) {
+        sendJson(res, 429, { error: 'Rate limit exceeded' }, { ...cors, 'Retry-After': '60' })
+        return
+      }
+    }
     const rl = await db.rpc('consume_rate_limit', {
       p_key: `check-link:ip:${ipHash}`,
       p_limit: RATE_LIMIT_PER_MIN,

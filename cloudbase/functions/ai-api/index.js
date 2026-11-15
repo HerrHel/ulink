@@ -31,6 +31,10 @@ function getDb() {
 /** 每 token（匿名共享桶）60s 窗口内的调用上限；DB 计数跨 isolate / 跨节点共享 */
 const AIAPI_LIMIT_AUTHED = 30
 const AIAPI_LIMIT_ANON = 10
+// 真正的全局固定桶：checkGlobalQuota 跑在 requireAuth 之前，bucket 由**未验签**的
+// Bearer 字符串派生，随机 token 会无限新建计数行。固定桶先把总量卡死，避免
+// 「配额按 token 名存实亡 + rate_limit_counters 被无限灌入」。
+const AIAPI_LIMIT_GLOBAL = parseInt(process.env.AIAPI_GLOBAL_PER_MIN || '600', 10)
 
 async function checkGlobalQuota(req, action) {
   const auth = String(req.headers.authorization || '')
@@ -39,6 +43,15 @@ async function checkGlobalQuota(req, action) {
     ? crypto.createHash('sha256').update(token).digest('hex').slice(0, 20)
     : 'anon'
   try {
+    if (AIAPI_LIMIT_GLOBAL > 0) {
+      const g = await getDb().rpc('consume_rate_limit', {
+        p_key: `ai-api:global:${action}`,
+        p_limit: AIAPI_LIMIT_GLOBAL,
+        p_window_secs: 60,
+      })
+      if (g.error) return { ok: false, status: 503, error: 'quota_unavailable' }
+      if (g.data !== true) return { ok: false, status: 429, error: 'rate_limited' }
+    }
     const r = await getDb().rpc('consume_rate_limit', {
       p_key: `ai-api:${action}:${bucket}`,
       p_limit: token ? AIAPI_LIMIT_AUTHED : AIAPI_LIMIT_ANON,

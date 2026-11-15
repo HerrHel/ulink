@@ -504,13 +504,18 @@ if (apiKey) {
   writeFileSync(rcPath, JSON.stringify(rc, null, 2), 'utf8')
   try {
     const updateOut = String(tcb(FN_DIR, ['config', 'update', 'fn', fnName]) || '')
-    console.log(updateOut)
+    // CLI 可能回显刚注入的 envVariables（CLOUDBASE_APIKEY / 微信支付宝私钥 PEM 等）。
+    // 成功判定仍用完整输出，但绝不把原文打进终端/CI 日志。
+    const redact = (s) => String(s)
+      .replace(/-----BEGIN[\s\S]*?-----END[^-]+-----/g, '[PEM REDACTED]')
+      .replace(/((?:apikey|api_key|secret|password|passwd|token|private_key|privatekey)\s*[:=]\s*["']?)([^"',\s}\]]+)/gi, '$1[REDACTED]')
+    console.log('✔ config update 已执行（原始输出含密钥，不回显）')
     // 无论 env-only 与否，都要在 config update 输出里确认成功；未命中成功标记或出现失败标记即非零退出
     // （env-only 尤其关键：它是密钥轮换唯一入口，旧版完全不检查输出就 exit 0）
     const ok = /(?:success|成功|√|已更新|更新完成|updated)/i.test(updateOut)
     const bad = /(?:failed|失败|✖|error:)/i.test(updateOut)
     if (!ok || bad) {
-      console.error(`✖ config update 输出未确认成功（envOnly=${envOnly}），拒绝继续：\n${updateOut.slice(-800)}`)
+      console.error(`✖ config update 输出未确认成功（envOnly=${envOnly}），拒绝继续：\n${redact(updateOut.slice(-800))}`)
       process.exit(1)
     }
   } finally {
@@ -543,7 +548,16 @@ if (!envOnly && !isEventFn) {
       ]),
     )
   } catch (e) {
-    console.log('⚠ 路由类型修正失败（若已是 WEB_SCF 可忽略）:', String(e.stdout || e.message).slice(0, 200))
+    const msg = String(e.stdout || e.stderr || e.message || '')
+    // 只有「目标已是 WEB_SCF」这类幂等提示可忽略；其余（权限/参数/网络/路由不存在）
+    // 一律判定部署失败，否则线上仍是 SCF(Event)、网关回 FUNCTIONS_PARAM_INVALID，
+    // 而脚本照常打印访问地址并 exit 0。
+    if (/(?:already|已是|已经|无需|no.?op)/i.test(msg) && /WEB_SCF|upstream/i.test(msg)) {
+      console.log('✔ 路由已是 WEB_SCF，无需修正')
+    } else {
+      console.error(`✖ 路由类型修正失败，拒绝判定部署成功：${msg.slice(0, 300)}`)
+      process.exit(1)
+    }
   }
 }
 
