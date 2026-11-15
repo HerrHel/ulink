@@ -248,3 +248,44 @@ describe('_fingerprint', () => {
     expect(normalize(a)).toBe('1|0|1|0|42|42|0|<refsum>|')
   })
 })
+
+describe('内容字段纳入指纹（同毫秒编辑不再静默跳过落盘）', () => {
+  it('updatedAt 完全相同时，只改 bookmark.title 也改变指纹', () => {
+    const a = mkBm({ id: 'b1', updatedAt: 1700000000000 })
+    const b = { ...a, title: '改过的标题' }
+    expect(_fingerprint(data({ bookmarks: [a] }))).not.toBe(_fingerprint(data({ bookmarks: [b] })))
+  })
+
+  it('url / notes / username / password / attributes 任一变化都改变指纹', () => {
+    const base = mkBm({ id: 'b1', updatedAt: 1700000000000 })
+    const variants: Partial<Bookmark>[] = [
+      { url: 'https://new.example' },
+      { notes: '<p>新笔记</p>' },
+      { username: 'alice' },
+      { password: { encrypted: true, data: 'x', iv: 'y', salt: 'z' } as unknown as Bookmark['password'] },
+      { attributes: { 标签: '新值' } as unknown as Bookmark['attributes'] },
+    ]
+    const fp0 = _fingerprint(data({ bookmarks: [base] }))
+    for (const v of variants) {
+      expect(_fingerprint(data({ bookmarks: [{ ...base, ...v }] }))).not.toBe(fp0)
+    }
+  })
+
+  it('group / category / attribute 的名称与笔记变化也改变指纹', () => {
+    const g = mkGrp({ id: 'g1', updatedAt: 1700000000000 })
+    const c = mkCat({ id: 'c1' })
+    const a = mkAttr({ id: 'a1' })
+    const fp0 = _fingerprint(data({ siblingGroups: [g], categories: [c], customAttributes: [a] }))
+    expect(_fingerprint(data({ siblingGroups: [{ ...g, name: '新组名' }], categories: [c], customAttributes: [a] }))).not.toBe(fp0)
+    expect(_fingerprint(data({ siblingGroups: [{ ...g, notes: '新笔记' }], categories: [c], customAttributes: [a] }))).not.toBe(fp0)
+    expect(_fingerprint(data({ siblingGroups: [g], categories: [{ ...c, name: '新分类' }], customAttributes: [a] }))).not.toBe(fp0)
+    expect(_fingerprint(data({ siblingGroups: [g], categories: [c], customAttributes: [{ ...a, name: '新属性' }] }))).not.toBe(fp0)
+  })
+
+  it('对象字段含循环引用时指纹计算不抛错（save 会另行拦下）', () => {
+    const bad: any = mkBm({ id: 'b1', updatedAt: 1 })
+    bad.attributes = {}
+    bad.attributes.self = bad.attributes
+    expect(() => _fingerprint(data({ bookmarks: [bad] }))).not.toThrow()
+  })
+})

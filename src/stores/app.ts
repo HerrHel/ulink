@@ -48,24 +48,38 @@ export function _fingerprint(data: AppData): string {
     for (let i = 0; i < s.length; i++) structSum = (structSum * 31 + s.charCodeAt(i)) | 0
     structSum = (structSum * 31 + 7) | 0 // 字段分隔符，防 ['ab','c'] 与 ['a','bc'] 碰撞
   }
+  // 对象/数组字段（加密密码、attributes、bookmarkIds）折 JSON 文本；
+  // 循环引用等极端情况不能让指纹计算抛错（save() 会自己拦截并提示）。
+  const mixValue = (v: unknown) => {
+    if (v == null) return mix('')
+    if (typeof v === 'object') {
+      try { mix(JSON.stringify(v)) } catch { mix('[unserializable]') }
+    } else mix(v)
+  }
   let useCounts = 0
   for (const b of bms) {
     bump(b.updatedAt)
     useCounts += b.useCount || 0
     mix(b.id); mix(b.order); mix(b.categoryId); mix(b.parentId); mix(b.deletedAt)
+    // #20 审计补强：内容字段此前完全没进指纹，只靠 updatedAt 感知变化。
+    // 同一毫秒内两次编辑（Date.now() 相同）且改动落在 title/url/notes 等内容时，
+    // maxUp/updSum 都不变 → 指纹命中早退 → 第二次修改静默不落盘、刷新回退。
+    // 折进 structSum（第 8 段）后指纹格式段数不变，既有断言的 normalize() 仍成立。
+    mix(b.title); mix(b.url); mix(b.notes); mix(b.username); mixValue(b.password); mixValue(b.attributes)
   }
   for (const g of grps) {
     bump(g.updatedAt)
     useCounts += g.useCount || 0
     mix(g.id); mix(g.order); mix(g.categoryId); mix(g.deletedAt)
+    mix(g.name); mix(g.notes); mixValue((g as { bookmarkIds?: unknown }).bookmarkIds)
   }
   for (const c of cats) {
     bump(c.updatedAt)
-    mix(c.id); mix(c.order); mix(c.deletedAt)
+    mix(c.id); mix(c.order); mix(c.deletedAt); mix(c.name)
   }
   for (const a of attrs) {
     bump(a.updatedAt)
-    mix(a.id); mix(a.deletedAt)
+    mix(a.id); mix(a.deletedAt); mix(a.name)
   }
   const base = `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${updSum}|${useCounts}|${structSum}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
   if (!data._masterCanary) return base

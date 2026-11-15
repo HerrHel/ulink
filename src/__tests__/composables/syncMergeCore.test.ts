@@ -3,7 +3,7 @@
  * 纯决策、无 store / supabase 副作用。
  */
 import { describe, it, expect } from 'vitest'
-import { decideRemoteApply } from '../../composables/domain/syncMergeCore.js'
+import { decideRemoteApply, isRemoteNewer, MAX_FUTURE_CLOCK_SKEW_MS } from '../../composables/domain/syncMergeCore.js'
 
 const base = { id: 'x-1', updatedAt: 1000 }
 const remoteNewer = { id: 'x-1', updatedAt: 9000 }
@@ -284,5 +284,39 @@ describe('decideRemoteApply 矩阵', () => {
       isPending: false,
       lastSyncAt: 1,
     }).action).toBe('skip')
+  })
+})
+
+describe('本地未来时间戳规整（时钟超前设备不再冻结更新）', () => {
+  const NOW = 1_700_000_000_000
+
+  it('本地被写成 now+60s 的未来戳后，正常时钟设备的 now+10s 更新应被接受', () => {
+    // 旧实现 lTime = now+60000，rTime = now+10000 → false，实体静默停在旧版本
+    expect(isRemoteNewer(
+      { id: 'x', updatedAt: NOW + 10_000 },
+      { id: 'x', updatedAt: NOW + 60_000 },
+      NOW,
+    )).toBe(true)
+  })
+
+  it('本地未来戳 + 远端更旧的更新仍被拒（不误收）', () => {
+    expect(isRemoteNewer(
+      { id: 'x', updatedAt: NOW - 1_000 },
+      { id: 'x', updatedAt: NOW + 60_000 },
+      NOW,
+    )).toBe(false)
+  })
+
+  it('正常时间戳比较语义不变', () => {
+    expect(isRemoteNewer({ id: 'x', updatedAt: NOW + 10 }, { id: 'x', updatedAt: NOW - 10 }, NOW)).toBe(true)
+    expect(isRemoteNewer({ id: 'x', updatedAt: NOW - 20 }, { id: 'x', updatedAt: NOW - 10 }, NOW)).toBe(false)
+  })
+
+  it('远端远超 120s 的未来戳被截断到 now，不能压过本地未来戳', () => {
+    expect(isRemoteNewer(
+      { id: 'x', updatedAt: NOW + 10 * MAX_FUTURE_CLOCK_SKEW_MS },
+      { id: 'x', updatedAt: NOW + 60_000 },
+      NOW,
+    )).toBe(false)
   })
 })

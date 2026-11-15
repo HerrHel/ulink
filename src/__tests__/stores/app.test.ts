@@ -220,8 +220,12 @@ describe('#25 _fingerprint 纳入结构字段', () => {
     expect(fpWith((d) => { d.bookmarks[0].deletedAt = 9999 }))
       .not.toBe(_fingerprint(makeData()))
   })
-  it('仅改 title（非结构字段）→ 指纹不变（不误伤 PERF-3 早退优化）', () => {
+  it('仅改 title（updatedAt 不变）→ 指纹改变：同毫秒两次内容编辑也必须落盘', () => {
+    // 旧断言写的是「title 变化指纹不变」，依赖 updatedAt 每次 bump 来触发落盘。
+    // 但同一毫秒内两次编辑 Date.now() 相同 → 指纹不变 → save() 早退、第二次修改丢失。
+    // 内容字段纳入 structSum 后必须改变指纹；PERF-3 早退仍对「真正没变化」的
+    // 重复 save 生效（幂等契约由 app-fingerprint.test.ts 锁定）。
     expect(fpWith((d) => { d.bookmarks[0].title = '新标题' }))
-      .toBe(_fingerprint(makeData()))
+      .not.toBe(_fingerprint(makeData()))
   })
 })

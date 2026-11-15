@@ -7,26 +7,35 @@
  * 运行：`npm run test:ai-eval`（走 vitest.ai-eval.config.ts，自动注入 AI_EVAL_REQUIRE=1）。
  * 默认 `npm run test` 下本套件整体跳过（不产生网络调用与费用）。
  *
- * 鉴权（二选一，须为真实登录态，评测走与生产完全相同的 mimo-chat Edge Function 转发通道）：
- *   - AI_EVAL_TOKEN：Supabase access_token（应用登录后可从会话中取）
- *   - AI_EVAL_EMAIL + AI_EVAL_PASSWORD：密码登录自动获取 token
- * 另需 .env 中的 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY（与生产客户端同源）。
- * 凭据缺失时如实 FAIL 并给出指引，绝不静默跳过（防假绿）。
+ * 鉴权（必须为真实登录态，评测走与生产完全相同的 CloudBase mimo-chat 通道）：
+ *   - AI_EVAL_TOKEN：CloudBase access token（浏览器登录 ulink.ren 后从会话中取，
+ *     即客户端 authDriver.getApiToken() 的返回值）
+ *   - 可选 AI_EVAL_FN_BASE：覆盖转发基址（默认与 .env.production 一致 https://ulink.ren）
+ * 缺凭据时如实 FAIL 并给出指引，绝不静默跳过（防假绿）。
+ *
+ * 2026-11-15：旧版打 `${VITE_SUPABASE_URL}/functions/v1/mimo-chat` 并用 supabase-js
+ * 密码登录换 token —— 生产 11-10 已全量 CloudBase，这条通道必然 404 / 登录失败。
+ * 现改为同域 `${VITE_CLOUDBASE_FN_BASE}/mimo-chat`，Bearer 直接带 CloudBase token。
  *
  * 说明：为便于解析，评测以 stream=false 打同一转发通道（mimo-guard 放行该字段），
  * 其余请求组装（系统提示词 / 温度 / tools）与生产 askMiMoStream 同口径。
  */
 import { describe, it, expect, beforeAll } from 'vitest'
-import { createClient } from '@supabase/supabase-js'
 import { buildUlinkSystemPrompt } from '../../lib/ai/mimoPrompt.js'
 import { getMiMoConfig } from '../../lib/ai/mimoStream.js'
 import { ULINK_AGENT_TOOLS } from '../../lib/ai/tools.js'
 import { GOLDEN_CASES, checkGoldenExpectation, type GoldenCase, type GoldenReply } from './goldenCases.js'
 
 const ENABLED = !!process.env.AI_EVAL_REQUIRE
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || process.env.VITE_SUPABASE_URL || ''
-const SUPABASE_ANON_KEY =
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || process.env.VITE_SUPABASE_ANON_KEY || ''
+
+/** 与生产同一个 HTTP 函数网关；允许 AI_EVAL_FN_BASE 覆盖（联调自测用） */
+export function evalFnUrl(): string {
+  const base =
+    (import.meta.env.VITE_CLOUDBASE_FN_BASE as string | undefined) ||
+    process.env.AI_EVAL_FN_BASE ||
+    'https://ulink.ren'
+  return `${String(base).replace(/\/+$/, '')}/mimo-chat`
+}
 
 /** 单条用例最大尝试次数：首跑失败再复跑一次区分采样波动与真实回归（两次全败才判 FAIL） */
 const MAX_ATTEMPTS = 2
@@ -51,12 +60,11 @@ async function callMimoForEval(c: GoldenCase, token: string): Promise<GoldenRepl
     tools: ULINK_AGENT_TOOLS,
     tool_choice: 'auto',
   }
-  const res = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/mimo-chat`, {
+  const res = await fetch(evalFnUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
-      apikey: SUPABASE_ANON_KEY,
     },
     body: JSON.stringify(body),
   })
@@ -82,6 +90,14 @@ async function callMimoForEval(c: GoldenCase, token: string): Promise<GoldenRepl
  * 真模型调用仍由下方 describe.skipIf 门控，绝不在 CI 跑（需凭据 + 计费）。
  * 注：vitest.ai-eval.config.ts 同样 include 本文件，届时 ENABLED=true，两类一起跑，无副作用。
  */
+describe('真模型评测通道与生产一致（零网络）', () => {
+  it('打 CloudBase 同域 mimo-chat，不再指向 Supabase /functions/v1/', () => {
+    const url = evalFnUrl()
+    expect(url).toMatch(/\/mimo-chat$/)
+    expect(url).not.toMatch(/\/functions\/v1\//)
+  })
+})
+
 describe('golden expectation 结构性校验（默认套件常跑，零网络）', () => {
   const toolNames = new Set(ULINK_AGENT_TOOLS.map((t) => t.function.name))
 
@@ -139,28 +155,18 @@ describe('golden expectation 结构性校验（默认套件常跑，零网络）
 describe.skipIf(!ENABLED)('AI 真模型 golden 回归评测（手动门控）', () => {
   let token = ''
 
-  beforeAll(async () => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error('缺少 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY（请检查 .env），评测无法进行')
-    }
+  beforeAll(() => {
+    // CloudBase 的用户密码登录依赖浏览器侧 SDK，Node 评测进程里无法复现；
+    // 旧版用 supabase-js 登录换 token 的路径在生产切 CloudBase 后必然失败。
+    // 因此只接受显式传入的真实 CloudBase access token，缺就 fail-closed。
     const direct = process.env.AI_EVAL_TOKEN
-    if (direct) {
-      token = direct
-      return
-    }
-    const email = process.env.AI_EVAL_EMAIL
-    const password = process.env.AI_EVAL_PASSWORD
-    if (!email || !password) {
+    if (!direct) {
       throw new Error(
-        '缺少评测凭据：请设置 AI_EVAL_TOKEN 或 AI_EVAL_EMAIL + AI_EVAL_PASSWORD（详见文件头注释），评测无法进行',
+        '缺少 AI_EVAL_TOKEN（CloudBase access token）。请在 ulink.ren 登录后从会话取 token，' +
+          '或用 AI_EVAL_FN_BASE 指定联调环境；评测不会静默跳过。',
       )
     }
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error || !data.session?.access_token) {
-      throw new Error(`评测账号登录失败：${error?.message || '无会话返回'}`)
-    }
-    token = data.session.access_token
+    token = direct
   }, 60000)
 
   for (const c of GOLDEN_CASES) {

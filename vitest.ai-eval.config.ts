@@ -18,6 +18,9 @@ export default defineConfig({
     testTimeout: 180000,
     env: {
       AI_EVAL_REQUIRE: '1',
+      // 与生产同形态：不要被本机 .env.local 的偶然值带偏，也不读 .env.production
+      VITE_BACKEND: 'cloudbase',
+      VITE_CLOUDBASE_FN_BASE: process.env.AI_EVAL_FN_BASE || 'https://ulink.ren',
     },
   },
 })

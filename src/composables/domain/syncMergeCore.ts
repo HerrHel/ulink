@@ -61,7 +61,12 @@ export function sanitizeRemoteTimestamp(remoteUpdatedAt?: number, now = Date.now
 
 export function isRemoteNewer(remote: MergeEntity, local: MergeEntity, now = Date.now()): boolean {
   const rTime = sanitizeRemoteTimestamp(remote.updatedAt, now)
-  const lTime = local.updatedAt || 0
+  // 本地时间戳同样要规整：远端超前 ≤120s 的戳会被 sanitize 原样保留，并经
+  // syncLocalMerge 的 `Math.max(lTime, safeRemoteUpdatedAt)` 写回本地 updatedAt，
+  // 使本地出现未来戳。此后来自正常时钟设备的更新（rTime ≈ now）永远小于 lTime →
+  // 被判 older 静默拒收，实体冻结在旧版本。把本地未来戳视为 now 即可解开这个窗口。
+  const lRaw = typeof local.updatedAt === 'number' && Number.isFinite(local.updatedAt) ? local.updatedAt : 0
+  const lTime = Math.min(lRaw, now)
   return rTime > lTime
 }
 

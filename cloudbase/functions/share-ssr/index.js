@@ -231,6 +231,9 @@ const server = http.createServer(async (req, res) => {
   // ── 访问密码前置判定（组分享）──────────────────────────────────────
   // 必须先问「这组有没有设密码」，再决定要不要读缓存 / 取内容。
   // 反过来的话，「刚加上密码」的组会继续吐上一次缓存的完整内容，密码形同虚设。
+  // ⚠️ 这里必须**每次请求实时 RPC**，绝不能把 get_share_secret 结果放进 mem-cache：
+  //    票据签名绑定了当前 password_hash（ticketVersion），一旦 secret 被缓存，
+  //    主人改密码后旧访客的 24h 票据仍会在缓存 TTL 内被判为有效。
   const db = getDb()
   let hasPassword = false
   let passwordHash = null
