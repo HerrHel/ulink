@@ -82,34 +82,52 @@
   }
   .scrolled-search .filter-row{height:auto;min-height:auto;max-height:none;padding:4px 12px}
 
-  /* === Stage 2: header simplified — hamburger left, category center === */
+  /* === Stage 2: header simplified — hamburger left, category center ===
+   *
+   * 旧实现把「标题」和「右侧按钮组」都做成绝对定位（标题 left:50% 居中、按钮组 right:14px
+   * 贴右），两者互不感知。未登录时按钮组多出登录入口（实测 390px 视口下宽度 104→202px），
+   * 左边界从 272 推到 174，直接盖住居中的标题（182–208），重叠 34px。
+   *
+   * 改为正常流三段：汉堡 | 标题（占满剩余、居中、可省略）| 按钮组。
+   * 按钮再多也只会让标题变短省略，不会重叠；标题居中于「汉堡右侧~按钮组左侧」，
+   * 而非屏幕正中——这是避免绝对定位冲突的必要取舍。
+   */
   .scrolled-header .panel-header{
     padding:0 14px;
-    grid-template-columns:auto 1fr auto;
-    align-items:stretch;
+    grid-template-columns:32px minmax(0,1fr) auto;
+    align-items:center;
   }
   .scrolled-header .header-left{
-    grid-column:1/-1;
+    grid-column:1/3;
     display:flex;align-items:center;
-    position:relative;
+    min-width:0;
   }
   .scrolled-header .hamburger-btn{
     flex-shrink:0;
     width:32px;height:32px;
   }
   .scrolled-header .panel-breadcrumb{
-    position:absolute;left:50%;transform:translateX(-50%);
+    /* 覆盖全局 display:flex（那样 text-overflow 不生效），用块级 + text-align 居中 */
+    position:static;transform:none;
+    flex:1 1 auto;min-width:0;
+    display:block;
+    text-align:center;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     font-size:var(--fs-sm);font-weight:600;
     color:var(--text);
-    white-space:nowrap;pointer-events:none;
+    pointer-events:none;
   }
   .scrolled-header .panel-count{display:none}
   .scrolled-header .header-search{display:none}
   .scrolled-header .search-toggle-btn{display:inline-flex}
   .scrolled-header .header-right{
-    position:absolute;right:14px;top:0;bottom:0;
+    grid-column:3;
     display:flex;align-items:center;gap:4px;
+    min-width:0;
   }
+  /* Stage 2 是简化头部：登录入口收起（未滚动时仍在 header/设置面板里）。
+     与上面的三段布局叠加成 A+B：布局不再重叠，头部也不会因未登录多一个按钮而变挤。 */
+  .scrolled-header .header-login-btn{display:none}
   .scrolled-header .search-toggle-btn,
   .scrolled-header .lt-btn{
     width:32px;height:32px;
