@@ -98,11 +98,24 @@ export function verifyPassword(password: string, stored: string | null | undefin
 
 // ── 票据（cookie 值）───────────────────────────────────────────────────
 
-/** 票据格式：`v1.<过期秒>.<hmac>`，hmac = HMAC-SHA256(secret, `v1|gid|exp`) */
-export function makeTicket(gid: string, secret: string, nowMs?: number, ttlSec = TICKET_TTL_SEC): string {
+/**
+ * 票据格式：`v1.<过期秒>.<hmac>`，hmac = HMAC-SHA256(secret, `v1|gid|exp|<pwVersion>`)
+ *
+ * pwVersion = 当前密码摘要的短哈希（由调用方传入，绝不写进 cookie）。
+ * 旧实现只签 gid|exp：主人改密码 / 撤密码再重设后，旧访客手里的 24h 票据
+ * 仍然能直接过门，最长可继续读到主人后续编辑的内容。把密码版本纳入签名后，
+ * 任何密码变更都会让所有既有票据自动失效。
+ */
+export function makeTicket(
+  gid: string,
+  secret: string,
+  nowMs?: number,
+  ttlSec = TICKET_TTL_SEC,
+  pwVersion = '',
+): string {
   if (!secret) throw new Error('SHARE_LOCK_SECRET 未配置')
   const exp = Math.floor((nowMs ?? Date.now()) / 1000) + ttlSec
-  const sig = createHmac('sha256', secret).update(`v1|${gid}|${exp}`).digest('base64url')
+  const sig = createHmac('sha256', secret).update(`v1|${gid}|${exp}|${pwVersion}`).digest('base64url')
   return `v1.${exp}.${sig}`
 }
 
@@ -112,6 +125,7 @@ export function checkTicket(
   gid: string,
   secret: string,
   nowMs?: number,
+  pwVersion = '',
 ): boolean {
   if (!ticket || !secret) return false
   const parts = ticket.split('.')
@@ -122,7 +136,7 @@ export function checkTicket(
   // 过期判定留 30s 容差，避免实例间时钟微偏导致刚签发的票据被拒
   if (exp * 1000 + 30_000 < (nowMs ?? Date.now())) return false
 
-  const expected = createHmac('sha256', secret).update(`v1|${gid}|${exp}`).digest('base64url')
+  const expected = createHmac('sha256', secret).update(`v1|${gid}|${exp}|${pwVersion}`).digest('base64url')
   const a = Buffer.from(parts[2])
   const b = Buffer.from(expected)
   if (a.length !== b.length) return false

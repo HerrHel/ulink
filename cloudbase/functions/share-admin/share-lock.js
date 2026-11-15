@@ -92,20 +92,20 @@ function verifyPassword(password, stored) {
   if (actual.length !== expected.length) return false;
   return (0, import_node_crypto.timingSafeEqual)(actual, expected);
 }
-function makeTicket(gid, secret, nowMs, ttlSec = TICKET_TTL_SEC) {
+function makeTicket(gid, secret, nowMs, ttlSec = TICKET_TTL_SEC, pwVersion = "") {
   if (!secret) throw new Error("SHARE_LOCK_SECRET \u672A\u914D\u7F6E");
   const exp = Math.floor((nowMs ?? Date.now()) / 1e3) + ttlSec;
-  const sig = (0, import_node_crypto.createHmac)("sha256", secret).update(`v1|${gid}|${exp}`).digest("base64url");
+  const sig = (0, import_node_crypto.createHmac)("sha256", secret).update(`v1|${gid}|${exp}|${pwVersion}`).digest("base64url");
   return `v1.${exp}.${sig}`;
 }
-function checkTicket(ticket, gid, secret, nowMs) {
+function checkTicket(ticket, gid, secret, nowMs, pwVersion = "") {
   if (!ticket || !secret) return false;
   const parts = ticket.split(".");
   if (parts.length !== 3 || parts[0] !== "v1") return false;
   const exp = Number(parts[1]);
   if (!Number.isFinite(exp)) return false;
   if (exp * 1e3 + 3e4 < (nowMs ?? Date.now())) return false;
-  const expected = (0, import_node_crypto.createHmac)("sha256", secret).update(`v1|${gid}|${exp}`).digest("base64url");
+  const expected = (0, import_node_crypto.createHmac)("sha256", secret).update(`v1|${gid}|${exp}|${pwVersion}`).digest("base64url");
   const a = Buffer.from(parts[2]);
   const b = Buffer.from(expected);
   if (a.length !== b.length) return false;

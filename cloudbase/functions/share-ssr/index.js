@@ -59,6 +59,11 @@ function clientIp(req) {
   return req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown'
 }
 
+/** 当前密码摘要 → 票据签名版本。hash 本身绝不出函数，也不进 cookie。 */
+function ticketVersion(passwordHash) {
+  return passwordHash ? sha256Hex(String(passwordHash)).slice(0, 32) : ''
+}
+
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex')
 }
@@ -315,7 +320,8 @@ const server = http.createServer(async (req, res) => {
         return
       }
 
-      const ticket = makeTicket(id, SHARE_LOCK_SECRET)
+      // 密码版本进签名：改密码后所有旧票据立即失效（cookie 里仍只有 exp + sig）
+      const ticket = makeTicket(id, SHARE_LOCK_SECRET, undefined, undefined, ticketVersion(passwordHash))
       res.writeHead(302, {
         Location: backTo,
         'Set-Cookie': buildTicketCookie(id, ticket),
@@ -360,7 +366,7 @@ const server = http.createServer(async (req, res) => {
       return
     }
     const cookies = parseCookies(req.headers.cookie)
-    passOk = checkTicket(cookies[ticketCookieName(id)], id, SHARE_LOCK_SECRET)
+    passOk = checkTicket(cookies[ticketCookieName(id)], id, SHARE_LOCK_SECRET, undefined, ticketVersion(passwordHash))
     if (!passOk) {
       const gateKey = `${cacheKey}|gate`
       const gateHit = getFresh(gateKey)

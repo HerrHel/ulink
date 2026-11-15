@@ -160,3 +160,19 @@ describe('cookie 工具', () => {
     expect(clearTicketCookie('g-abc')).toContain('Max-Age=0')
   })
 })
+
+describe('票据绑定密码版本（改密码即撤销旧访问）', () => {
+  it('同一 gid 改了密码摘要后，旧票据立即失效', () => {
+    const v1 = 'hash-of-old-password'
+    const v2 = 'hash-of-new-password'
+    const ticket = makeTicket('g-abc', SECRET, undefined, undefined, v1)
+
+    expect(checkTicket(ticket, 'g-abc', SECRET, undefined, v1)).toBe(true)
+    expect(checkTicket(ticket, 'g-abc', SECRET, undefined, v2)).toBe(false)
+  })
+
+  it('无密码分享（pwVersion 为空）仍可正常签发与校验', () => {
+    const ticket = makeTicket('g-open', SECRET)
+    expect(checkTicket(ticket, 'g-open', SECRET)).toBe(true)
+  })
+})
