@@ -28,7 +28,8 @@ type FuseInstance<T> = {
   search: (q: string, opts?: { limit?: number }) => Array<{ item: T; matches?: ReadonlyArray<{ key?: string; value?: string; indices: ReadonlyArray<readonly [number, number]> }> }>
 }
 type FuseCtor = new <T>(list: T[], opts: Record<string, unknown>) => FuseInstance<T>
-type PinyinFn = (text: string, opts: { toneType: string; type: string }) => string[]
+type PinyinFn = (text: string, opts?: { toneType?: string; type?: string; pattern?: string; nonZh?: string }) => string[]
+type MatchFn = (text: string, query: string, opts?: { continuous?: boolean; precision?: string }) => number[] | null
 
 type FuseOptionKeyObject = { name: string; weight: number }
 type IFuseOptions = {
@@ -55,14 +56,16 @@ type FuseResult = {
 // ── 动态加载 fuse / pinyin ──
 let FuseClass: FuseCtor | null = null
 let pinyinFn: PinyinFn | null = null
+let matchFn: MatchFn | null = null
 let _libsLoading: Promise<void> | null = null
 
 function ensureSearchLibs(): boolean {
-  if (FuseClass && pinyinFn) return true
+  if (FuseClass && pinyinFn && matchFn) return true
   if (!_libsLoading) {
     _libsLoading = Promise.all([import('fuse.js'), import('pinyin-pro')]).then(([fuseMod, pyMod]) => {
       FuseClass = fuseMod.default as unknown as FuseCtor
       pinyinFn = pyMod.pinyin as PinyinFn
+      matchFn = pyMod.match as MatchFn
     }).catch(e => {
       console.warn('[search] fuse/pinyin load failed:', e)
       _libsLoading = null
@@ -86,6 +89,7 @@ ensureSearchLibs()
 // 被重复同步计算（pinyin-pro 同步 CPU 密集），CRUD 重建时主线程被同步阻塞。Map 迭代顺序即
 // 插入顺序，改为 LRU 淘汰最旧条目（删第一个 entry）而非全清。
 const _pyCache = new Map<string, string>()
+const _pyInitialCache = new Map<string, string>()
 const _PY_CACHE_MAX = 10000
 
 function _toPy(text: string): string {
@@ -103,24 +107,42 @@ function _toPy(text: string): string {
   return cached
 }
 
+function _toPyInitial(text: string): string {
+  if (!text) return ''
+  let cached = _pyInitialCache.get(text)
+  if (cached !== undefined) return cached
+  if (!pinyinFn) { ensureSearchLibs(); return '' }
+  if (_pyInitialCache.size >= _PY_CACHE_MAX) {
+    const oldest = _pyInitialCache.keys().next().value
+    if (oldest !== undefined) _pyInitialCache.delete(oldest)
+  }
+  cached = pinyinFn(text, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase()
+  _pyInitialCache.set(text, cached)
+  return cached
+}
+
 // ── Fuse.js 配置 ──
 const BOOKMARK_KEYS: FuseOptionKeyObject[] = [
-  { name: 'title',    weight: 0.35 },
-  { name: 'url',      weight: 0.25 },
-  { name: 'notes',    weight: 0.15 },
-  { name: 'username', weight: 0.10 },
-  { name: 'attrNames', weight: 0.10 },
-  { name: 'titlePy',  weight: 0.03 },
-  { name: 'notesPy',  weight: 0.02 },
+  { name: 'title',          weight: 0.35 },
+  { name: 'url',            weight: 0.25 },
+  { name: 'notes',          weight: 0.15 },
+  { name: 'username',       weight: 0.10 },
+  { name: 'attrNames',      weight: 0.10 },
+  { name: 'titlePy',        weight: 0.03 },
+  { name: 'titlePyInitial', weight: 0.04 },
+  { name: 'notesPy',        weight: 0.02 },
+  { name: 'notesPyInitial', weight: 0.02 },
 ]
 
 const GROUP_KEYS: FuseOptionKeyObject[] = [
-  { name: 'name',       weight: 0.40 },
-  { name: 'attrNames',  weight: 0.15 },
-  { name: 'childTitle', weight: 0.25 },
-  { name: 'childUrl',   weight: 0.10 },
-  { name: 'namePy',     weight: 0.05 },
-  { name: 'childTitlePy', weight: 0.05 },
+  { name: 'name',               weight: 0.40 },
+  { name: 'attrNames',          weight: 0.15 },
+  { name: 'childTitle',         weight: 0.25 },
+  { name: 'childUrl',           weight: 0.10 },
+  { name: 'namePy',             weight: 0.05 },
+  { name: 'namePyInitial',      weight: 0.05 },
+  { name: 'childTitlePy',       weight: 0.05 },
+  { name: 'childTitlePyInitial', weight: 0.05 },
 ]
 
 const FUSE_OPTIONS: IFuseOptions = {
@@ -143,7 +165,9 @@ interface BookmarkSearchItem {
   username: string
   attrNames: string
   titlePy: string
+  titlePyInitial: string
   notesPy: string
+  notesPyInitial: string
 }
 
 interface GroupSearchItem {
@@ -153,7 +177,9 @@ interface GroupSearchItem {
   childTitle: string
   childUrl: string
   namePy: string
+  namePyInitial: string
   childTitlePy: string
+  childTitlePyInitial: string
   // D2-2：把 bookmarkIds 折进索引项，searchWithHighlights 热路径不再每次 new Map 重建。
   // 仅供下游携带，不进 Fuse keys，不参与匹配；undefined 透传（见 _buildGroupSearchItems）。
   bookmarkIds: string[] | undefined
@@ -193,7 +219,9 @@ export function _buildBookmarkSearchItems(
       username: _plain(b.username || ''),
       attrNames: _attrsToAttrNames(b.attributes, attrNameMap),
       titlePy: _toPy(title),
+      titlePyInitial: _toPyInitial(title),
       notesPy: _toPy(notes),
+      notesPyInitial: _toPyInitial(notes),
     }
   })
 }
@@ -212,14 +240,17 @@ function _buildGroupSearchItems(
       if (b) { childTitles.push(_plain(b.title || '')); childUrls.push(_plain(b.url || '')) }
     }
     const ct = childTitles.join(' ')
+    const name = _plain(g.name || '')
     return {
       id: g.id,
-      name: _plain(g.name || ''),
+      name,
       attrNames: _attrsToAttrNames(g.attributes, attrNameMap),
       childTitle: ct,
       childUrl: childUrls.join(' '),
-      namePy: _toPy(_plain(g.name || '')),
+      namePy: _toPy(name),
+      namePyInitial: _toPyInitial(name),
       childTitlePy: _toPy(ct),
+      childTitlePyInitial: _toPyInitial(ct),
       // D2-2：透传原 bookmarkIds（g 无此字段时 undefined），供 searchWithHighlights O(1) 取用。
       bookmarkIds: g.bookmarkIds,
     }
@@ -431,16 +462,37 @@ export function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string
   const out: Record<string, HighlightSegment[]> = {}
   for (const match of fuseResult.matches || []) {
     if (!match.key || !match.indices?.length) continue
-    // M8 修复：拼音 key（titlePy/notesPy/namePy/childTitlePy）命中时，Fuse 的 match.value 是
-    // 拼音串（如 'kaiFaGongJu'）、indices 指向拼音串的字符位置。若把拼音串作 text 生成高亮段，
+    // M8 修复：拼音 key（titlePy/notesPy/namePy/childTitlePy 等）命中时，Fuse 的 match.value 是
+    // 拼音串（如 'kaiFaGongJu' 或 'kfgj'）、indices 指向拼音串的字符位置。若把拼音串作 text 生成高亮段，
     // SearchSuggest/CommandPalette 的建议项名称位置会渲染出拼音字符而非中文原文（如 'kaiFaGongJu'
     // 而非'开发工具'）。拼音 key 命中时跳过段生成，仅让该字段其他原文 key 命中（若有）正常高亮，
     // 渲染层对无原文字段段时用 fallback 原文显示（SearchSuggest 已用 item.title/name 显示主标题）。
-    if (match.key.endsWith('Py')) continue
+    if (match.key.endsWith('Py') || match.key.endsWith('PyInitial')) continue
     const label = keyMap[match.key] || match.key
     out[label] = _buildHighlightSegments(match.value || '', match.indices)
   }
   return out
+}
+
+/** 将字符下标合并为不重叠且按顺序递增的闭区间 [start, end] */
+export function _indicesToRanges(indices: number[]): [number, number][] {
+  if (!indices || !indices.length) return []
+  const sorted = Array.from(new Set(indices)).sort((a, b) => a - b)
+  const ranges: [number, number][] = []
+  let rangeStart = sorted[0]
+  let prev = sorted[0]
+  for (let i = 1; i < sorted.length; i++) {
+    const curr = sorted[i]
+    if (curr === prev + 1) {
+      prev = curr
+    } else {
+      ranges.push([rangeStart, prev])
+      rangeStart = curr
+      prev = curr
+    }
+  }
+  ranges.push([rangeStart, prev])
+  return ranges
 }
 
 // 组结果预算：混合搜索中组预分组数上限（Fuse limit / slice / 最终拼接上限 maxResults + 该值）。
@@ -448,8 +500,27 @@ export function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string
 const GROUP_SUGGEST_LIMIT = 4
 
 // ── searchWithHighlights 需要的 key 映射 ──
-const BM_KEY_MAP = { title: 'title', url: 'url', notes: 'notes', username: 'username', attrNames: 'attrNames', titlePy: 'title', notesPy: 'notes' }
-const GRP_KEY_MAP = { name: 'name', attrNames: 'attrNames', childTitle: 'childTitle', childUrl: 'childUrl', namePy: 'name', childTitlePy: 'childTitle' }
+const BM_KEY_MAP = {
+  title: 'title',
+  url: 'url',
+  notes: 'notes',
+  username: 'username',
+  attrNames: 'attrNames',
+  titlePy: 'title',
+  titlePyInitial: 'title',
+  notesPy: 'notes',
+  notesPyInitial: 'notes',
+}
+const GRP_KEY_MAP = {
+  name: 'name',
+  attrNames: 'attrNames',
+  childTitle: 'childTitle',
+  childUrl: 'childUrl',
+  namePy: 'name',
+  namePyInitial: 'name',
+  childTitlePy: 'childTitle',
+  childTitlePyInitial: 'childTitle',
+}
 
 /**
  * 带高亮信息的混合搜索（书签 + 组），供 SearchSuggest 使用。
@@ -489,24 +560,49 @@ export function searchWithHighlights(
     }))
   } else {
     const bmResults = _bmFuse.search(q, { limit: maxResults })
-    bookmarkResults = bmResults.map(r => ({
-      id: r.item.id,
-      title: (r.item as BookmarkSearchItem).title,
-      url: (r.item as BookmarkSearchItem).url,
-      _highlights: _extractHighlights(r as unknown as FuseResult, BM_KEY_MAP),
-    }))
+    bookmarkResults = bmResults.map(r => {
+      const highlights = _extractHighlights(r as unknown as FuseResult, BM_KEY_MAP)
+      const bmItem = r.item as BookmarkSearchItem
+      // 拼音/首字母命中时，若中文标题未被精确命中高亮，用 matchFn 补齐中文高亮段
+      if (!highlights.title && matchFn && bmItem.title) {
+        try {
+          const matchedIndices = matchFn(bmItem.title, q, { continuous: true }) || matchFn(bmItem.title, q)
+          if (matchedIndices && matchedIndices.length) {
+            highlights.title = _buildHighlightSegments(bmItem.title, _indicesToRanges(matchedIndices))
+          }
+        } catch { /* 忽略 */ }
+      }
+      return {
+        id: r.item.id,
+        title: bmItem.title,
+        url: bmItem.url,
+        _highlights: highlights,
+      }
+    })
 
     const needsRebuildGrp = !!_grpFuse && version !== _grpVersion
     if (_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuildGrp) && _grpFuse) {
       const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
-      groupResults = grpResults.map(r => ({
-        id: r.item.id,
-        name: (r.item as GroupSearchItem).name,
-        _isGroup: true,
-        _displayTitle: (r.item as GroupSearchItem).name || t('cards.unnamedGroup'),
-        bookmarkIds: (r.item as GroupSearchItem).bookmarkIds,
-        _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
-      }))
+      groupResults = grpResults.map(r => {
+        const highlights = _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP)
+        const grpItem = r.item as GroupSearchItem
+        if (!highlights.name && matchFn && grpItem.name) {
+          try {
+            const matchedIndices = matchFn(grpItem.name, q, { continuous: true }) || matchFn(grpItem.name, q)
+            if (matchedIndices && matchedIndices.length) {
+              highlights.name = _buildHighlightSegments(grpItem.name, _indicesToRanges(matchedIndices))
+            }
+          } catch { /* 忽略 */ }
+        }
+        return {
+          id: r.item.id,
+          name: grpItem.name,
+          _isGroup: true,
+          _displayTitle: grpItem.name || t('cards.unnamedGroup'),
+          bookmarkIds: grpItem.bookmarkIds,
+          _highlights: highlights,
+        }
+      })
     }
   }
 
@@ -558,6 +654,7 @@ export function searchWithHighlights(
  */
 export function clearSearchCache(): void {
   _pyCache.clear()
+  _pyInitialCache.clear()
   _bmBaseRef = null; _bmBaseItems = []; _bmBaseAttrs = null; _bmFuse = null
   _grpBaseRef = null; _grpBaseItems = []; _grpBaseMap = null; _grpBaseAttrs = null; _grpFuse = null
 }

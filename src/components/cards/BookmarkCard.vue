@@ -273,9 +273,9 @@ const hlRegex = computed<RegExp | null>(() => {
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(escaped, 'gi')
 })
-const hlTitle = computed(() => hlRegex.value ? highlight(displayText(props.bookmark.title), hlRegex.value) : '')
-const hlDomain = computed(() => hlRegex.value ? highlight(domainStr.value, hlRegex.value) : '')
-const hlNotes = computed(() => hlRegex.value && props.bookmark.notes ? highlight(displayText(props.bookmark.notes), hlRegex.value) : '')
+const hlTitle = computed(() => hlRegex.value ? highlight(displayText(props.bookmark.title), hlRegex.value, searchQuery.value) : '')
+const hlDomain = computed(() => hlRegex.value ? highlight(domainStr.value, hlRegex.value, searchQuery.value) : '')
+const hlNotes = computed(() => hlRegex.value && props.bookmark.notes ? highlight(displayText(props.bookmark.notes), hlRegex.value, searchQuery.value) : '')
 
 function visit() { openBookmark(props.bookmark) }
 function onOpenClick() {

@@ -9,7 +9,7 @@
         </div>
         <div class="card-titlewrap" @dblclick.stop="onDblClick">
           <div class="card-titlewrap-text">
-            <div class="card-name" :data-group-name="group.id">{{ groupDisplayName }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
+            <div class="card-name" :data-group-name="group.id"><span v-if="searchQuery" v-html="hlName"></span><template v-else>{{ groupDisplayName }}</template><span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
             <div class="card-domain group-domain"></div>
           </div>
         </div>
@@ -93,7 +93,7 @@
       </div>
       <div class="card-titlewrap" :title="t('cards.focusGroup')" @click.stop="onFocusClick">
         <div class="card-titlewrap-text">
-          <div class="card-name" :data-group-name="group.id">{{ groupDisplayName }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
+          <div class="card-name" :data-group-name="group.id"><span v-if="searchQuery" v-html="hlName"></span><template v-else>{{ groupDisplayName }}</template><span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
           <div class="card-domain group-domain"></div>
         </div>
       </div>
@@ -162,6 +162,7 @@ import { handleListCardKeydown } from '../../composables/interaction/listCardKey
 import { useListNav } from '../../composables/useListNav.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
+import { highlight } from './highlight.js'
 
 const props = defineProps({
   group: { type: Object as () => SiblingGroup, required: true },
@@ -242,6 +243,15 @@ function markFbIconError(e: Event) {
 const groupDisplayName = computed(() => {
   return displayText(props.group.name) || extractGroupTitle('', props.group.notes) || t('cards.unnamedGroup')
 })
+
+const searchQuery = computed(() => (ui.searchQuery || '').trim())
+const hlRegex = computed<RegExp | null>(() => {
+  const q = searchQuery.value
+  if (!q) return null
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(escaped, 'gi')
+})
+const hlName = computed(() => hlRegex.value ? highlight(groupDisplayName.value, hlRegex.value, searchQuery.value) : '')
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 const isPinned = computed(() => !!props.group.pinnedAt)

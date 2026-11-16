@@ -110,6 +110,36 @@ describe('searchBookmarkIds', () => {
     expect(byChildPy!.has('g-cs')).toBe(true)
   })
 
+  it('拼音首字母简拼命中（如 sj 搜出 设计、UI设计；组首字母简拼命中）', () => {
+    const bms: Bookmark[] = [
+      ...SAMPLE_BOOKMARKS,
+      {
+        id: 'b-sheji', title: '设计模式入门', url: 'https://design.example', notes: '', username: '',
+        password: '', icon: '', categoryId: 'dev', parentId: null, order: 10, useCount: 0,
+        attributes: {}, isExpanded: false, createdAt: 0, updatedAt: 0,
+      },
+      {
+        id: 'b-uisheji', title: 'UI设计规范', url: 'https://ui.example', notes: '', username: '',
+        password: '', icon: '', categoryId: 'dev', parentId: null, order: 11, useCount: 0,
+        attributes: {}, isExpanded: false, createdAt: 0, updatedAt: 0,
+      },
+    ]
+    const groups: SiblingGroup[] = [
+      ...SAMPLE_GROUPS,
+      {
+        id: 'g-sj', name: '设计资源库', categoryId: 'dev', icon: '', order: 10, isExpanded: false,
+        attributes: {}, bookmarkIds: ['b-sheji'], notes: '', updatedAt: 0, useCount: 0,
+      },
+    ]
+    const map = Object.fromEntries(bms.map(b => [b.id, b]))
+    const bySj = searchBookmarkIds(bms, 'sj', EMPTY_ATTRS)
+    expect(bySj!.has('b-sheji')).toBe(true)
+    expect(bySj!.has('b-uisheji')).toBe(true)
+
+    const grpBySj = searchGroupIds(groups, 'sj', map, EMPTY_ATTRS)
+    expect(grpBySj!.has('g-sj')).toBe(true)
+  })
+
   it('L6：降级（库未就绪）下 attrNames 匹配照常生效', () => {
     // L6：fallback includes 应覆盖 attrNames 字段，与正常 Fuse 路径一致。
     // 正常路径能搜到勾选某属性名的书签，降级路径也应能。
@@ -232,6 +262,30 @@ describe('searchWithHighlights', () => {
       // 不应出现整段拉丁拼音串（aa-zz 大量连续拉丁字符的拼音）
       expect(/[a-zA-Z]{6,}/.test(allText)).toBe(false)
     }
+  })
+
+  it('searchWithHighlights 支持拼音首字母与全拼命中并在建议项中高亮对应中文字符', () => {
+    const bms: Bookmark[] = [
+      {
+        id: 'b-sheji', title: '设计模式入门', url: 'https://design.example', notes: '', username: '',
+        password: '', icon: '', categoryId: 'dev', parentId: null, order: 10, useCount: 0,
+        attributes: {}, isExpanded: false, createdAt: 0, updatedAt: 0,
+      },
+    ]
+    const map = { 'b-sheji': bms[0] }
+    // 1. 首字母 sj 命中
+    const sjResults = searchWithHighlights(bms, [], 'sj', map, EMPTY_ATTRS)
+    const sjHit = sjResults.find(r => r.id === 'b-sheji')
+    expect(sjHit).toBeDefined()
+    expect(sjHit?._highlights.title).toBeDefined()
+    expect(sjHit?._highlights.title.some(s => s.highlight && s.text === '设计')).toBe(true)
+
+    // 2. 全拼 sheji 命中
+    const pyResults = searchWithHighlights(bms, [], 'sheji', map, EMPTY_ATTRS)
+    const pyHit = pyResults.find(r => r.id === 'b-sheji')
+    expect(pyHit).toBeDefined()
+    expect(pyHit?._highlights.title).toBeDefined()
+    expect(pyHit?._highlights.title.some(s => s.highlight && s.text === '设计')).toBe(true)
   })
 
   // ── D2-2 护栏：group result 的 bookmarkIds 字段须精确保留原 group.bookmarkIds ──

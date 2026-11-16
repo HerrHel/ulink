@@ -69,4 +69,29 @@ describe('BookmarkCard 搜索高亮渲染（组件级回归）', () => {
     expect(wrapper.find('mark.card-hl').exists()).toBe(false)
     expect(wrapper.text()).toContain('Hello Vue World')
   })
+
+  it('searchQuery 为拼音首字母简拼（如 sj）时，卡片标题高亮对应的汉字（如「设计」）', () => {
+    const ui = useUIStore()
+    ui.searchQuery = 'sj'
+    const zhBm = { ...bm, id: 'b-sheji', title: '设计模式入门', url: 'https://design.test' }
+    const wrapper = mount(BookmarkCard, { props: { bookmark: zhBm } })
+    const mark = wrapper.find('.card-name mark.card-hl')
+    expect(mark.exists()).toBe(true)
+    expect(mark.text()).toBe('设计')
+  })
+
+  it('searchQuery 为拼音全拼或前缀时，卡片标题高亮对应的汉字', () => {
+    const ui = useUIStore()
+    const zhBm = { ...bm, id: 'b-sheji', title: '设计模式入门', url: 'https://design.test' }
+
+    // 全拼 sheji 高亮「设计」
+    ui.searchQuery = 'sheji'
+    const w1 = mount(BookmarkCard, { props: { bookmark: zhBm } })
+    expect(w1.find('.card-name mark.card-hl').text()).toBe('设计')
+
+    // 前缀 she 高亮「设」
+    ui.searchQuery = 'she'
+    const w2 = mount(BookmarkCard, { props: { bookmark: zhBm } })
+    expect(w2.find('.card-name mark.card-hl').text()).toBe('设')
+  })
 })

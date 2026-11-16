@@ -59,11 +59,13 @@ describe('_buildBookmarkSearchItems 索引构建契约护栏', () => {
     const [item] = _buildBookmarkSearchItems([bm({ id: 'b', title: '测试文档' })], [])
     // 只锁非空保证可搜,不锁具体拼音字面(防库升级假阳性)
     expect(item.titlePy.length).toBeGreaterThan(0)
+    expect(item.titlePyInitial.length).toBeGreaterThan(0)
   })
 
-  it('空标题 titlePy 为空串', () => {
+  it('空标题 titlePy 与 titlePyInitial 为空串', () => {
     const [item] = _buildBookmarkSearchItems([bm({ id: 'b', title: undefined })], [])
     expect(item.titlePy).toBe('')
+    expect(item.titlePyInitial).toBe('')
   })
 
   it('勾选 attr 经 attrNameMap 映射出 attrNames 名串；falsy/miss 跳过', () => {

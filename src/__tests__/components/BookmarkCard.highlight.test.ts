@@ -136,4 +136,46 @@ describe('BookmarkCard.highlight — v-html 高亮转义不变量', () => {
     const out = highlight('x&y<z', /y/g)
     expect(out).toBe(esc('x&') + '<mark class="card-hl">y</mark>' + esc('<z'))
   })
+
+  // ===== 拼音首字母与全拼高亮 =====
+
+  it('拼音首字母简拼匹配中文标题（如 sj 命中 设计）', () => {
+    const rx = /sj/gi
+    const out = highlight('设计模式入门', rx, 'sj')
+    expect(out).toBe('<mark class="card-hl">设计</mark>模式入门')
+  })
+
+  it('拼音全拼匹配中文标题（如 sheji 命中 设计）', () => {
+    const rx = /sheji/gi
+    const out = highlight('设计模式入门', rx, 'sheji')
+    expect(out).toBe('<mark class="card-hl">设计</mark>模式入门')
+  })
+
+  it('拼音前缀匹配中文部分单字（如 she 命中 设）', () => {
+    const rx = /she/gi
+    const out = highlight('设计模式入门', rx, 'she')
+    expect(out).toBe('<mark class="card-hl">设</mark>计模式入门')
+  })
+
+  it('中英混合拼音首字母匹配（如 uisj 命中 UI设计）', () => {
+    const rx = /uisj/gi
+    const out = highlight('UI设计规范指南', rx, 'uisj')
+    expect(out).toBe('<mark class="card-hl">UI设计</mark>规范指南')
+  })
+
+  it('未传 rawQuery 时从 regex.source 提取拼音搜索词高亮', () => {
+    const rx = /sj/gi
+    const out = highlight('设计模式', rx)
+    expect(out).toBe('<mark class="card-hl">设计</mark>模式')
+  })
+
+  it('拼音命中段及其余段均严格经 esc 转义（防 XSS）', () => {
+    const rx = /sj/gi
+    const out = highlight('<b>设计</b><script>alert(1)</script>', rx, 'sj')
+    expect(out).toBe(
+      esc('<b>') + '<mark class="card-hl">设计</mark>' + esc('</b><script>alert(1)</script>')
+    )
+    expect(out).not.toContain('<script>')
+    expect(out).not.toContain('<b>')
+  })
 })
