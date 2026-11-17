@@ -137,6 +137,9 @@ describe('supabase.ts 已配置分支——createClient config 契约', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test-anon-key')
+    // 显式钉 Supabase 后端：CloudBase 后端下即使 Supabase 配置齐全也不建真客户端（见下一用例），
+    // 不钉的话 test:cloudbase 配置会走空客户端分支
+    vi.stubEnv('VITE_BACKEND', 'supabase')
     // mock 真 SDK createClient：resetModules 后 doMock 在动态 import 前注册生效
     createClientSpy = vi.fn(() => ({ _fake: true }) as any)
     vi.doMock('@supabase/supabase-js', () => ({ createClient: createClientSpy }))
@@ -162,6 +165,16 @@ describe('supabase.ts 已配置分支——createClient config 契约', () => {
     })
     // supabase 即 mock client 返回值（验三元真值分支输出）
     expect(supabase).toEqual({ _fake: true })
+  })
+
+  it('CloudBase 后端：即使 Supabase 两值齐全也不调 createClient，走空客户端（首屏不打包 SDK）', async () => {
+    vi.stubEnv('VITE_BACKEND', 'cloudbase')
+    const { supabase, isSupabaseConfigured } = await importSupabase()
+    expect(createClientSpy).not.toHaveBeenCalled()
+    // isSupabaseConfigured 语义不变（仍反映 env 是否配齐），只是不再据此创建真客户端
+    expect(isSupabaseConfigured).toBe(true)
+    const { data } = await supabase.auth.getSession()
+    expect(data.session).toBeNull()
   })
 })
 
