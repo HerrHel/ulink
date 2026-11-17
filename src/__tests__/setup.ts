@@ -4,6 +4,7 @@
 import 'fake-indexeddb/auto'
 import { setActivePinia, createPinia } from 'pinia'
 import { vi, beforeEach } from 'vitest'
+import { loadLocale } from '../i18n/index.js'
 import { __resetSyncCircuit } from '../composables/domain/syncCircuit.js'
 
 const localStorageMock = (() => {
@@ -37,3 +38,7 @@ beforeEach(() => {
 })
 
 export { localStorageMock }
+
+// 英文包改为按需动态加载（首屏瘦身）：测试里大量同步 setLocale('en-US') 后立即断言 t()，
+// 这里预载一次，保持「切语言即生效」的同步语义
+await loadLocale('en-US')

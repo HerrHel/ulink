@@ -7,10 +7,12 @@
  * - 复数：tN('count.bookmarks', n) — en 下按 n 选择 key_one / key_other / key_zero，zh 恒用基础键
  * - 缺失键：运行时回退到中文；键对齐由单测 src/__tests__/i18n.test.ts 保障
  * - 持久化：localStorage 'lv_locale'；默认跟随浏览器语言（zh* → zh-CN，其余 en-US）
+ * - 按需加载：中文包（键全集 + 回退源）静态打包；英文包经动态 import 按需拉取，不进中文用户首屏。
+ *   启动时 main.ts 先 await ensureLocaleReady() 再挂载，英文用户不会先闪中文；
+ *   运行中切到英文时，加载完成前 t() 暂按中文回退，加载完成后经 _dictVersion 触发重渲染。
  */
 import { ref, computed } from 'vue'
 import { zh } from '../locales/zh.js'
-import { en } from '../locales/en.js'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -64,14 +66,39 @@ function flatten(obj: Record<string, unknown>, prefix = ''): Record<string, stri
 
 const locale = ref<Locale>(detect())
 
-const dicts: Record<Locale, Record<string, string>> = {
+const dicts: Partial<Record<Locale, Record<string, string>>> & { 'zh-CN': Record<string, string> } = {
   'zh-CN': flatten(zh),
-  'en-US': flatten(en),
+}
+
+/** 字典加载版本号：t() 读取它，英文包异步到位后自增，驱动已渲染的模板重新取词 */
+const _dictVersion = ref(0)
+let _enLoading: Promise<void> | null = null
+
+/** 确保某语言字典已加载（中文恒在；英文首次调用时动态 import，并发调用共享同一 Promise） */
+export function loadLocale(l: Locale): Promise<void> {
+  if (dicts[l]) return Promise.resolve()
+  if (!_enLoading) {
+    _enLoading = import('../locales/en.js').then(({ en }) => {
+      dicts['en-US'] = flatten(en)
+      _dictVersion.value++
+      applyToDocument()
+    }).catch((e) => {
+      _enLoading = null // 允许下次重试；期间 t() 按中文回退
+      console.warn('[i18n] en locale load failed:', e)
+    })
+  }
+  return _enLoading
+}
+
+/** 启动用：等当前语言字典就绪（main.ts 在 mount 前 await，避免英文用户首帧闪中文） */
+export function ensureLocaleReady(): Promise<void> {
+  return loadLocale(locale.value)
 }
 
 /** 取翻译；缺失回退中文，仍缺回退键名本身（便于发现漏键）。 */
 export function t(key: string, params?: Record<string, string | number>): string {
-  let s = dicts[locale.value][key]
+  void _dictVersion.value // 建立响应式依赖：英文包异步到位后模板自动重渲染
+  let s = dicts[locale.value]?.[key]
   if (s == null) s = dicts['zh-CN'][key]
   if (s == null) return key
   if (params) {
@@ -86,9 +113,12 @@ export function t(key: string, params?: Record<string, string | number>): string
 export function tN(key: string, count: number, params?: Record<string, string | number>): string {
   const p: Record<string, string | number> = { ...(params || {}), n: count }
   if (locale.value === 'en-US') {
-    if (count === 1 && dicts['en-US'][`${key}_one`] != null) return t(`${key}_one`, p)
-    if (count === 0 && dicts['en-US'][`${key}_zero`] != null) return t(`${key}_zero`, p)
-    if (dicts['en-US'][`${key}_other`] != null) return t(`${key}_other`, p)
+    const enDict = dicts['en-US']
+    if (enDict) {
+      if (count === 1 && enDict[`${key}_one`] != null) return t(`${key}_one`, p)
+      if (count === 0 && enDict[`${key}_zero`] != null) return t(`${key}_zero`, p)
+      if (enDict[`${key}_other`] != null) return t(`${key}_other`, p)
+    }
   }
   return t(key, p)
 }
@@ -103,6 +133,7 @@ export function setLocale(l: Locale): void {
     try { localStorage.setItem(LOCALE_KEY, l) } catch { /* 忽略 */ }
   }
   applyToDocument()
+  void loadLocale(l)
 }
 
 /** 把语言应用到 <html lang> 与默认文档标题（应用内其它标题逻辑可随后覆盖）。 */

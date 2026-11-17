@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import './styles/main.css'
 import App from './App.vue'
 import { vueErrorHandler, unhandledRejectionHandler } from './lib/errorReporter.js'
-import { t, tN } from './i18n/index.js'
+import { t, tN, ensureLocaleReady } from './i18n/index.js'
 import { installChunkLoadRecovery } from './lib/chunkLoadRecovery.js'
 
 // #50：旧缓存 HTML 指向已清理的 hashed asset 时，脚本 404 会白屏。
@@ -47,8 +47,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', unhandledRejectionHandler)
 }
 
-// Mount Vue app
-app.mount('#app')
+// Mount Vue app：先等当前语言字典就绪（英文包按需加载；中文用户立即 resolve），加载失败也照常挂载（按中文回退）
+void ensureLocaleReady().finally(() => app.mount('#app'))
 
 // L1 E2E：仅 DEV 暴露最小测试钩子（冲突 banner UI；生产构建 tree-shake 掉）
 if (import.meta.env.DEV) {

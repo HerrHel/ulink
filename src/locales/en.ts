@@ -8,14 +8,14 @@
  * - Brand: Chinese name 「与链」, English name 「ulink」.
  */
 
-import { e2eVaultEn } from './parts/e2eVault.js'
-import { modalsEn } from './parts/modals.js'
-import { editorOverlayEn } from './parts/editorOverlay.js'
-import { shareAppEn } from './parts/shareApp.js'
-import { programmaticEn } from './parts/programmatic.js'
-import { aiEn } from './parts/aiPro.js'
-import { aiCmdEn } from './parts/aiCommander.js'
-import { purchaseEn } from './parts/purchase.js'
+import { e2eVaultEn } from './parts/en/e2eVault.js'
+import { modalsEn } from './parts/en/modals.js'
+import { editorOverlayEn } from './parts/en/editorOverlay.js'
+import { shareAppEn } from './parts/en/shareApp.js'
+import { programmaticEn } from './parts/en/programmatic.js'
+import { aiEn } from './parts/en/aiPro.js'
+import { aiCmdEn } from './parts/en/aiCommander.js'
+import { purchaseEn } from './parts/en/purchase.js'
 
 export const en = {
   app: {
