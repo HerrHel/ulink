@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick, ref } from 'vue'
 import { useUserPopoverStore } from '../../stores/overlay.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -19,6 +19,9 @@ vi.mock('../../composables/domain/useRedeem.js', () => ({
 }))
 
 import UserPopover from '../../components/overlays/UserPopover.vue'
+
+// PurchaseModal 已改为异步组件（首屏瘦身）：预热模块缓存，避免加载晚于用例卸载而串扰后续用例
+beforeAll(async () => { await import('../../components/modals/PurchaseModal.vue') })
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 
 // 模拟 toast（hoisted 引用，便于断言「远端失败不提示成功」）
@@ -383,6 +386,7 @@ describe('UserPopover.vue', () => {
 
     // 点击升级项：关闭 popover 并打开 PurchaseModal
     await upgradeBtn.click()
+    await flushPromises()
     await nextTick()
 
     expect(popoverStore.open).toBe(false)

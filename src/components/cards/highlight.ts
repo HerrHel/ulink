@@ -1,5 +1,6 @@
 import { esc } from '../../utils.js'
-import { match } from 'pinyin-pro'
+// pinyin-pro 经 search.ts 动态加载，不进首屏包
+import { pinyinMatch as match } from '../../lib/search.js'
 
 /**
  * 将字符下标合并为不重叠且按顺序递增的闭区间 [start, end]

@@ -165,7 +165,8 @@ const CategoryModal = defineAsyncComponent(() => import('./components/modals/Cat
 const AttributeModal = defineAsyncComponent(() => import('./components/modals/AttributeModal.vue'))
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
 const ShareModal = defineAsyncComponent(() => import('./components/modals/ShareModal.vue'))
-import PurchaseModal from './components/modals/PurchaseModal.vue'
+// 异步组件：常驻挂载语义不变，但代码在首屏渲染后再拉取，不进首屏包
+const PurchaseModal = defineAsyncComponent(() => import('./components/modals/PurchaseModal.vue'))
 const AiEnrichModal = defineAsyncComponent(() => import('./components/modals/AiEnrichModal.vue'))
 const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))

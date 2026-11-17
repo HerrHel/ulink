@@ -131,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onUnmounted } from 'vue'
+import { computed, ref, watch, onUnmounted, defineAsyncComponent } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
@@ -142,7 +142,8 @@ import { useAuth } from '../../composables/domain/useAuth.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useShareStore } from '../../stores/share.js'
 import SearchSuggest from '../overlays/SearchSuggest.vue'
-import SettingsPanel from './SettingsPanel.vue'
+// 异步组件：常驻挂载语义不变，但代码在首屏渲染后再拉取，不进首屏包
+const SettingsPanel = defineAsyncComponent(() => import('./SettingsPanel.vue'))
 import SyncStatusPopover from '../overlays/SyncStatusPopover.vue'
 import { displayText } from '../../utils.js'
 import { t, tN } from '../../i18n/index.js'

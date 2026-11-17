@@ -12,7 +12,16 @@
  * 3. Worker 线程：交由 audioCompress.worker.ts 通过 lamejs 编码为 32kbps MP3（无 Worker 环境同线程兜底）；
  * 4. 容错降级：压缩失败时，若原文件 ≤10MB 自动降级上传原文件；若 >10MB 给出清晰阻断提示。
  */
-import { encodePcmSamples, type WorkerCompressRequest, type WorkerCompressResponse } from './audioCompress.worker.js'
+import type { WorkerCompressRequest, WorkerCompressResponse } from './audioCompress.worker.js'
+
+/**
+ * 主线程兜底编码：动态加载 worker 模块（含 lamejs ~160KB），
+ * 避免静态 import 把 MP3 编码器拉进首屏包——只有 Worker 不可用/失败时才付这笔下载。
+ */
+async function encodePcmSamples(pcm: Float32Array, sampleRate: number, kbps: number): Promise<ArrayBuffer> {
+  const mod = await import('./audioCompress.worker.js')
+  return mod.encodePcmSamples(pcm, sampleRate, kbps)
+}
 
 /** 自动触发音频压缩的体积阈值：6MB */
 export const AUDIO_COMPRESS_SIZE_THRESHOLD = 6 * 1024 * 1024

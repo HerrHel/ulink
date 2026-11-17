@@ -52,7 +52,13 @@ function createNullClient(): SupabaseClient {
   })
 }
 
-export const supabase: SupabaseClient = supabaseUrl && supabaseAnonKey
+// CloudBase 后端下所有 Supabase 调用都在 isCloudBaseBackend() 分支之外，真客户端永远用不上：
+// 直接走空实现。条件内联 import.meta.env（构建期常量），让打包器把 createClient 整条
+// 依赖（~52KB gzip）摇掉，同时省掉每次启动创建真客户端与 autoRefreshToken 定时器的开销。
+const _useRealClient = (import.meta.env.VITE_BACKEND as string | undefined) !== 'cloudbase'
+  && Boolean(supabaseUrl && supabaseAnonKey)
+
+export const supabase: SupabaseClient = _useRealClient
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,

@@ -16,7 +16,14 @@
  *   `.where()→.match()`、`.orderBy()→.order()`、`.offset()→.range()`
  * - 计数走 `select('*', { count: 'exact' })`，不是 `.count()`
  */
-import cloudbase from '@cloudbase/js-sdk'
+// 按需分模块引入（官方支持）：只注册实际用到的 auth / storage / rdb(mysql 模块)。
+// 全量包 '@cloudbase/js-sdk' 会把 database(bson) / ai(web-streams polyfill) / realtime /
+// functions / model 等一并打进首屏（~670KB raw），本项目一个都不用。
+// 新增能力时在 ensureComponents() 里补注册，否则对应 app.xxx 为 undefined。
+import cloudbase from '@cloudbase/js-sdk/app'
+import { registerAuth } from '@cloudbase/js-sdk/auth'
+import { registerStorage } from '@cloudbase/js-sdk/storage'
+import { registerMySQL } from '@cloudbase/js-sdk/mysql'
 
 const envId = import.meta.env.VITE_CLOUDBASE_ENV_ID as string | undefined
 const publishableKey = import.meta.env.VITE_PUBLISHABLE_KEY as string | undefined
@@ -117,9 +124,28 @@ const nullDb: RdbClient = {
 let _app: ReturnType<typeof cloudbase.init> | null = null
 let _db: RdbClient | null = null
 
+let _componentsRegistered = false
+/** 惰性注册组件：与 init 同步发生，保持「模块顶层不碰 SDK」的约定 */
+function ensureComponents(): void {
+  if (_componentsRegistered) return
+  _componentsRegistered = true
+  // 子模块被 import 时已经通过 window.cloudbase 自动注册过一次（SDK 行为）；这里再显式注册
+  // 作为兜底（不依赖全局变量与模块求值顺序）。SDK 对重复注册会 throw，register* 包装层
+  // 再 console.warn——用一个吞掉重复错误的薄代理，避免控制台刷 "Duplicate component"。
+  const target = {
+    registerComponent: (c: unknown) => {
+      try { (cloudbase as unknown as { registerComponent: (c: unknown) => void }).registerComponent(c) } catch { /* 已注册 */ }
+    },
+  }
+  registerAuth(target as unknown as Parameters<typeof registerAuth>[0])
+  registerStorage(target as unknown as Parameters<typeof registerStorage>[0])
+  registerMySQL(target as unknown as Parameters<typeof registerMySQL>[0])
+}
+
 function initApp(): ReturnType<typeof cloudbase.init> | null {
   if (!isCloudBaseConfigured) return null
   if (!_app) {
+    ensureComponents()
     _app = cloudbase.init({
       env: envId as string,
       accessKey: publishableKey as string,

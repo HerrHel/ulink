@@ -1,14 +1,15 @@
 import { reactive, ref } from 'vue'
 import type { Editor } from '@tiptap/core'
-// ── 副作用 import：触发 TipTap v3 extension 对 ChainedCommands 的类型 augmentation ──
-import '@tiptap/extension-bold'
-import '@tiptap/extension-underline'
-import '@tiptap/extension-heading'
-import '@tiptap/extension-bullet-list'
-import '@tiptap/extension-ordered-list'
-import '@tiptap/extension-task-list'
-import '@tiptap/extension-color'
-import '@tiptap/extension-text-style'
+// ── 纯类型 import：触发 TipTap v3 extension 对 ChainedCommands 的类型 augmentation ──
+// 用 `import type {}` 而非副作用 import：编译后被擦除，避免把 tiptap/prosemirror 拉进首屏包
+import type {} from '@tiptap/extension-bold'
+import type {} from '@tiptap/extension-underline'
+import type {} from '@tiptap/extension-heading'
+import type {} from '@tiptap/extension-bullet-list'
+import type {} from '@tiptap/extension-ordered-list'
+import type {} from '@tiptap/extension-task-list'
+import type {} from '@tiptap/extension-color'
+import type {} from '@tiptap/extension-text-style'
 
 export const PALETTE = [
   { hex: '#EF4444', name: '红' }, { hex: '#F97316', name: '橙' },

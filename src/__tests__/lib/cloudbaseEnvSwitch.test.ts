@@ -41,7 +41,10 @@ const fake = vi.hoisted(() => {
   return { marker, calls, builder, db, init }
 })
 
-vi.mock('@cloudbase/js-sdk', () => ({ default: { init: fake.init } }))
+vi.mock('@cloudbase/js-sdk/app', () => ({ default: { init: fake.init } }))
+vi.mock('@cloudbase/js-sdk/auth', () => ({ registerAuth: vi.fn() }))
+vi.mock('@cloudbase/js-sdk/storage', () => ({ registerStorage: vi.fn() }))
+vi.mock('@cloudbase/js-sdk/mysql', () => ({ registerMySQL: vi.fn() }))
 
 // vi.mock 提升语义：下面两个被测模块的 import 会被 vitest 转换器排在 mock 之后执行
 import { isCloudBaseBackend, edgeFnUrl, getCbFnBase } from '../../lib/cloudbase.js'

@@ -74,6 +74,16 @@ function ensureSearchLibs(): boolean {
   return !!(FuseClass && pinyinFn)
 }
 
+/**
+ * 拼音匹配（供卡片高亮复用同一份动态加载的 pinyin-pro，避免首屏静态引入 ~145KB gzip）。
+ * 库未就绪时返回 null（调用方降级为不高亮），并顺带触发加载。
+ * 本模块加载即预拉分包，用户开始输入时通常已就绪。
+ */
+export function pinyinMatch(text: string, query: string, opts?: { continuous?: boolean }): number[] | null {
+  if (!matchFn) { ensureSearchLibs(); return null }
+  return matchFn(text, query, opts)
+}
+
 /** 测试/预热：等待 fuse/pinyin 动态 import 完成 */
 export async function preloadSearchLibs(): Promise<void> {
   ensureSearchLibs()

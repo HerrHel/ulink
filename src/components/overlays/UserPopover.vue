@@ -193,10 +193,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, reactive, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import { prefetchPurchasePlans } from '../../composables/domain/usePurchasePlans.js'
-import PurchaseModal from '../modals/PurchaseModal.vue'
+// 异步组件：常驻挂载语义不变，但代码在首屏渲染后再拉取，不进首屏包
+const PurchaseModal = defineAsyncComponent(() => import('../modals/PurchaseModal.vue'))
 import { useUserPopoverStore } from '../../stores/overlay.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'

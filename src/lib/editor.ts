@@ -5,9 +5,10 @@
  * 通过 _editors 注册表访问由 GroupEditor.vue 创建的编辑器实例。
  */
 import type { Editor } from '@tiptap/core'
-// ── 副作用 import：触发 TipTap v3 extension 对 ChainedCommands 的类型 augmentation ──
-import '@tiptap/extension-bold'
-import '@tiptap/extension-heading'
+// ── 纯类型 import：触发 TipTap v3 extension 对 ChainedCommands 的类型 augmentation ──
+// 用 `import type {}` 而非副作用 import：编译后被擦除，避免把 tiptap/prosemirror 拉进首屏包
+import type {} from '@tiptap/extension-bold'
+import type {} from '@tiptap/extension-heading'
 
 // ---------- Editor Registry ----------
 const _editors: Record<string, Editor> = {}

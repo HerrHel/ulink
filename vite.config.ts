@@ -1632,8 +1632,15 @@ export default defineConfig({
               return 'vue-vendor'
             }
 
-            // 其他第三方库（nanoid 等）
-            return 'vendor'
+            // CloudBase SDK（首屏必需，独立 chunk 便于长期缓存）
+            if (id.includes('node_modules/@cloudbase/')) {
+              return 'cloudbase'
+            }
+
+            // 其他第三方库不再兜底合并成单个 'vendor'：
+            // 兜底会把只被懒加载模块使用的依赖（lamejs 音频编码、qrcode 收银台等）
+            // 一起塞进首屏包。交给打包器按实际引用关系就近放置。
+            return undefined
           }
         }
       }

@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 // 同 syncMappingTables.test.ts 口径：相对路径 + .js 后缀，esbuild 解析到 .ts
 import { highlight } from '../../components/cards/highlight.js'
 // 用 esc 派生期望值，避免手敲 HTML 实体在编辑层被吞并（同 d1-10 recoveryKeyPDF 护栏设计升级）
 import { esc } from '../../utils.js'
+import { preloadSearchLibs } from '../../lib/search.js'
+
+// pinyin-pro 改为经 search.ts 动态加载（首屏瘦身），拼音高亮用例需先等分包就绪
+beforeAll(async () => { await preloadSearchLibs() })
 
 /**
  * C-1 护栏：BookmarkCard.vue 模板 v-html 渲染入口的 highlight 函数。

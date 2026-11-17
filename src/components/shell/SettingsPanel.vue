@@ -1112,7 +1112,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, reactive, watch, onBeforeUnmount } from 'vue'
+import { computed, nextTick, onMounted, ref, reactive, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useUIStore, type ThemeStyle, type SortMode, type LayoutMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
@@ -1138,7 +1138,8 @@ import { APP_VERSION, BUILD_TIME, GIT_COMMIT } from '../../version.js'
 import { LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
-import PurchaseModal from '../modals/PurchaseModal.vue'
+// 异步组件：常驻挂载语义不变，但代码在首屏渲染后再拉取，不进首屏包
+const PurchaseModal = defineAsyncComponent(() => import('../modals/PurchaseModal.vue'))
 import { dbRpc } from '../../lib/dbApi.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import {
