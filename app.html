@@ -35,16 +35,10 @@
 
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
 
-<!-- 预连接：仅保留字体源（favicon 域名非首屏关键路径，移除以释放连接槽） -->
-<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-<!-- DNS 预解析 -->
-<link rel="dns-prefetch" href="https://fonts.googleapis.com">
-
 <link href="/fonts/fonts.css" rel="stylesheet">
-<!-- Google Fonts：JetBrains Mono（代码字体）与 Noto Sans SC（现代思源黑体，动态切片加载） -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<!-- JetBrains Mono（代码字体）与 Noto Sans SC（思源黑体，unicode-range 切片按需加载）：
+     自托管于同域 /fonts/gf/（scripts/selfhost-google-fonts.mjs 生成），不再阻塞于 Google Fonts -->
+<link href="/fonts/gf.css" rel="stylesheet">
 </head>
 <body>
 <!-- 微信/QQ 爬虫首图兜底 -->

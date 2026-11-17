@@ -103,10 +103,11 @@ const securityHeaders: Record<string, string> = {
     "script-src 'self' 'wasm-unsafe-eval'",
     "frame-src 'self'",
     "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "connect-src 'self' https: wss://*.supabase.co",
-    "font-src 'self' https://fonts.gstatic.com",
+    // 字体已自托管（public/fonts/gf/，scripts/selfhost-google-fonts.mjs），不再放行 Google Fonts
+    "font-src 'self'",
     "frame-ancestors 'self'",
     "form-action 'self'",
     "base-uri 'self'",
@@ -161,10 +162,10 @@ function headersPlugin(): Plugin {
           "frame-src 'self'",
           // HMR 断线重连的 blob Worker 心跳（waitForSuccessfulPing）必须放行 blob:
           "worker-src 'self' blob:",
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: https:",
           "connect-src 'self' ws: wss: https:",
-          "font-src 'self' data: https://fonts.gstatic.com",
+          "font-src 'self' data:",
           "frame-ancestors 'self'",
           "form-action 'self'",
           "base-uri 'self'",
@@ -1512,6 +1513,9 @@ export default defineConfig({
         // 首刷命中旧版（autoUpdate 需等 SW 换代才切新）。改为导航请求 NetworkFirst
         // （网络优先，离线回退 pages-cache），部署后刷新即拿新 HTML —— 一次刷新即新。
         globPatterns: ['**/*.{js,css,svg,woff2}'],
+        // 自托管 Google Fonts 切片（public/fonts/gf/，107 个 / ~4.4MB）不进预缓存：
+        // 否则每个用户安装 SW 都被强制下载全部切片。改由下方运行时 CacheFirst 按需缓存。
+        globIgnores: ['fonts/gf/**'],
         // 必须显式覆盖 VitePWA 默认 navigateFallback:"index.html"——HTML 已不 precache，
         // 默认值会让 workbox 生成指向不存在 precache 条目的 NavigationRoute（SW 顶层抛错失效）。
         // 置 undefined 后导航统一走下方 NetworkFirst（网络优先 + pages-cache 离线兜底）。
@@ -1551,6 +1555,14 @@ export default defineConfig({
           options: {
             cacheName: 'favicon-cache',
             expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 }
+          }
+        }, {
+          // 自托管字体切片（同域 /fonts/gf/*.woff2）：文件名稳定、内容不变，按需 CacheFirst
+          urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/fonts/gf/'),
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'selfhost-font-cache',
+            expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 365 }
           }
         }, {
           urlPattern: /^https:\/\/(api\.fontshare\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//i,
