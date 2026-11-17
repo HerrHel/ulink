@@ -133,8 +133,10 @@ jobs:
       # 未纳入 l1-sync-mock.spec.ts：其 Supabase 形态假会话注入在 prod CloudBase 产物上
       # 实测不兼容（登录态无法恢复）；prod 构建 env 保持纯透传，不注入任何 VITE_* 覆盖，
       # 以免产物与线上形态不一致。dev 形态的同步链路由默认 test:e2e 的 L1 mock 覆盖。
+      # e2e/purchase-flow.spec.ts（2026-11-17）：购买流程只在 CloudBase 形态下单，故仅在 prod 跑；
+      # page.route 拦截 CloudBase 网关（登录/rdb）与 https://ulink.ren/pay，零真实出站。
       - name: E2E Tests (prod build)
-        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts e2e/prod-backend-shape.spec.ts --config playwright.config.ts
+        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts e2e/prod-backend-shape.spec.ts e2e/purchase-flow.spec.ts --config playwright.config.ts
         env:
           CI: true
           LV_E2E_PROD: '1'
