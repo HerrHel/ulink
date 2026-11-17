@@ -134,8 +134,11 @@ import BatchBottom from './components/shell/BatchBottom.vue'
 import CardGrid from './components/cards/CardGrid.vue'
 import AppNav from './components/shell/AppNav.vue'
 import ErrorBoundary from './components/ui/ErrorBoundary.vue'
-import DetailPanel from './components/shell/DetailPanel.vue'
-import EdgeStagingSidebar from './components/shell/EdgeStagingSidebar.vue'
+// AI 对话侧栏 / 边缘暂存栏：常驻挂载语义不变，但整条 AI 对话链路（ChatStream / useAiChat /
+// universalAgent 等，约占首屏 app 包一半）改为首屏渲染后再拉取。侧栏默认收起（宽 0），无布局跳动；
+// useResize 以 MutationObserver 等待 #detailPanel 出现，对异步渲染安全。
+const DetailPanel = defineAsyncComponent(() => import('./components/shell/DetailPanel.vue'))
+const EdgeStagingSidebar = defineAsyncComponent(() => import('./components/shell/EdgeStagingSidebar.vue'))
 
 const { t, locale: curLocale } = useI18n()
 const isZh = computed(() => curLocale.value === 'zh-CN')
