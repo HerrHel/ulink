@@ -517,6 +517,15 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
   }
   runMigrations(effective, result)
 
+  // 迁移会把全部默认分类补进 result.categories（为旧版备份兜底）。导入只带入文件自带的分类，
+  // 以及被导入书签/组实际引用到的默认分类；否则每次导入浏览器书签都会把默认分类（含用户已删的）
+  // 作为空分类塞回库里，提示里还多出「N 个分类」。
+  const sourceCatIds = new Set((effective.categories || []).map(c => c && c.id))
+  const referencedCatIds = new Set<string>()
+  for (const b of result.bookmarks) if (b && b.categoryId) referencedCatIds.add(b.categoryId)
+  for (const g of result.siblingGroups) if (g && g.categoryId) referencedCatIds.add(g.categoryId)
+  result.categories = result.categories.filter(c => c && (sourceCatIds.has(c.id) || referencedCatIds.has(c.id)))
+
   const { categories, bookmarks, customAttributes, siblingGroups } = result
 
   try { persist.saveToLocalStorage(ds._dataSnapshot(), useUIStore().curSpace) } catch (e) { console.warn('[import] backup before import failed:', e) }
