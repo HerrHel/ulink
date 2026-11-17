@@ -177,6 +177,19 @@ export const SECOND_LEVEL_DOMAINS = new Set([
 ])
 
 /**
+ * 共享托管后缀：其下每个子域名属于不同用户/项目（a.github.io 与 b.github.io 互不相干）。
+ * 计算根域名时当作后缀处理（见 lib/registrableDomain.ts），杜绝自动归拢把不同人的站点收到一起。
+ */
+export const SHARED_HOSTING_SUFFIXES = new Set([
+  'github.io', 'gitee.io', 'gitlab.io', 'githubusercontent.com', 'readthedocs.io',
+  'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com',
+  'herokuapp.com', 'onrender.com', 'fly.dev', 'deno.dev', 'surge.sh', 'glitch.me', 'replit.app', 'repl.co',
+  'azurewebsites.net', 'cloudfront.net', 's3.amazonaws.com', 'appspot.com', 'tcloudbaseapp.com',
+  'blogspot.com', 'wordpress.com', 'tumblr.com', 'substack.com', 'medium.com', 'notion.site',
+  'myshopify.com', 'wixsite.com', 'weebly.com', 'gitbook.io', 'hf.space', 'streamlit.app', 'lofter.com'
+])
+
+/**
  * 精选高频优质站点双语知识库
  */
 export const CURATED_SITES: Record<string, CuratedSiteInfo> = {

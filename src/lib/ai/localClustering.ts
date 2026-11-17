@@ -8,6 +8,7 @@ import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { suggestCategory } from '../ai-classify.js'
 import { isThreePartCipher } from '../../crypto.js'
+import { registrableDomain } from '../registrableDomain.js'
 
 export interface BookmarkCluster {
   id: string
@@ -237,16 +238,22 @@ export interface ParentChildLink {
  * 2. 同域名（去 www）且子页路径是父路径的严格下级（按 / 段边界前缀匹配，杜绝 /a/b 误配 /a/bc）；
  * 3. 多个候选父级取路径最长者（挂在最近栏目页下）；若该父级自身也将被嵌套则沿祖先拍平，
  *    保证输出是一层扁平嵌套（卡片 UI 仅渲染一层子书签），杜绝祖孙链与环；
- * 4. 同路径仅参数不同（如 /watch?v=1 与 /watch?v=2）互不为父子。
+ * 4. 同路径仅参数不同（如 /watch?v=1 与 /watch?v=2）互不为父子；
+ * 5. 跨子域：子域名页面（chat.deepseek.com、platform.deepseek.com/usage）归入同一根域名的主页
+ *    （主机名即根域名、路径为空，如 www.deepseek.com/）。父级必须是根域名主页，带路径的页面不跨子域收纳；
+ *    根域名按 registrableDomain 计算，多段后缀（com.cn）与共享托管后缀（github.io）不会误归；
+ *    同主机名的父级永远优先于跨子域父级。
  */
 export function detectParentChildRelations(bookmarks: Bookmark[]): ParentChildLink[] {
   const candidates = bookmarks.filter((b) => !b.deletedAt && b.url && !isThreePartCipher(b.url) && !b.parentId && !isOfficialBookmark(b))
-  const parsed = new Map<string, { host: string; segs: string[] }>()
+  const parsed = new Map<string, { host: string; root: string; segs: string[] }>()
   for (const b of candidates) {
     try {
       const u = new URL(b.url.trim())
+      const host = u.hostname.replace(/^www\./i, '').toLowerCase()
       parsed.set(b.id, {
-        host: u.hostname.replace(/^www\./i, '').toLowerCase(),
+        host,
+        root: registrableDomain(host),
         segs: u.pathname.split('/').filter(Boolean),
       })
     } catch {
@@ -254,21 +261,31 @@ export function detectParentChildRelations(bookmarks: Bookmark[]): ParentChildLi
     }
   }
 
-  // child → 最长路径匹配的父候选
+  // child → 最优父候选。分值：同主机名取父路径段数（越长越近）；跨子域的根域名主页固定为 -1，低于任何同主机名父级
+  const CROSS_SUBDOMAIN_SCORE = -1
   const bestParent = new Map<string, string>()
-  const bestLen = new Map<string, number>()
+  const bestScore = new Map<string, number>()
   for (const child of candidates) {
     const c = parsed.get(child.id)
-    if (!c || c.segs.length === 0) continue
+    if (!c) continue
     for (const parent of candidates) {
       if (parent.id === child.id) continue
       const p = parsed.get(parent.id)
-      if (!p || p.host !== c.host) continue
-      if (p.segs.length >= c.segs.length) continue
-      if (!p.segs.every((seg, i) => seg === c.segs[i])) continue
-      if (p.segs.length > (bestLen.get(child.id) ?? -1)) {
+      if (!p) continue
+      let score: number
+      if (p.host === c.host) {
+        if (p.segs.length >= c.segs.length) continue
+        if (!p.segs.every((seg, i) => seg === c.segs[i])) continue
+        score = p.segs.length
+      } else {
+        // 父级是根域名主页，子级是它的子域名
+        if (!p.root || p.host !== p.root || p.segs.length !== 0) continue
+        if (c.root !== p.root) continue
+        score = CROSS_SUBDOMAIN_SCORE
+      }
+      if (score > (bestScore.get(child.id) ?? -2)) {
         bestParent.set(child.id, parent.id)
-        bestLen.set(child.id, p.segs.length)
+        bestScore.set(child.id, score)
       }
     }
   }

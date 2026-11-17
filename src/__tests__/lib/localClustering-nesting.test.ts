@@ -89,3 +89,113 @@ describe('detectParentChildRelations — 同站子页从属关系识别', () => 
     expect(linkSet(links)).toEqual(new Set(['c->p']))
   })
 })
+
+describe('detectParentChildRelations — 跨子域归入根域名主页', () => {
+  it('子域名页面归入根域名主页（带 www 的主页同样算根域名主页）', () => {
+    const links = detectParentChildRelations([
+      bm('home', 'https://www.deepseek.com/'),
+      bm('chat', 'https://chat.deepseek.com/'),
+      bm('platform', 'https://platform.deepseek.com/usage'),
+    ])
+    expect(linkSet(links)).toEqual(new Set(['chat->home', 'platform->home']))
+  })
+
+  it('没有根域名主页时，兄弟子域之间互不归拢', () => {
+    const links = detectParentChildRelations([
+      bm('chat', 'https://chat.deepseek.com/'),
+      bm('platform', 'https://platform.deepseek.com/usage'),
+    ])
+    expect(links).toHaveLength(0)
+  })
+
+  it('父级必须是根域名主页：带路径的根域名页面不跨子域收纳', () => {
+    const links = detectParentChildRelations([
+      bm('docs', 'https://deepseek.com/docs'),
+      bm('chat', 'https://chat.deepseek.com/docs/x'),
+    ])
+    expect(links).toHaveLength(0)
+  })
+
+  it('父级必须在根域名上：子域名主页不收纳别的子域', () => {
+    const links = detectParentChildRelations([
+      bm('chat', 'https://chat.deepseek.com/'),
+      bm('deep', 'https://a.chat.deepseek.com/x'),
+      bm('platform', 'https://platform.deepseek.com/'),
+    ])
+    expect(links).toHaveLength(0)
+  })
+
+  it('同主机名的父级优先于跨子域父级，最终拍平到根域名主页一层', () => {
+    const links = detectParentChildRelations([
+      bm('home', 'https://github.com/'),
+      bm('docs', 'https://docs.github.com/'),
+      bm('actions', 'https://docs.github.com/actions'),
+    ])
+    expect(linkSet(links)).toEqual(new Set(['docs->home', 'actions->home']))
+  })
+
+  it('多段后缀：同一根域名才归拢，不把 com.cn 当根域名', () => {
+    const links = detectParentChildRelations([
+      bm('sina', 'https://www.sina.com.cn/'),
+      bm('news', 'https://news.sina.com.cn/china'),
+      bm('other', 'https://www.other.com.cn/'),
+      bm('otherSub', 'https://shop.another.com.cn/'),
+    ])
+    expect(linkSet(links)).toEqual(new Set(['news->sina']))
+  })
+
+  it('co.uk 下不同公司的站点互不归拢', () => {
+    const links = detectParentChildRelations([
+      bm('bbc', 'https://www.bbc.co.uk/'),
+      bm('guardian', 'https://shop.theguardian.co.uk/'),
+    ])
+    expect(links).toHaveLength(0)
+  })
+
+  it('共享托管后缀：不同用户的 github.io 站点互不归拢，也不归到 github.io 下', () => {
+    const links = detectParentChildRelations([
+      bm('gh', 'https://github.io/'),
+      bm('alice', 'https://alice.github.io/'),
+      bm('bob', 'https://bob.github.io/blog'),
+    ])
+    expect(links).toHaveLength(0)
+  })
+
+  it('共享托管后缀：同一用户站点的子页与子域仍可归拢', () => {
+    const links = detectParentChildRelations([
+      bm('alice', 'https://alice.github.io/'),
+      bm('post', 'https://alice.github.io/blog/post'),
+      bm('sub', 'https://docs.alice.github.io/'),
+    ])
+    expect(linkSet(links)).toEqual(new Set(['post->alice', 'sub->alice']))
+  })
+
+  it('IP 与 localhost 不做跨主机归拢', () => {
+    const links = detectParentChildRelations([
+      bm('ip1', 'http://1.1.1.1/'),
+      bm('ip2', 'http://2.1.1.1/x'),
+      bm('lh', 'http://localhost/'),
+      bm('lhSub', 'http://app.localhost/x'),
+    ])
+    expect(links).toHaveLength(0)
+  })
+
+  it('不同根域名互不归拢（后缀相同不算同站）', () => {
+    const links = detectParentChildRelations([
+      bm('a', 'https://deepseek.com/'),
+      bm('b', 'https://chat.notdeepseek.com/'),
+      bm('c', 'https://deepseek.com.evil.net/'),
+    ])
+    expect(links).toHaveLength(0)
+  })
+
+  it('官方书签与已有归属的子书签不参与跨子域归拢', () => {
+    const links = detectParentChildRelations([
+      bm('bm_ulink_home', 'https://ulink.ren/'),
+      bm('app', 'https://app.ulink.ren/'),
+      bm('home', 'https://deepseek.com/'),
+      bm('chat', 'https://chat.deepseek.com/', { parentId: 'someone' }),
+    ])
+    expect(links).toHaveLength(0)
+  })
+})
