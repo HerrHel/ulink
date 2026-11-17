@@ -310,9 +310,6 @@
                       <button type="button" class="pur-btn-retry" @click="submit">
                         {{ t('common.retry') || (isZh ? '点击重试' : 'Retry') }}
                       </button>
-                      <button type="button" class="pur-btn-demo" @click="enableDemoPay">
-                        {{ isZh ? '体验演示支付' : 'Try Demo Pay' }}
-                      </button>
                     </div>
                   </div>
 
@@ -913,21 +910,13 @@ async function submit() {
   })
 }
 
-async function enableDemoPay() {
-  qrDataUrl.value = ''
-  stopCountdown()
-  const mockQr = `https://ulink.ren/pay/test?channel=${selectedChannel.value}&plan=${selectedPlan.value}&t=${Date.now()}`
-  qrDataUrl.value = await QRCode.toDataURL(mockQr, { width: 480, margin: 1 })
-  startCountdown(new Date(Date.now() + 30 * 60000).toISOString())
-}
-
+// 切换渠道一律按新渠道重新下单。
+// 注：此前「出错后切渠道」与「体验演示支付」会渲染指向 /pay/test 的假二维码并带倒计时，
+// 线上用户可能误以为在付款（扫了不扣款、会员也不到账）。已移除，出错只给「重试」。
 async function onChangeChannelWhilePaying(channel: PaymentChannel) {
   if (selectedChannel.value === channel) return
   selectedChannel.value = channel
-  if (qrDataUrl.value && pay.error.value) {
-    await enableDemoPay()
-    return
-  }
+  pay.stopPolling()
   await submit()
 }
 
@@ -1766,22 +1755,6 @@ onBeforeUnmount(() => {
   gap: 8px;
   align-items: center;
   justify-content: center;
-}
-.pur-btn-demo {
-  padding: 5px 10px;
-  font-size: var(--fs-2xs, 0.72rem);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  font-weight: 500;
-  transition: var(--transition-fast);
-}
-.pur-btn-demo:hover {
-  background: var(--surface-hover);
-  color: var(--accent);
-  border-color: var(--accent);
 }
 .pur-scan-tip {
   margin: 10px 0 4px;
