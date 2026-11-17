@@ -124,11 +124,20 @@ function onImgError(e: Event) {
   (e.target as HTMLImageElement).classList.add('img-error')
 }
 
-// 子书签图标加载失败时降级为首字母占位，避免破图
+// 子书签图标加载失败时先回退用父书签（本卡片）的图标，父图标也不可用再降级为首字母占位，避免破图
 function onSubImgError(e: Event, name?: string) {
   const img = e.target as HTMLImageElement
-  if (!img.dataset.fallback) {
-    img.dataset.fallback = '1'
+  const stage = img.dataset.fallback
+  if (!stage) {
+    const parentIcon = iconSrc.value
+    if (parentIcon && img.getAttribute('src') !== parentIcon) {
+      img.dataset.fallback = 'parent'
+      img.src = parentIcon
+      return
+    }
+  }
+  if (stage !== 'initials') {
+    img.dataset.fallback = 'initials'
     img.src = faviconInitials(name)
   }
 }
