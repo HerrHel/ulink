@@ -104,6 +104,7 @@
               class="form-select parent-trigger"
               :class="{ 'is-open': parentDropdownOpen }"
               @click="toggleParentDropdown"
+              @keydown.down.prevent="openParentDropdown"
               :aria-expanded="parentDropdownOpen"
               aria-haspopup="listbox"
             >
@@ -130,8 +131,9 @@
                   />
                 </div>
                 <div class="parent-options-list" ref="parentListRef">
-                  <!-- 「无」选项 -->
+                  <!-- 「无」选项（搜索时仅在包含或全匹配时显示） -->
                   <div
+                    v-if="showNoneOption"
                     class="parent-option"
                     :class="{ 'is-selected': !bmForm.parentId, 'is-active': parentActiveIdx === 0 }"
                     data-opt-idx="0"
@@ -164,12 +166,12 @@
                     />
                     <span v-else class="parent-opt-icon-placeholder" />
                     <div class="parent-opt-info">
-                      <span class="parent-opt-title">{{ displayText(b.title) || b.url }}</span>
-                      <span v-if="b.url && isValidUrl(b.url)" class="parent-opt-domain">{{ new URL(b.url).hostname }}</span>
+                      <span class="parent-opt-title">{{ displayText(b.title) || b.url || t('common.unnamed') }}</span>
+                      <span v-if="domain(b.url)" class="parent-opt-domain">{{ domain(b.url) }}</span>
                     </div>
                     <span v-if="bmForm.parentId === b.id" class="parent-opt-check" v-html="I.check" />
                   </div>
-                  <div v-if="filteredParentOptions.length === 0 && parentSearchQuery" class="parent-no-results">
+                  <div v-if="filteredParentOptions.length === 0 && !showNoneOption" class="parent-no-results">
                     {{ t('common.noResults') }}
                   </div>
                 </div>
@@ -213,7 +215,7 @@
 <script setup lang="ts">
 import { computed, watch, nextTick, ref, onBeforeUnmount } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { displayText } from '../../utils.js'
+import { displayText, domain } from '../../utils.js'
 import { bmForm, closeBmModal, saveBm, isBmSaving, previewIconUrl, clearIcon, autoFetchFromUrl, triggerAiFetch, applyAiCategory, applyAiAttributes, dismissAiSuggestions, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
@@ -264,15 +266,17 @@ const parentDropdownStyle = ref<Record<string, string>>({})
 const sortedParentOptions = computed(() => sortedParents(parentOptions.value))
 const filteredParentOptions = computed(() => filterParents(sortedParentOptions.value, parentSearchQuery.value))
 
+const showNoneOption = computed(() => {
+  const q = parentSearchQuery.value.trim().toLowerCase()
+  if (!q) return true
+  return t('common.none').toLowerCase().includes(q) || 'none'.includes(q)
+})
+
 const selectedParentLabel = computed(() => {
   if (!bmForm.parentId) return t('common.none')
   const found = parentOptions.value.find(b => b.id === bmForm.parentId)
-  return found ? (displayText(found.title) || found.url) : t('common.none')
+  return found ? (displayText(found.title) || found.url || t('common.unnamed')) : t('common.none')
 })
-
-function isValidUrl(url: string): boolean {
-  try { new URL(url); return true } catch { return false }
-}
 
 function updateParentDropdownPos() {
   const trigger = parentTriggerRef.value
@@ -333,19 +337,37 @@ function scrollActiveOptionIntoView() {
 
 function onParentKeydown(e: KeyboardEvent) {
   const opts = filteredParentOptions.value
-  const total = opts.length + 1 // +1 for "无" option
+  const hasNone = showNoneOption.value
+  const total = opts.length + (hasNone ? 1 : 0)
   if (e.key === 'ArrowDown') {
     e.preventDefault()
-    parentActiveIdx.value = Math.min(parentActiveIdx.value + 1, total - 1)
+    if (total === 0) return
+    if (parentActiveIdx.value === -1) {
+      parentActiveIdx.value = hasNone ? 0 : 1
+    } else {
+      parentActiveIdx.value = Math.min(parentActiveIdx.value + 1, opts.length)
+    }
     scrollActiveOptionIntoView()
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
-    parentActiveIdx.value = Math.max(parentActiveIdx.value - 1, 0)
+    if (total === 0) return
+    const minIdx = hasNone ? 0 : 1
+    parentActiveIdx.value = Math.max(parentActiveIdx.value - 1, minIdx)
     scrollActiveOptionIntoView()
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    if (parentActiveIdx.value === 0) selectParent(null)
-    else if (parentActiveIdx.value > 0 && opts[parentActiveIdx.value - 1]) selectParent(opts[parentActiveIdx.value - 1].id)
+    if (parentActiveIdx.value === 0 && hasNone) {
+      selectParent(null)
+    } else if (parentActiveIdx.value > 0) {
+      const target = opts[parentActiveIdx.value - 1]
+      if (target) selectParent(target.id)
+    } else if (parentActiveIdx.value === -1) {
+      if (opts.length > 0) {
+        selectParent(opts[0].id)
+      } else if (hasNone) {
+        selectParent(null)
+      }
+    }
   } else if (e.key === 'Escape') {
     e.preventDefault()
     e.stopPropagation()
@@ -358,6 +380,10 @@ watch(parentSearchQuery, () => {
   parentActiveIdx.value = -1
 })
 
+watch(() => bmForm.id, () => {
+  closeParentDropdown()
+})
+
 function onParentOutsideClick(e: MouseEvent) {
   const target = e.target as Node
   if (parentDropdownRef.value?.contains(target) || parentMenuRef.value?.contains(target)) return
@@ -368,9 +394,11 @@ watch(parentDropdownOpen, (open) => {
   if (open) {
     document.addEventListener('click', onParentOutsideClick, true)
     window.addEventListener('resize', updateParentDropdownPos)
+    window.addEventListener('scroll', updateParentDropdownPos, true)
   } else {
     document.removeEventListener('click', onParentOutsideClick, true)
     window.removeEventListener('resize', updateParentDropdownPos)
+    window.removeEventListener('scroll', updateParentDropdownPos, true)
   }
 })
 
@@ -480,5 +508,6 @@ onBeforeUnmount(() => {
   }
   document.removeEventListener('click', onParentOutsideClick, true)
   window.removeEventListener('resize', updateParentDropdownPos)
+  window.removeEventListener('scroll', updateParentDropdownPos, true)
 })
 </script>

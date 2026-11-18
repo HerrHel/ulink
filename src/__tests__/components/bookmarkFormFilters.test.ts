@@ -137,6 +137,14 @@ describe('sortedParents — 父级下拉拼音/字母 A-Z 排序', () => {
     ])
     expect(out.map(b => b.id)).toEqual(['a', 'z'])
   })
+
+  it('带前导/后置空格的标题不应影响首字母排序权重', () => {
+    const out = sortedParents([
+      mk({ id: '1', title: '  抖音 ', url: 'https://douyin.com' }),
+      mk({ id: '2', title: 'Agnes', url: 'https://agnes.example' }),
+    ])
+    expect(out.map(b => b.id)).toEqual(['2', '1'])
+  })
 })
 
 describe('filterParents — 父级下拉多维检索', () => {

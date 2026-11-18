@@ -20,11 +20,12 @@ import { pinyin, match } from 'pinyin-pro'
 
 /** 把汉字/混合字符串转为拼音排序键（静默降级为原字符串） */
 function getSortKey(str: string): string {
-  if (!str) return ''
+  const trimmed = (str || '').trim()
+  if (!trimmed) return ''
   try {
-    return pinyin(str, { toneType: 'none', nonZh: 'consecutive' }).toLowerCase()
+    return pinyin(trimmed, { toneType: 'none', nonZh: 'consecutive' }).toLowerCase()
   } catch {
-    return str.toLowerCase()
+    return trimmed.toLowerCase()
   }
 }
 
@@ -46,16 +47,17 @@ export function filterParents(parents: Bookmark[], query: string): Bookmark[] {
   const q = query.trim().toLowerCase()
   if (!q) return parents
   return parents.filter(b => {
-    const title = (displayText(b.title) || '').toLowerCase()
+    const rawTitle = displayText(b.title) || ''
+    const title = rawTitle.toLowerCase()
     const url = (b.url || '').toLowerCase()
     // 1. 文本直接包含
     if (title.includes(q) || url.includes(q)) return true
     // 2. 拼音首字母 / 全拼匹配
     try {
-      if (match(displayText(b.title) || '', q) !== null) return true
+      if (match(rawTitle, q) !== null) return true
     } catch { /* pinyin-pro 不可用时跳过拼音匹配 */ }
     // 3. 拼音全拼包含
-    const py = getSortKey(displayText(b.title) || '')
+    const py = getSortKey(rawTitle)
     if (py && py.includes(q)) return true
     return false
   })
