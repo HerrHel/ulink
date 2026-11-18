@@ -47,11 +47,15 @@ test.describe('L1 同步 mock', () => {
     await page.keyboard.press('Control+k')
     const cmdInput = page.getByTestId('lv-cmd-input')
     await expect(cmdInput).toBeVisible({ timeout: 5000 })
-    await cmdInput.fill('同步')
-    await page.keyboard.press('Enter')
-
-    // 允许 push/pull 完成
-    await page.waitForTimeout(1500)
+    // 原写法「输入『同步』+ 回车」实际执行的是排第一的 AI 指令（「让 AI 在全网甄选…」），
+    // 手动同步从未触发；断言只看「REST 请求数 > 0」，初始同步就满足——假绿。
+    // 现精确点选「同步到云端」，并要求点击后 REST 请求数确实增长。
+    await cmdInput.fill('同步到云端')
+    const restBefore = stats.restGets + stats.restWrites
+    const syncCmd = page.locator('.cmd-item').filter({ has: page.locator('.cmd-item-label', { hasText: /^同步到云端$/ }) })
+    await expect(syncCmd).toHaveCount(1)
+    await syncCmd.click()
+    await expect.poll(() => stats.restGets + stats.restWrites, { timeout: 10000 }).toBeGreaterThan(restBefore)
 
     await page.getByTestId('lv-btn-settings').click()
     await expect(page.getByTestId('lv-settings-drawer')).toBeVisible({ timeout: 5000 })
