@@ -383,10 +383,8 @@ function resolveGroupTitle(dict, group) {
   return { name: dict.defaultGroupName, promotedH1: false };
 }
 var FONT_LINKS = [
-  `<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>`,
-  `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`,
   `<link href="/fonts/fonts.css" rel="stylesheet">`,
-  `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">`
+  `<link href="/fonts/gf.css" rel="stylesheet">`
 ].join("\n");
 function buildHead(dict, group, bookmarks, shareUrl, ogImage) {
   const titleInfo = resolveGroupTitle(dict, group);

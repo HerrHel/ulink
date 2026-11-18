@@ -139,6 +139,11 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).not.toContain('<style>.s-b{stroke:#122E8A}')
     // 质感排版：加载顶级字体与 display 字体栈
     expect(zh).toContain('/fonts/fonts.css')
+    // 中文 / 代码字体同域自托管（scripts/selfhost-google-fonts.mjs），不得回退到阻塞渲染的 Google Fonts
+    expect(zh).toContain('/fonts/gf.css')
+    expect(catHtml).toContain('/fonts/gf.css')
+    expect(zh).not.toMatch(/fonts\.(googleapis|gstatic)\.com/)
+    expect(catHtml).not.toMatch(/fonts\.(googleapis|gstatic)\.com/)
     expect(zh).toContain("'Clash Display'")
     expect(zh).toContain("'Satoshi'")
   })

@@ -502,12 +502,14 @@ export function resolveGroupTitle(
   return { name: dict.defaultGroupName, promotedH1: false }
 }
 
-/** 高级排版字体栈预连接与样式（对齐主站与落地页，加载 Satoshi / Clash Display / Noto Sans SC） */
+/**
+ * 高级排版字体栈（对齐主站与落地页：Satoshi / Clash Display / Noto Sans SC / JetBrains Mono）。
+ * 全部同域自托管：/fonts/gf.css 由 scripts/selfhost-google-fonts.mjs 生成（unicode-range 切片按需加载）。
+ * 分享页同在 ulink.ren 下，不再阻塞于 Google Fonts。
+ */
 const FONT_LINKS = [
-  `<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>`,
-  `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`,
   `<link href="/fonts/fonts.css" rel="stylesheet">`,
-  `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">`,
+  `<link href="/fonts/gf.css" rel="stylesheet">`,
 ].join("\n")
 
 /** 构建 <head>：title / description / og:* / twitter:* / canonical。 */

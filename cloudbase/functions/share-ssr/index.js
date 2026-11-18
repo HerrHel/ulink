@@ -124,8 +124,9 @@ const SHARE_CSP = [
   "object-src 'none'",
   "script-src 'self' 'unsafe-inline'",
   "script-src-attr 'none'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https:",
+  // 字体已同域自托管（/fonts/fonts.css + /fonts/gf.css），不再放行 Google Fonts
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
   "img-src 'self' data: https: http:",
   "connect-src 'self' https: wss:",
 ].join('; ')
