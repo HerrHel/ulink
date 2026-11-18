@@ -203,25 +203,25 @@ test.describe('宣传落地页', () => {
     await expect(page.locator('[data-i18n="create.title"]')).toBeVisible()
   })
 
-  test('更多贴心细节：自由拖拽卡片与双语呈现', async ({ page }) => {
+  test('更多细节：拖拽卡片与双语呈现', async ({ page }) => {
     await page.goto('/?stay=1#extras')
     const extras = page.locator('#extras')
     await expect(extras).toBeVisible()
 
     const dragTitle = page.locator('[data-i18n="x5.t"]')
     await expect(dragTitle).toBeVisible()
-    await expect(dragTitle).toHaveText('自由拖拽，随心而动')
+    await expect(dragTitle).toHaveText('拖拽排序与归类')
 
     const cards = page.locator('.extra')
     await expect(cards).toHaveCount(5)
 
     // 测试英文呈现
     await page.locator('#lang-toggle').click()
-    await expect(dragTitle).toHaveText('Fluid Drag & Drop')
+    await expect(dragTitle).toHaveText('Drag to sort & file')
 
     // 切回中文
     await page.locator('#lang-toggle').click()
-    await expect(dragTitle).toHaveText('自由拖拽，随心而动')
+    await expect(dragTitle).toHaveText('拖拽排序与归类')
   })
 })
 

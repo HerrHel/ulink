@@ -185,12 +185,6 @@ button{font:inherit;cursor:pointer}
 /* ── Hero：左文右星链 ── */
 .hero{padding:clamp(40px,7vh,84px) 0 clamp(56px,8vh,96px)}
 .hero-grid{display:grid;grid-template-columns:minmax(0,10fr) minmax(0,9fr);gap:clamp(28px,5vw,64px);align-items:center}
-.hero-pill{display:inline-flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);
-  padding:5px 14px;border-radius:999px;box-shadow:var(--shadow-sm),0 1px 0 rgba(255,255,255,.8) inset;font-size:.8rem;font-weight:600;color:var(--ink-2);margin-bottom:18px}
-.hero-pill .pill-dot{width:7px;height:7px;border-radius:50%;background:var(--brand-green-bright);
-  box-shadow:0 0 8px rgba(16,185,129,.7);flex-shrink:0;animation:pill-pulse 2.2s ease-in-out infinite}
-@keyframes pill-pulse{0%,100%{opacity:.65;transform:scale(.92)} 50%{opacity:1;transform:scale(1.2)}}
-.hero-pill .pill-tag{background:var(--brand);color:#fff;font-size:.66rem;font-weight:800;padding:2px 7px;border-radius:999px;letter-spacing:.04em;white-space:nowrap;flex-shrink:0}
 .hero-copy h1{
   font-family:var(--font-display);font-weight:600;
   font-size:clamp(2.3rem,5.4vw,3.9rem);
@@ -203,7 +197,6 @@ button{font:inherit;cursor:pointer}
 html[lang="en-US"] .hero-copy h1{font-size:clamp(1.7rem,3.4vw,2.5rem)}
 .hero-sub{color:var(--ink-2);font-size:clamp(1rem,1.5vw,1.13rem);max-width:34em;margin-bottom:30px;line-height:1.75}
 .hero-ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-.hero-note{margin-top:18px;font-size:.86rem;color:var(--ink-3);letter-spacing:.02em}
 .hero-visual{position:relative;aspect-ratio:1/0.92;min-height:320px}
 .hero-visual canvas{position:absolute;inset:0;width:100%;height:100%}
 /* 星链后方蓝绿双相自然氛围光 */
@@ -344,7 +337,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
 .demo-mini .mk-domain,.demo-mini .mk-tag,.demo-mini .mk-foot{display:none}
 
 .demo-label{text-align:center;margin-top:12px;font-size:.88rem;color:var(--ink-2);font-weight:600}
-.demo-note{text-align:center;margin-top:10px;font-size:.8rem;color:var(--ink-3)}
 
 /* ── 视觉 4：创作与分享（行星环绕式 · 知识引力系统）── */
 .sect#create .eyebrow{color:var(--brand-green);background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
@@ -386,7 +378,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   background:radial-gradient(circle at 40% 50%,rgba(18,46,138,.055) 0%,transparent 60%),
              radial-gradient(circle at 62% 50%,rgba(16,185,129,.05) 0%,transparent 60%);pointer-events:none}
 .cta-band h2{font-family:var(--font-display);font-weight:600;font-size:clamp(1.8rem,4vw,2.8rem);margin-bottom:14px;letter-spacing:.01em}
-.cta-band p{color:var(--ink-2);margin-bottom:30px;font-size:1.05rem}
 .cta-band .btn{padding:15px 42px;font-size:1.05rem}
 
 /* ── 页脚 ── */
@@ -434,7 +425,7 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   .btn,.demo-item,.extra,.seg-glider{transition:none}
   .btn:hover,.demo-item:hover,.extra:hover{transform:none}
   .demo-kids,.demo-chips span,.demo-rail span,.flow,.lock-pulse,
-  .demo-col,.cchip.a,.cchip.b,.cchip.c,.hero-pill .pill-dot{animation:none}
+  .demo-col,.cchip.a,.cchip.b,.cchip.c{animation:none}
   .demo-kids{max-height:120px;opacity:1}
 }
 /* ── 定价区 ── */
@@ -444,13 +435,10 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
 .price-card.price-featured{border:1.5px solid var(--brand);box-shadow:0 10px 30px rgba(18,46,138,.12)}
 .price-badge{position:absolute;top:-10px;right:14px;padding:3px 10px;border-radius:999px;background:var(--brand);color:#fff;font-size:.66rem;font-weight:700;letter-spacing:.05em}
 .price-name{font-weight:600;font-size:.95rem}
-.price-amount{font-size:1.75rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.price-amount{margin-bottom:14px;font-size:1.75rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
 .price-amount span{font-size:.75rem;font-weight:400;color:#888;margin-left:2px}
-.price-period{font-size:.72rem;color:#8A867F}
-.price-feats{list-style:none;margin:6px 0 0;padding:0;font-size:.8rem;line-height:1.95;flex:1;color:#4A4640}
-.price-feats li{padding-left:18px;position:relative}
-.price-feats li::before{content:'\2713';position:absolute;left:0;color:var(--brand);font-weight:700}
-.price-card .btn{margin-top:14px;width:100%;justify-content:center}
+.price-period{font-size:.72rem;color:#8A867F;margin-bottom:14px}
+.price-card .btn{margin-top:auto;width:100%;justify-content:center}
 
 .price-compare{border:1px solid #E8E4DF;border-radius:14px;background:#fff;overflow:hidden;font-size:.82rem}
 .price-compare-row{display:grid;grid-template-columns:1.5fr repeat(4,1fr);gap:4px;padding:10px 16px;align-items:center}
@@ -508,15 +496,11 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <!-- 合规修订：hero.pill / hero.sub / hero.note 改为仅账号字段端到端加密，标题、网址、笔记明文存储 -->
-        <div class="hero-pill reveal"><span class="pill-dot" aria-hidden="true"></span><span class="pill-tag" data-i18n="hero.pillTag">免注册</span> <span data-i18n="hero.pill">离线优先架构 · 仅账号字段端到端加密 · 专属私有链接分享</span></div>
         <h1><em data-i18n="hero.title1">随时随地，</em><span data-i18n="hero.title2">收藏、整理、分享</span></h1>
-        <p class="hero-sub" data-i18n="hero.sub">与链 ulink 是一款本地优先的个人书签管理工具：支持子书签多级嵌套与富文本笔记，仅账号字段端到端加密，标题、网址、笔记明文存储，多端登录同一账号即可同步，数据亦可随时完整导出。</p>
+        <p class="hero-sub" data-i18n="hero.sub">本地优先的书签管理器。子书签多级嵌套，附富文本笔记，多端同步，随时完整导出。</p>
         <div class="hero-ctas">
           <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
-          <a class="btn btn-ghost" href="#why" data-i18n="hero.explore">探索特性</a>
         </div>
-        <p class="hero-note" data-i18n="hero.note">开箱即用 · 本地权威存储 · 仅账号字段端到端加密 · 专属私有链接分享</p>
       </div>
       <div class="hero-visual" aria-hidden="true">
         <canvas id="constellation"></canvas>
@@ -527,31 +511,27 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <!-- ═══ 为什么选择与链：深度管理 ═══ -->
   <section class="sect" id="why">
     <div class="wrap">
-      <div class="sect-head reveal">
-        <div class="eyebrow" data-i18n="why.eyebrow">Deep Organization</div>
-        <h2 data-i18n="why.title">为什么选择与链</h2>
-      </div>
       <div class="split">
         <div class="copy reveal">
-          <h3 data-i18n="manage.title">深度管理：连接链与链与人</h3>
-          <p class="lead" data-i18n="manage.sub">“与链”亦是“与人”（ulink.ren）。突破传统收藏夹扁平膨胀的结构限制，在链接与链接、知识与人之间建立清晰的层级结构，让每一次收藏都沉淀为可复用的知识资产。</p>
+          <h3 data-i18n="manage.title">层级整理，不再扁平</h3>
+          <p class="lead" data-i18n="manage.sub">把一个站点的文档、控制台和代码仓库收在同一处。</p>
           <div class="cap-row">
             <div class="cap-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 10v4M12 10v4M16 10v4"/></svg>
             </div>
-            <div><b data-i18n="m1.t">子书签树状嵌套</b><span data-i18n="m1.d">单个主站点可收纳多级子级入口，官方文档、管理控制台与代码仓库均可归于同一处。</span></div>
+            <div><b data-i18n="m1.t">子书签嵌套</b><span data-i18n="m1.d">主站点下收纳多级入口。</span></div>
           </div>
           <div class="cap-row">
             <div class="cap-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M9 13h6"/></svg>
             </div>
-            <div><b data-i18n="m2.t">多维分类与富文本笔记</b><span data-i18n="m2.d">侧栏分类划分业务边界；笔记内置富文本编辑器，支持 @ 引用书签卡片与全屏沉浸编辑。</span></div>
+            <div><b data-i18n="m2.t">分类与富文本笔记</b><span data-i18n="m2.d">笔记里用 @ 引用书签卡片。</span></div>
           </div>
           <div class="cap-row">
             <div class="cap-icon green">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7V4h9.6l7.4 7.4a2 2 0 0 1 0 2z"/><circle cx="7.5" cy="7.5" r="1"/></svg>
             </div>
-            <div><b data-i18n="m3.t">自定义属性标签</b><span data-i18n="m3.d">可按业务维度自定义属性标签，支持布尔组合过滤与多维筛选，大量收藏亦可快速定位。</span></div>
+            <div><b data-i18n="m3.t">自定义属性</b><span data-i18n="m3.d">按属性组合筛选，收藏再多也能快速定位。</span></div>
           </div>
         </div>
         <div class="visual reveal d1" aria-hidden="true">
@@ -572,11 +552,10 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
         </div>
       </div>
       <div class="copy reveal d1">
-        <div class="eyebrow" data-i18n="sync.eyebrow">Sync & Privacy</div>
-        <!-- 合规修订：sync.title 改为仅账号字段端到端加密；下方 sync.d2 已是如实说明，按真源保留不改 -->
-        <h3 data-i18n="sync.title">多端实时同频，仅账号字段端到端加密</h3>
-        <p class="lead" data-i18n="sync.d1">摆脱单一浏览器生态绑定与数据丢失风险。全端设备增量同步，冲突可择一保留，历史版本随时回溯。</p>
-        <p data-i18n="sync.d2">账号与密码于本机完成加密后上传：密钥由主密码经 PBKDF2 派生，以 AES-256-GCM 封装，密钥不出设备，服务端无法解密。标题、网址、笔记等内容为明文存储——加密范围如实说明，不作夸大。</p>
+        <!-- 合规：标题只说「账号密码本机加密」，不做笼统加密宣称；加密范围由 sync.d2 如实说明 -->
+        <h3 data-i18n="sync.title">多端同步，账号密码本机加密</h3>
+        <p class="lead" data-i18n="sync.d1">增量同步，冲突择一保留，历史版本可回溯。</p>
+        <p data-i18n="sync.d2">账号与密码在本机加密后上传：密钥由主密码经 PBKDF2 派生，以 AES-256-GCM 封装，不出设备，服务端无法解密。标题、网址、笔记为明文存储。</p>
       </div>
     </div>
   </section>
@@ -585,9 +564,7 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="looks" id="looks" data-style="eff" data-mode="light">
     <div class="wrap">
       <div class="sect-head reveal">
-        <div class="eyebrow" data-i18n="looks.eyebrow">Design System</div>
-        <h2 data-i18n="looks.title">简洁、精致：精于方寸</h2>
-        <p data-i18n="looks.sub">配备效率与舒适双调色体系，支持明暗外观自由切换；提供宫格、列表与紧凑小宫格三种布局视图，适配不同屏幕尺寸与使用场景。</p>
+        <h2 data-i18n="looks.title">两套配色，三种视图</h2>
       </div>
       <div class="demo-controls reveal" id="demo-controls">
         <div class="seg" role="group" data-i18n-aria="theme.aria" aria-label="主题风格">
@@ -625,7 +602,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <div class="demo-label" data-i18n="view.mini">小宫格</div>
         </div>
       </div>
-      <p class="demo-note reveal" data-i18n="looks.note">视觉主题与视图偏好按设备本地独立持久化，登录后随账号自动同步。</p>
     </div>
   </section>
 
@@ -633,10 +609,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="sect" id="create">
     <div class="wrap split">
       <div class="copy reveal">
-        <div class="eyebrow" data-i18n="create.eyebrow">Private Share</div>
-        <h3 data-i18n="create.title">专属私有链接，安全定向分享</h3>
-        <p class="lead" data-i18n="create.d1">不设公共广场，亦不被搜索引擎收录，仅凭专属链接定向访问。无论发送给好友、同事，还是同步至自己的其他设备，对方在浏览器中免登录即可查阅，并支持一键保存副本。</p>
-        <p data-i18n="create.d2">每篇笔记均可附带富文本内容，用于记录背景说明、操作步骤、重点标注或待办清单，并支持以 @ 在正文中直接嵌入书签卡片。网址与说明合并呈现，降低接收方的理解成本。</p>
+        <h3 data-i18n="create.title">私有链接分享</h3>
+        <p class="lead" data-i18n="create.d1">不公开，不被搜索引擎收录。对方无需登录即可查看，并可一键保存副本。</p>
       </div>
       <div class="visual reveal d1" aria-hidden="true">
         <div class="share-visual">
@@ -650,35 +624,34 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="extras" id="extras">
     <div class="wrap">
       <div class="sect-head reveal">
-        <div class="eyebrow" data-i18n="extra.eyebrow">Crafted Details</div>
-        <h2 data-i18n="extra.title">更多贴心细节，顺手就好</h2>
+        <h2 data-i18n="extra.title">更多细节</h2>
       </div>
       <div class="extra-grid">
         <article class="extra reveal">
           <div class="extra-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
           </div>
-          <b data-i18n="x1.t">扩展一键捕获</b><span><span data-i18n="x1.d">浏览器扩展中按 </span><code>Ctrl+Shift+S</code><span data-i18n="x1.d2">，当前页面与选中文本即可一并归档。</span></span></article>
+          <b data-i18n="x1.t">一键收藏</b><span><span data-i18n="x1.d">在浏览器扩展中按 </span><code>Ctrl+Shift+S</code><span data-i18n="x1.d2">，保存当前页面与选中文本。</span></span></article>
         <article class="extra reveal d1">
           <div class="extra-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
           </div>
-          <b data-i18n="x2.t">离线优先架构，桌面级 PWA</b><span data-i18n="x2.d">数据基于浏览器 IndexedDB 存储，断网环境下亦可正常使用；支持安装至桌面与手机主屏。</span></article>
+          <b data-i18n="x2.t">离线可用，可安装</b><span data-i18n="x2.d">数据存在本机 IndexedDB，断网照常使用。</span></article>
         <article class="extra green reveal d2">
           <div class="extra-icon green">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
           </div>
-          <b data-i18n="x5.t">自由拖拽，随心而动</b><span data-i18n="x5.d">卡片支持自由拖拽排序、拖入侧栏归类与拖入笔记引用；移动端采用原生手势跟手处理。</span></article>
+          <b data-i18n="x5.t">拖拽排序与归类</b><span data-i18n="x5.d">拖动排序、拖入侧栏归类、拖入笔记引用。</span></article>
         <article class="extra reveal d3">
           <div class="extra-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
           </div>
-          <b data-i18n="x3.t">拼音全拼与模糊智能检索</b><span data-i18n="x3.d">内置拼音首字母与模糊匹配检索，输入「js」即可命中「键盘快捷键」，无需记忆完整名称。</span></article>
+          <b data-i18n="x3.t">拼音与模糊搜索</b><span data-i18n="x3.d">输入「js」即可找到「键盘快捷键」。</span></article>
         <article class="extra green reveal d4">
           <div class="extra-icon green">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 10.5v6M14 10.5v6"/></svg>
           </div>
-          <b data-i18n="x4.t">安全回收站与多级撤销栈</b><span data-i18n="x4.d">每一步操作均可撤销与重做，删除内容先进入回收站，不会立即丢失。</span></article>
+          <b data-i18n="x4.t">撤销与回收站</b><span data-i18n="x4.d">每步操作都可撤销，删除的内容先进回收站。</span></article>
       </div>
     </div>
   </section>
@@ -688,10 +661,7 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="sect" id="pricing">
     <div class="wrap">
       <div class="sect-head reveal">
-        <div class="eyebrow" data-i18n="price.eyebrow">PRICING</div>
-        <h2 data-i18n="price.title">简单透明的价格</h2>
-        <!-- 合规修订：平台视频深度解析已下线，能力名统一为「轻量平台解析」「聊天媒体解析」 -->
-        <p class="sect-sub" data-i18n="price.sub">免费版永久可用，PRO 解锁轻量平台解析、聊天媒体解析与全自动知识整理。无自动续费，按需选购。</p>
+        <h2 data-i18n="price.title">价格</h2>
       </div>
 
       <!-- 合规修订：定价区加密口径改为仅账号字段加密；能力名与徽标同步（去早鸟包装、省额注明较按月订阅同周期合计） -->
@@ -699,31 +669,13 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
         <div class="price-card">
           <div class="price-name" data-i18n="price.free">免费版</div>
           <div class="price-amount">¥0<span data-i18n="price.forever">/ 永久</span></div>
-          <div class="price-period" data-i18n="price.freeSub">适合轻量收藏与检索</div>
-          <ul class="price-feats">
-            <li data-i18n="price.f1">无限书签与嵌套分类</li>
-            <li data-i18n="price.f2">仅账号字段端到端加密同步</li>
-            <li data-i18n="price.f3">200 MB 云端存储空间</li>
-            <li data-i18n="price.f4">每日 3 次手动死链排查</li>
-            <li data-i18n="price.f5">每月 10 万字（5 万 tokens）AI 额度</li>
-            <li data-i18n="price.f6">每日 1 次轻量平台解析体验</li>
-          </ul>
           <a class="btn btn-ghost" href="/app" data-i18n="price.freeCta">免费开始</a>
         </div>
 
         <div class="price-card">
-          <span class="price-badge" data-i18n="price.monthlyBadge" style="background:#5C6B82;">灵活按月</span>
           <div class="price-name" data-i18n="price.monthly">PRO 月付</div>
           <div class="price-amount">¥15<span data-i18n="price.perMonth">/ 月</span></div>
-          <div class="price-period" data-i18n="price.days30">30 天 · 按月灵活订阅，随订随用</div>
-          <ul class="price-feats">
-            <li data-i18n="price.p1">包含免费版全部功能</li>
-            <li data-i18n="price.p2">仅账号字段端到端加密 · 不限设备</li>
-            <li data-i18n="price.p3">每日 10 次轻量平台解析</li>
-            <li data-i18n="price.p4">每周全库后台自动死链巡检（每日 50 次）</li>
-            <li data-i18n="price.p5">每月 40 万字（20 万 tokens）AI 额度</li>
-            <li data-i18n="price.p6">每日 2 次聊天媒体解析体验</li>
-          </ul>
+          <div class="price-period" data-i18n="price.days30">30 天</div>
           <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
         </div>
 
@@ -732,14 +684,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <div class="price-name" data-i18n="price.quarterly">PRO 季付</div>
           <div class="price-amount"><del style="font-size:16px;color:var(--text-sub);margin-right:6px;font-weight:normal;">¥45</del>¥32<span data-i18n="price.perQuarter">/ 季</span></div>
           <div class="price-period" data-i18n="price.quarterUnit">90 天 · 折合 ¥10.7/月（按月买 3 个月需 ¥45，省 29%）</div>
-          <ul class="price-feats">
-            <li data-i18n="price.p1">包含免费版全部功能</li>
-            <li data-i18n="price.p2">仅账号字段端到端加密 · 不限设备</li>
-            <li data-i18n="price.p3">每日 10 次轻量平台解析</li>
-            <li data-i18n="price.p4">每周全库后台自动死链巡检（每日 50 次）</li>
-            <li data-i18n="price.p5">每月 40 万字（20 万 tokens）AI 额度</li>
-            <li data-i18n="price.p6">每日 2 次聊天媒体解析体验</li>
-          </ul>
           <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
         </div>
 
@@ -748,14 +692,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <div class="price-name" data-i18n="price.yearly">PRO 年付</div>
           <div class="price-amount"><del style="font-size:16px;color:var(--text-sub);margin-right:6px;font-weight:normal;">¥180</del>¥108<span data-i18n="price.perYear">/ 年</span></div>
           <div class="price-period" data-i18n="price.yearUnit">365 天 · 折合仅 ¥9/月（按月买 12 个月需 ¥180，省 40%）</div>
-          <ul class="price-feats">
-            <li data-i18n="price.p1">包含免费版全部功能</li>
-            <li data-i18n="price.p2">仅账号字段端到端加密 · 不限设备</li>
-            <li data-i18n="price.p3">每日 10 次轻量平台解析</li>
-            <li data-i18n="price.p4">每周全库后台自动死链巡检（每日 50 次）</li>
-            <li data-i18n="price.p5">每月 40 万字（20 万 tokens）AI 额度</li>
-            <li data-i18n="price.p6">每日 2 次聊天媒体解析体验</li>
-          </ul>
           <a class="btn btn-solid" href="/app" data-i18n="price.proCta">升级 PRO</a>
         </div>
       </div>
@@ -770,7 +706,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <span data-i18n="price.quarterly">PRO 季付</span>
           <span data-i18n="price.yearly">PRO 年付</span>
         </div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.devices">仅账号字段端到端加密同步</span><span data-i18n="price.yes">支持</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.bookmarks">书签与分类</span><span data-i18n="price.cmp.noLimit">无限</span><span data-i18n="price.cmp.noLimit">无限</span><span data-i18n="price.cmp.noLimit">无限</span><span data-i18n="price.cmp.noLimit">无限</span></div>
+          <div class="price-compare-row"><span data-i18n="price.cmp.devices">仅账号字段端到端加密同步</span><span data-i18n="price.yes">支持</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span></div>
         <div class="price-compare-row"><span data-i18n="price.cmp.storage">云端存储空间</span><span>200 MB</span><span>5 GB</span><span>5 GB</span><span>5 GB</span></div>
         <div class="price-compare-row"><span data-i18n="price.cmp.linkcheck">每日死链排查</span><span data-i18n="price.cmp.times3">3 次</span><span data-i18n="price.cmp.times50">50 次</span><span data-i18n="price.cmp.times50">50 次</span><span data-i18n="price.cmp.times50">50 次</span></div>
         <div class="price-compare-row"><span data-i18n="price.cmp.patrol">全库自动死链巡检</span><span data-i18n="price.no">不支持</span><span data-i18n="price.weekly">每周巡检</span><span data-i18n="price.weekly">每周巡检</span><span data-i18n="price.weekly">每周巡检</span></div>
@@ -791,7 +728,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="sect" id="faq">
     <div class="wrap">
       <div class="sect-head reveal">
-        <div class="eyebrow" data-i18n="faq.eyebrow">FAQ</div>
         <h2 data-i18n="faq.title">常见问题</h2>
       </div>
       <div class="faq-list reveal">
@@ -816,7 +752,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="cta-band">
     <div class="wrap reveal">
       <h2 data-i18n="cta.title">现在，把收藏连成链</h2>
-      <p data-i18n="cta.sub">免注册即开即用 · 支持导入已有书签 · 数据可随时完整导出</p>
       <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
     </div>
   </section>
