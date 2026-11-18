@@ -266,6 +266,14 @@ export function useCloudSync() {
       }
     }
 
+    // 先把本地 dirty/new 走标准入队（出队 dirty 标记 + 打 pending）。基线补推行用 now 作
+    // updated_at_num（见下方 #13），若这些条目推送后仍留在 _dirtyIds/_newIds 里，紧随其后的
+    // pull 会看到「远端更新 + 本地 dirty」而判冲突——全新设备首次登录即弹出「同步冲突」，
+    // 冲突对象是启动时刚补齐的官网示例书签（E2E cloudbase-sync 实测复现）。
+    // 走 enqueueDirtyAsOps 后它们变为 pending，push 成功即释放，pull 按常规 assign 合并。
+    // 入队失败时该函数会回填 dirty，下方 shouldPush 仍按 dirty 判据补推，不丢数据。
+    await enqueueDirtyAsOps()
+
     const allOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
     const now = Date.now()
     const shouldPush = (table: SyncOp['table'], id: string, deletedAt?: number, updatedAt = 0) => {
