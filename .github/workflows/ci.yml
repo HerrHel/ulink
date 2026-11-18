@@ -135,8 +135,11 @@ jobs:
       # 以免产物与线上形态不一致。dev 形态的同步链路由默认 test:e2e 的 L1 mock 覆盖。
       # e2e/purchase-flow.spec.ts（2026-11-17）：购买流程只在 CloudBase 形态下单，故仅在 prod 跑；
       # page.route 拦截 CloudBase 网关（登录/rdb）与 https://ulink.ren/pay，零真实出站。
+      # e2e/cloudbase-sync.spec.ts（2026-11-18）：线上同步链路（CloudBase rdb）的端到端覆盖——
+      # 双设备共用 e2e/helpers/cloudbaseMock.ts 内存云端（复刻 032/035 墓地与防复活触发器），
+      # 覆盖往返、删除不复活、离线补推、冲突、云端故障恢复。
       - name: E2E Tests (prod build)
-        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts e2e/prod-backend-shape.spec.ts e2e/purchase-flow.spec.ts --config playwright.config.ts
+        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts e2e/prod-backend-shape.spec.ts e2e/purchase-flow.spec.ts e2e/cloudbase-sync.spec.ts --config playwright.config.ts
         env:
           CI: true
           LV_E2E_PROD: '1'
