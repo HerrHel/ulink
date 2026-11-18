@@ -71,7 +71,7 @@ jobs:
       # 剩余 <= 30 天：开一条 issue 提醒（已有未关闭的同类 issue 则不重复开）
       - name: 到期提醒 issue
         if: steps.cert.outputs.warn == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const days = '${{ steps.cert.outputs.days }}';
