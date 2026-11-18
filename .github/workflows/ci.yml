@@ -165,6 +165,9 @@ jobs:
     # push 与手动触发都可发布，但都限定 main（PR 与其它分支绝不发布）
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    # 正常部署约 6 分钟。未设上限时 tcb 上传一旦卡死要等满 GitHub 默认 360 分钟才失败，
+    # 且占住 deploy-production 并发组，后续 push 的部署全部排队（2026-11-18 实际发生）。
+    timeout-minutes: 20
     concurrency:
       group: deploy-production
       cancel-in-progress: false
