@@ -27,6 +27,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // 重试只用来区分「真失败」与「偶发」，但重试后通过的 flaky 用例此前一律算绿、无人知晓。
+  // CI 上把 flaky 也判为失败：要么修稳，要么显式标注原因，不允许被重试静默吞掉。
+  failOnFlakyTests: !!process.env.CI,
   // 文件级并行（fullyParallel 保持 false：同文件内用例仍串行，避免文件内状态链断裂）。
   // workers=1 时 37 用例完全串行 ~2min；3 是速度与稳定性的平衡点（机器 CPU 供给有限）。
   workers: 3,

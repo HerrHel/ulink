@@ -75,9 +75,15 @@ describe('useSpaceMove', () => {
     })
 
     it('在私密空间内调用无意义（已私密）：不报错、不重复移入', async () => {
+      // 用真实存在的书签：原用例只传不存在的 id 且无断言，「错误地照样移动」也会通过
+      dataStore.addBookmark({ id: 'b1', title: '已在私密空间', url: 'v', categoryId: 'all' } as any)
+      dataStore._syncMaps()
       uiStore.curSpace = 'vault'
-      await spaceMove.moveBookmarksToVault(['nonexistent'])
-      // 不崩溃、不写入额外数据
+      await spaceMove.moveBookmarksToVault(['b1', 'nonexistent'])
+      // 当前空间数据原封不动，也不额外写私密空间存储
+      expect(dataStore.bookmarkMap['b1']).toBeDefined()
+      expect(dataStore.bookmarks.filter((b) => !b.deletedAt)).toHaveLength(1)
+      expect(localStorage.getItem(STORAGE_KEY_VAULT)).toBeNull()
     })
   })
 
@@ -100,9 +106,20 @@ describe('useSpaceMove', () => {
     })
 
     it('不可移入虚拟分类（CAT_ALL/CAT_UNCATEGORIZED）', async () => {
+      // 与生产一致：「全部」随默认数据加载进 categories（config/constants.ts 默认分类），
+      // 不经 addCategory（后者会拒收虚拟分类 id）。若测试里没有这个条目，守卫失效时后续
+      // `if (!cat) return` 也会兜住，测试测不出差别（变异测试 M18 曾因此存活）。
+      dataStore.categories = [{ id: 'all', name: '全部', icon: 'grid', color: '#122E8A', order: 0 } as any]
+      dataStore.addBookmark({ id: 'bA', title: '全部下', url: 'a', categoryId: 'all' } as any)
+      dataStore.addBookmark({ id: 'bU', title: '未分类下', url: 'u', categoryId: 'uncategorized' } as any)
+      dataStore._syncMaps()
       await spaceMove.moveCategoryToVault('all')
       await spaceMove.moveCategoryToVault('uncategorized')
-      // 无操作、无崩溃
+      // 虚拟分类不可整体移入：其下书签留在主页，私密空间不被写入
+      expect(dataStore.categoryMap['all']).toBeDefined()
+      expect(dataStore.bookmarkMap['bA']).toBeDefined()
+      expect(dataStore.bookmarkMap['bU']).toBeDefined()
+      expect(localStorage.getItem(STORAGE_KEY_VAULT)).toBeNull()
     })
   })
 

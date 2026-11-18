@@ -316,7 +316,9 @@ describe('searchWithHighlights', () => {
     ]
     const resultsE = searchWithHighlights(SAMPLE_BOOKMARKS, groupsWithEmpty, '学习资源空', BOOKMARK_MAP, EMPTY_ATTRS)
     const gE = resultsE.find(r => r.id === 'gE' && r._isGroup)
-    if (gE) expect(gE!.bookmarkIds).toEqual([])
+    // 先断言命中再断言字段：原 `if (gE) expect(...)` 在搜索漏掉该组时一条断言都不执行（假绿）
+    expect(gE).toBeDefined()
+    expect(gE!.bookmarkIds).toEqual([])
     // undefined 防御：绕过 schema 类型，模拟未过校验的裸组（search.ts 的 || [] 与 item 透传都须兼容）
     const groupsNoIds = [
       { id: 'gX', name: '学习资源', categoryId: 'edu', icon: '', order: 0, isExpanded: false, attributes: {}, notes: '', updatedAt: 0, useCount: 0 },
@@ -324,10 +326,9 @@ describe('searchWithHighlights', () => {
     ] as unknown as SiblingGroup[]
     const results = searchWithHighlights(SAMPLE_BOOKMARKS, groupsNoIds, '学习', BOOKMARK_MAP, EMPTY_ATTRS)
     const gX = results.find(r => r.id === 'gX' && r._isGroup)
-    if (gX) {
-      // _buildGroupSearchItems 透传 g.bookmarkIds 即 undefined；结果项须 undefined 而非 null/[]
-      expect(gX!.bookmarkIds).toBeUndefined()
-    }
+    expect(gX).toBeDefined()
+    // _buildGroupSearchItems 透传 g.bookmarkIds 即 undefined；结果项须 undefined 而非 null/[]
+    expect(gX!.bookmarkIds).toBeUndefined()
     // 同轮已有 bookmarkIds 的组不受影响（防优化漏处理导致全 undefined）
     const g2 = results.find(r => r.id === 'g2' && r._isGroup)
     if (g2) expect(g2!.bookmarkIds).toEqual(['b2', 'b3'])
