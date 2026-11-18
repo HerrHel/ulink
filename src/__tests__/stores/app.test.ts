@@ -63,8 +63,8 @@ describe('AppStore', () => {
 
     it('overlays 对象可读写', () => {
       const store = useAppStore()
-      store.overlays.addDropdown = true
-      expect(store.overlays.addDropdown).toBe(true)
+      store.overlays.deadLinks = true
+      expect(store.overlays.deadLinks).toBe(true)
     })
   })
 

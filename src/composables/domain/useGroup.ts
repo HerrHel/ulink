@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { reactive, nextTick } from 'vue';
 import { useDataStore } from '../../stores/data.js';
 import { useUIStore } from '../../stores/ui.js';
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js';
@@ -116,6 +116,19 @@ export function createGroup(catId?: string): string {
   };
   ds.addGroup(g); saveAppData(); toast(t('msg.groupCreated'));
   return g.id;
+}
+
+/**
+ * 新建一张空笔记并直接进入专注编辑，光标落在标题上（起完名接着写正文）。
+ * 新建弹窗的「新建笔记」与命令面板共用此入口，保证两处行为一致。
+ */
+export function createNoteAndFocus(catId?: string): string {
+  const id = createGroup(catId);
+  toggleGroupFocus(id);
+  void nextTick(() => {
+    document.querySelector<HTMLElement>('.focus-title-input')?.focus();
+  });
+  return id;
 }
 
 export async function deleteGroup(dGid: string, skipConfirm?: boolean) {

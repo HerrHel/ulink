@@ -2,7 +2,6 @@
   <div class="settings-tab-panel" data-testid="settings-panel-maintenance">
     <div class="sp-tab-header">
       <h3 class="sp-tab-title">{{ t('settings.tabMaintenance') }}</h3>
-      <p class="sp-tab-desc">{{ t('settings.tabMaintenanceDesc') }}</p>
     </div>
 
     <div class="sp-card">
@@ -10,7 +9,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.checkDeadLinks') }}</span>
-          <span class="sp-row-desc">{{ t('settings.checkDeadLinksDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <button class="btn btn-secondary btn-sm" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">

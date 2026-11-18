@@ -2,7 +2,6 @@
   <div class="settings-tab-panel" data-testid="settings-panel-billing">
     <div class="sp-tab-header">
       <h3 class="sp-tab-title">{{ t('settings.tabBilling') }}</h3>
-      <p class="sp-tab-desc">{{ t('settings.tabBillingDesc') }}</p>
     </div>
 
     <!-- 会员与权益卡片 -->
@@ -14,7 +13,6 @@
           <span class="sp-row-desc" v-if="entitlement.isPaid && entitlement.expiresAt">
             {{ t('settings.expiresAt') }}: {{ formatExpiry(entitlement.expiresAt) }}
           </span>
-          <span class="sp-row-desc" v-else>{{ t('settings.freePlanDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <span class="sp-sync-status" data-testid="lv-entitlement-plan">{{ entitlementLabel }}</span>
@@ -37,7 +35,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ entitlement.isPaid ? t('purchase.renewTitle') : t('purchase.title') }}</span>
-          <span class="sp-row-desc">{{ t('purchase.subtitle') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <button
@@ -53,7 +50,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.activateRedeemCode') }}</span>
-          <span class="sp-row-desc">{{ t('settings.activateRedeemCodeDesc') }}</span>
         </div>
         <div class="sp-row-ctrl sp-redeem-ctrl">
           <input

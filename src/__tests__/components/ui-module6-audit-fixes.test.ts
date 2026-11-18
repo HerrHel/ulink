@@ -36,7 +36,6 @@ import BookmarkModal from '../../components/modals/BookmarkModal.vue'
 import BookmarkCard from '../../components/cards/BookmarkCard.vue'
 import GroupCard from '../../components/cards/GroupCard.vue'
 import CardGrid from '../../components/cards/CardGrid.vue'
-import FilterBar from '../../components/shell/FilterBar.vue'
 import AddPopover from '../../components/overlays/AddPopover.vue'
 import DeadLinksPopover from '../../components/overlays/DeadLinksPopover.vue'
 import AttrDropdown from '../../components/overlays/AttrDropdown.vue'
@@ -425,22 +424,7 @@ describe('模块 6：界面交互、组件体系与 TipTap 编辑器深度审计
     wrapper.unmount()
   })
 
-  // ── 14. FilterBar: 新建书签/组点击后关闭 addDropdown ──
-  it('14. FilterBar: 点击新建书签或组菜单项，自动关闭 addDropdown', async () => {
-    const appStore = useAppStore()
-    const wrapper = mount(FilterBar)
-
-    appStore.overlays.addDropdown = true
-    await nextTick()
-
-    const item = wrapper.find('.ctx-item')
-    if (item.exists()) {
-      await item.trigger('click')
-    }
-
-    expect(appStore.overlays.addDropdown).toBe(false)
-    wrapper.unmount()
-  })
+  // ── 14. 已移除：FilterBar「+」不再有下拉菜单（改为一步新建 + 弹窗内切换），新行为见 AddEntry.test.ts ──
 
   // ── 15. AddPopover: 候选列表排除软删除书签与组 ──
   it('15. AddPopover: 搜索与候选列表自动排除回收站中的软删书签与组', async () => {

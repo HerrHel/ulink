@@ -19,7 +19,7 @@ import { copyToClipboard } from '../utils.js'
 import { ACTIONS, CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../config/constants.js'
 import { visit, openBmModal, deleteBookmarkWithUndo, addSub } from '../composables/domain/useBookmark.js'
 import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../composables/ui/useUI.js'
-import { editGroup, deleteGroup, removeBmFromGroup, createGroup, toggleGroupFocus } from '../composables/domain/useGroup.js'
+import { editGroup, deleteGroup, removeBmFromGroup, createNoteAndFocus, toggleGroupFocus } from '../composables/domain/useGroup.js'
 import { exportCategory } from '../composables/domain/useDataIO.js'
 import { useSpaceMove } from '../composables/domain/useSpaceMove.js'
 import { toggleBatchMode } from '../composables/domain/useBatch.js'
@@ -33,6 +33,13 @@ export interface MenuEntry {
   /** 覆盖默认文案 key（同 action 在不同上下文语义不同，如 EDIT=编辑组名/编辑书签） */
   label?: string
   danger?: boolean
+  /** 分组序号（由 sections() 填充）：右键菜单在相邻可见项分组不同时插入分隔线 */
+  group?: number
+}
+
+/** 按分组声明菜单：每个参数是一组，扁平化后保留 group 序号，形状仍是 MenuEntry[] */
+function sections(...groups: MenuEntry[][]): MenuEntry[] {
+  return groups.flatMap((g, i) => g.map((e) => ({ ...e, group: i })))
 }
 
 /** 默认文案 key 与危险标记（per-type 可用 MENU_RULES/LONGPRESS_RULES 的 label 覆盖） */
@@ -62,55 +69,37 @@ export const MENU_ITEMS: Record<string, { label: string; danger?: boolean }> = {
   [ACTIONS.AI_CHAT]: { label: 'ctx.aiChat' },
 }
 
-/** 右键菜单规则（PC） */
+/** 右键菜单规则（PC）：分组顺序 = 常用操作 → 整理 → AI → 其他 → 危险操作 */
 export const MENU_RULES: Record<string, MenuEntry[]> = {
-  card: [
-    { action: ACTIONS.COPY_URL },
-    { action: ACTIONS.AI_CHAT },
-    { action: ACTIONS.ADD_SUB },
-    { action: ACTIONS.AI_ENRICH },
-    { action: ACTIONS.EDIT },
-    { action: ACTIONS.HISTORY },
-    { action: ACTIONS.PIN },
-    { action: ACTIONS.MOVE_TO_CAT },
-    { action: ACTIONS.MOVE_TO_SPACE },
-    { action: ACTIONS.MULTI_SELECT },
-    { action: ACTIONS.DETAIL },
-    { action: ACTIONS.DELETE },
-  ],
-  sub: [
-    { action: ACTIONS.VISIT, label: 'ctx.detail' },
-    { action: ACTIONS.EDIT },
-    { action: ACTIONS.DELETE },
-  ],
-  cat: [
-    { action: ACTIONS.EDIT, label: 'ctx.rename' },
-    { action: ACTIONS.SHARE_CATEGORY },
-    { action: ACTIONS.EXPORT_CATEGORY },
-    { action: ACTIONS.MOVE_TO_SPACE },
-    { action: ACTIONS.DELETE },
-  ],
-  attr: [
-    { action: ACTIONS.RENAME_ATTR, label: 'ctx.renameAttr' },
-    { action: ACTIONS.DELETE },
-  ],
-  group: [
-    { action: ACTIONS.DETAIL },
-    { action: ACTIONS.AI_CHAT },
-    { action: ACTIONS.EDIT, label: 'ctx.editGroupName' },
-    { action: ACTIONS.ADD_TO_GROUP },
-    { action: ACTIONS.HISTORY },
-    { action: ACTIONS.PIN },
-    { action: ACTIONS.MOVE_TO_CAT },
-    { action: ACTIONS.MOVE_TO_SPACE },
-    { action: ACTIONS.SHARE_GROUP },
-    { action: ACTIONS.DELETE, label: 'ctx.deleteGroup' },
-  ],
-  'group-card': [
-    { action: ACTIONS.VISIT, label: 'ctx.detail' },
-    { action: ACTIONS.EDIT, label: 'ctx.editBookmark' },
-    { action: ACTIONS.DELETE, label: 'ctx.removeFromGroup' },
-  ],
+  card: sections(
+    [{ action: ACTIONS.COPY_URL }, { action: ACTIONS.EDIT }, { action: ACTIONS.ADD_SUB }],
+    [{ action: ACTIONS.PIN }, { action: ACTIONS.MOVE_TO_CAT }, { action: ACTIONS.MOVE_TO_SPACE }],
+    [{ action: ACTIONS.AI_CHAT }, { action: ACTIONS.AI_ENRICH }],
+    [{ action: ACTIONS.HISTORY }, { action: ACTIONS.DETAIL }, { action: ACTIONS.MULTI_SELECT }],
+    [{ action: ACTIONS.DELETE }],
+  ),
+  sub: sections(
+    [{ action: ACTIONS.VISIT, label: 'ctx.detail' }, { action: ACTIONS.EDIT }],
+    [{ action: ACTIONS.DELETE }],
+  ),
+  cat: sections(
+    [{ action: ACTIONS.EDIT, label: 'ctx.rename' }, { action: ACTIONS.SHARE_CATEGORY }, { action: ACTIONS.EXPORT_CATEGORY }, { action: ACTIONS.MOVE_TO_SPACE }],
+    [{ action: ACTIONS.DELETE }],
+  ),
+  attr: sections(
+    [{ action: ACTIONS.RENAME_ATTR, label: 'ctx.renameAttr' }],
+    [{ action: ACTIONS.DELETE }],
+  ),
+  group: sections(
+    [{ action: ACTIONS.DETAIL }, { action: ACTIONS.EDIT, label: 'ctx.editGroupName' }, { action: ACTIONS.ADD_TO_GROUP }],
+    [{ action: ACTIONS.PIN }, { action: ACTIONS.MOVE_TO_CAT }, { action: ACTIONS.MOVE_TO_SPACE }, { action: ACTIONS.SHARE_GROUP }],
+    [{ action: ACTIONS.AI_CHAT }, { action: ACTIONS.HISTORY }],
+    [{ action: ACTIONS.DELETE, label: 'ctx.deleteGroup' }],
+  ),
+  'group-card': sections(
+    [{ action: ACTIONS.VISIT, label: 'ctx.detail' }, { action: ACTIONS.EDIT, label: 'ctx.editBookmark' }],
+    [{ action: ACTIONS.DELETE, label: 'ctx.removeFromGroup' }],
+  ),
   'rail-empty': [{ action: ACTIONS.ADD_CAT }],
   'grid-empty': [
     { action: ACTIONS.ADD_BOOKMARK },
@@ -336,7 +325,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
   }
   if (type === 'grid-empty') {
     if (action === ACTIONS.ADD_BOOKMARK) openBmModal()
-    if (action === ACTIONS.ADD_GROUP) createGroup()
+    if (action === ACTIONS.ADD_GROUP) createNoteAndFocus()
     if (action === ACTIONS.MULTI_SELECT) toggleBatchMode()
     return
   }

@@ -10,11 +10,10 @@ import { setActivePinia, createPinia } from 'pinia'
 // 间接覆盖为零，本护栏直锁其"关 add 弹窗时 overlay=false + addToGid=null 双状态原子重置"契约。
 
 // 稳定 mockUI 承载 closeAddBmPopover 直接读写的 ui 状态字段（overlays.addPopover + addToGid）
-// 及"不触碰"断言需保留的兄弟 overlay 字段（addDropdown/deadLinks/feedback）与模式字段（batchMode）。
+// 及"不触碰"断言需保留的兄弟 overlay 字段（deadLinks/feedback）与模式字段（batchMode）。
 const mockUI = {
   overlays: {
     addPopover: false as boolean,
-    addDropdown: false as boolean,
     deadLinks: false as boolean,
     feedback: false as boolean,
   },
@@ -68,7 +67,6 @@ describe('d1-71 closeAddBmPopover — 关 add 弹窗 overlay+addToGid 双状态�
     setActivePinia(createPinia())
     // 复位 mockUI 至干净态
     mockUI.overlays.addPopover = false
-    mockUI.overlays.addDropdown = false
     mockUI.overlays.deadLinks = false
     mockUI.overlays.feedback = false
     mockUI.addToGid = null
@@ -117,17 +115,15 @@ describe('d1-71 closeAddBmPopover — 关 add 弹窗 overlay+addToGid 双状态�
     expect(mockUI.addToGid).toBe(null)
   })
 
-  it('F. 只动 addPopover 一个 overlay 子键，不波及兄弟 overlay（addDropdown/deadLinks/feedback 维持原值）', () => {
+  it('F. 只动 addPopover 一个 overlay 子键，不波及兄弟 overlay（deadLinks/feedback 维持原值）', () => {
     // 兄弟 overlay 设为 true 模拟"其他弹层开着"场景
     mockUI.overlays.addPopover = true
-    mockUI.overlays.addDropdown = true
     mockUI.overlays.deadLinks = true
     mockUI.overlays.feedback = true
     mockUI.addToGid = 'grp-x'
     closeAddBmPopover()
     expect(mockUI.overlays.addPopover).toBe(false)
-    // 三个兄弟 overlay 不被误关
-    expect(mockUI.overlays.addDropdown).toBe(true)
+    // 两个兄弟 overlay 不被误关
     expect(mockUI.overlays.deadLinks).toBe(true)
     expect(mockUI.overlays.feedback).toBe(true)
   })

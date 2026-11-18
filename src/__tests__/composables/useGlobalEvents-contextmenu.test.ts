@@ -33,7 +33,6 @@ vi.mock('../../stores/overlay.js', () => ({
 }))
 
 vi.mock('../../composables/ui/useUI.js', () => ({
-  hideAddDropdown: vi.fn(),
 }))
 
 vi.mock('../../utils.js', () => ({

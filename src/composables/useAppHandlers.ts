@@ -6,9 +6,8 @@ import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { saveAppData } from '../stores/app.js'
 import { useAttrDropdownStore } from '../stores/attrDropdown.js'
-import { createGroup, exitGroupFocus, editGroup, searchInFocusedGroup } from './domain/useGroup.js'
+import { exitGroupFocus, editGroup, searchInFocusedGroup } from './domain/useGroup.js'
 import { openBmModal } from './domain/useBookmark.js'
-import { hideAddDropdown } from './ui/useUI.js'
 import { showBatchMovePopover, batchDelete } from './domain/useBatch.js'
 import { importData } from './domain/useDataIO.js'
 import { performUndo, performRedo } from './domain/useUndo.js'
@@ -47,8 +46,7 @@ export function useAppHandlers() {
     onFocusUndo() { if (ui.focusedGroupId) performUndo(ui.focusedGroupId) },
     onFocusRedo() { if (ui.focusedGroupId) performRedo(ui.focusedGroupId) },
     onToggleAttrFilter() { useAttrDropdownStore().toggle() },
-    onAddBookmark() { hideAddDropdown(); openBmModal() },
-    onAddGroup() { hideAddDropdown(); createGroup() },
+    onAddBookmark() { openBmModal() },
     onBatchMove() { showBatchMovePopover() },
     onBatchDelete() { batchDelete() },
     onImportFile(e: Event) { const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return; importData(file); (e.target as HTMLInputElement).value = '' },

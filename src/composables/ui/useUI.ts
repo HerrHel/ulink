@@ -92,6 +92,5 @@ export function closeAttrModal() { useUIStore().modals.attribute = false }
 
 export function deleteAttribute(id: string) { useDataStore().deleteAttribute(id); saveAppData() }
 
-// ── Settings / Add Dropdown ──
+// ── Settings ──
 export function hideSettingsMenu() { useUIStore().panels.settings = false }
-export function hideAddDropdown() { useUIStore().overlays.addDropdown = false }

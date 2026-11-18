@@ -2,7 +2,6 @@
   <div class="settings-tab-panel" data-testid="settings-panel-ai">
     <div class="sp-tab-header">
       <h3 class="sp-tab-title">{{ t('settings.tabAi') }}</h3>
-      <p class="sp-tab-desc">{{ t('settings.tabAiDesc') }}</p>
     </div>
 
     <div class="sp-card" data-testid="lv-search-fill-section">
@@ -21,7 +20,6 @@
       <div class="sp-card-row" @click="onToggleAiRail" style="cursor: pointer;">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.aiRail') }}</span>
-          <span class="sp-row-desc">{{ t('settings.aiRailHint') }}</span>
         </div>
         <div class="sp-row-ctrl" data-testid="lv-ai-rail-toggle">
           <div class="sp-toggle-pill" :class="{ active: uiStore.aiRailEnabled }">
@@ -49,7 +47,6 @@
             {{ t('settings.semanticSearch') }}
             <span class="sp-pro-tag">PRO</span>
           </span>
-          <span class="sp-row-desc">{{ t('settings.semanticSearchHint') }}</span>
         </div>
         <div class="sp-row-ctrl" data-testid="lv-semantic-search-toggle">
           <div class="sp-toggle-pill" :class="{ active: uiStore.semanticSearchEnabled && isPro }">

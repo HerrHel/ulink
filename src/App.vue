@@ -10,7 +10,7 @@
     <div class="panel-main-inner">
       <AppHeader @toggle-rail="toggleRail" @exit-focus="handlers.onExitGroupFocus" @focus-title-change="handlers.onFocusTitleChange" @toggle-detail="toggleDetailPanel" @search="handlers.onSearch" @focus-edit-group="handlers.onFocusEditGroup" @focus-share-group="handlers.onFocusShareGroup" />
       <div v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" class="filter-bar-wrap">
-        <FilterBar @exit-focus="handlers.onExitGroupFocus" @focus-add-bm="handlers.onFocusAddBm" @focus-edit-group="handlers.onFocusEditGroup" @focus-undo="handlers.onFocusUndo" @focus-redo="handlers.onFocusRedo" @toggle-attr-filter="handlers.onToggleAttrFilter" @add-bookmark="handlers.onAddBookmark" @add-group="handlers.onAddGroup" />
+        <FilterBar @exit-focus="handlers.onExitGroupFocus" @focus-add-bm="handlers.onFocusAddBm" @focus-edit-group="handlers.onFocusEditGroup" @focus-undo="handlers.onFocusUndo" @focus-redo="handlers.onFocusRedo" @toggle-attr-filter="handlers.onToggleAttrFilter" @add-bookmark="handlers.onAddBookmark" />
         <BatchBar @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       </div>
       <BatchBottom v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />

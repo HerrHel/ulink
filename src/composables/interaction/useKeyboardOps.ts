@@ -8,7 +8,7 @@ import { performUndo, performRedo } from '../domain/useUndo.js'
 import { EditorManager } from '../../lib/editor.js'
 import { closeBmModal, openBmModal } from '../domain/useBookmark.js'
 import { closeGroupEdit, exitGroupFocus, closeAddBmPopover } from '../domain/useGroup.js'
-import { closeCatModal, closeAttrModal, closeQuickLook, hideSettingsMenu, hideAddDropdown, toggleDetailPanel } from '../ui/useUI.js'
+import { closeCatModal, closeAttrModal, closeQuickLook, hideSettingsMenu, toggleDetailPanel } from '../ui/useUI.js'
 import { toggleBatchMode, selectAllBatch, batchDelete } from '../domain/useBatch.js'
 import { useToastStore } from '../../stores/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
@@ -277,7 +277,7 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     if (ui.modals.vaultUnlock) ui.modals.vaultUnlock = false
     if (ui.modals.vaultSetup) ui.modals.vaultSetup = false
     if (ui.modals.e2eCanaryConflict) ui.modals.e2eCanaryConflict = false
-    useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
+    useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover()
     if (ui.panels.trash) ui.panels.trash = false
     if (ui.overlays.deadLinks) ui.overlays.deadLinks = false
     if (ui.panels.history) ui.panels.history = false

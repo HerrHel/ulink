@@ -6,7 +6,6 @@ import { isMobile } from '../utils.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { useAttrDropdownStore } from '../stores/attrDropdown.js'
 import { useMentionStore } from '../stores/overlay.js'
-import { hideAddDropdown } from './ui/useUI.js'
 
 interface GlobalEventsOptions {
   onOpenDetail?: (id: string) => void
@@ -64,7 +63,6 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
 
     // Close dropdowns when clicking outside
     if (!(e.target as HTMLElement).closest('.attr-filter-wrap')) useAttrDropdownStore().close()
-    if (!(e.target as HTMLElement).closest('.add-wrap')) hideAddDropdown()
     if (!(e.target as HTMLElement).closest('#mentionDrop, .group-body')) useMentionStore().hide()
 
     // Inline card interactions

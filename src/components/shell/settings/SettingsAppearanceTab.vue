@@ -2,7 +2,6 @@
   <div class="settings-tab-panel" data-testid="settings-panel-appearance">
     <div class="sp-tab-header">
       <h3 class="sp-tab-title">{{ t('settings.tabAppearance') }}</h3>
-      <p class="sp-tab-desc">{{ t('settings.tabAppearanceDesc') }}</p>
     </div>
 
     <div class="sp-card">
@@ -10,15 +9,17 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.theme') }}</span>
-          <span class="sp-row-desc">{{ t('settings.themeDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-seg">
-            <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click.stop="onSetThemeColor('light', $event)">
+            <button class="sp-seg-btn" data-testid="lv-theme-light" :class="{ active: uiStore.themeMode !== 'auto' && uiStore.themeColor === 'light' }" @click.stop="onSetThemeColor('light', $event)">
               <span aria-hidden="true" v-html="I.sun" class="sp-icon"></span>{{ t('settings.themeLight') }}
             </button>
-            <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click.stop="onSetThemeColor('dark', $event)">
+            <button class="sp-seg-btn" data-testid="lv-theme-dark" :class="{ active: uiStore.themeMode !== 'auto' && uiStore.themeColor === 'dark' }" @click.stop="onSetThemeColor('dark', $event)">
               <span aria-hidden="true" v-html="I.moon" class="sp-icon"></span>{{ t('settings.themeDark') }}
+            </button>
+            <button class="sp-seg-btn" data-testid="lv-theme-auto" :class="{ active: uiStore.themeMode === 'auto' }" @click.stop="onSetThemeAuto">
+              <span aria-hidden="true" v-html="I.monitor" class="sp-icon"></span>{{ t('settings.themeAuto') }}
             </button>
           </div>
         </div>
@@ -26,23 +27,11 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.designStyle') }}</span>
-          <span class="sp-row-desc">{{ t('settings.designStyleDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-seg">
             <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click.stop="onSetThemeStyle('premium')">{{ t('settings.themePremium') }}</button>
             <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click.stop="onSetThemeStyle('comfortable')">{{ t('settings.themeComfortable') }}</button>
-          </div>
-        </div>
-      </div>
-      <div class="sp-card-row" @click.stop="onToggleAutoTheme" style="cursor: pointer;">
-        <div class="sp-row-meta">
-          <span class="sp-row-title">{{ t('settings.followSystem') }}</span>
-          <span class="sp-row-desc">{{ t('settings.followSystemDesc') }}</span>
-        </div>
-        <div class="sp-row-ctrl">
-          <div class="sp-toggle-pill" :class="{ active: uiStore.themeMode === 'auto' }">
-            <span class="sp-switch"></span>
           </div>
         </div>
       </div>
@@ -53,7 +42,6 @@
       <div class="sp-card-row" v-if="!uiStore.isMobile">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.layout') }}</span>
-          <span class="sp-row-desc">{{ t('settings.layoutDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-seg">
@@ -66,7 +54,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.sort') }}</span>
-          <span class="sp-row-desc">{{ t('settings.sortDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-seg sp-seg-wrap">
@@ -77,7 +64,6 @@
       <div class="sp-card-row" @click="onToggleGroupsOnTop" style="cursor: pointer;">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.groupsOnTop') }}</span>
-          <span class="sp-row-desc">{{ t('settings.groupsOnTopDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-toggle-pill" :class="{ active: uiStore.groupsOnTop }">
@@ -88,11 +74,9 @@
     </div>
 
     <div class="sp-card" data-testid="lv-lang-switch">
-      <div class="sp-card-head">{{ t('settings.language') }}</div>
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.language') }}</span>
-          <span class="sp-row-desc">{{ t('settings.languageDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-seg">
@@ -133,8 +117,9 @@ function onSetThemeStyle(style: ThemeStyle) {
   uiStore.themeStyle = style
 }
 
-function onToggleAutoTheme() {
-  uiStore.toggleAutoTheme()
+/** 三选一的「自动」：已是自动则不动（toggleAutoTheme 是开关语义，重复点击会切回手动） */
+function onSetThemeAuto() {
+  if (uiStore.themeMode !== 'auto') uiStore.toggleAutoTheme()
 }
 
 function onSetLayout(mode: LayoutMode) {

@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   editGroup: vi.fn(),
   deleteGroup: vi.fn(),
   removeBmFromGroup: vi.fn(),
-  createGroup: vi.fn(),
+  createNoteAndFocus: vi.fn(),
   toggleGroupFocus: vi.fn(),
   shareGroup: vi.fn(),
   shareCategory: vi.fn(),
@@ -50,7 +50,7 @@ vi.mock('../../composables/domain/useGroup.js', () => ({
   editGroup: mocks.editGroup,
   deleteGroup: mocks.deleteGroup,
   removeBmFromGroup: mocks.removeBmFromGroup,
-  createGroup: mocks.createGroup,
+  createNoteAndFocus: mocks.createNoteAndFocus,
   toggleGroupFocus: mocks.toggleGroupFocus,
 }))
 vi.mock('../../composables/domain/useDataShare.js', () => ({
@@ -131,6 +131,24 @@ describe('menuConfig — 规则结构', () => {
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.SHARE_GROUP)).toBe(true)
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.HISTORY)).toBe(true)
     expect(t(MENU_RULES.group.find(e => e.action === ACTIONS.DELETE)?.label ?? '')).toBe('删除笔记')
+  })
+
+  it('列表空白处右键「添加笔记」：新建后直接进入编辑（与 + 弹窗、命令面板同一入口）', () => {
+    dispatchMenuAction('grid-empty', ACTIONS.ADD_GROUP, '')
+    expect(mocks.createNoteAndFocus).toHaveBeenCalledTimes(1)
+  })
+
+  it('右键菜单分组：同组项连续、组号递增，删除类操作单独成最后一组', () => {
+    for (const type of ['card', 'sub', 'cat', 'attr', 'group', 'group-card']) {
+      const rules = MENU_RULES[type]
+      const groups = rules.map(e => e.group)
+      expect(groups.every(g => typeof g === 'number'), type).toBe(true)
+      // 组号单调不减 = 同组项连续，不会出现 A-B-A 的交错
+      expect(groups.every((g, i) => i === 0 || g! >= groups[i - 1]!), type).toBe(true)
+      const last = rules[rules.length - 1]
+      expect(last.action, type).toBe(ACTIONS.DELETE)
+      expect(rules.filter(e => e.group === last.group), type).toHaveLength(1)
+    }
   })
 
   it('长按 card 子集含 EXPAND（条件项）+ COPY_URL，无 HISTORY/MULTI_SELECT', () => {

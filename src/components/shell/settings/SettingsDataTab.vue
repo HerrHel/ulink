@@ -2,7 +2,6 @@
   <div class="settings-tab-panel" data-testid="settings-panel-data">
     <div class="sp-tab-header">
       <h3 class="sp-tab-title">{{ t('settings.tabData') }}</h3>
-      <p class="sp-tab-desc">{{ t('settings.tabDataDesc') }}</p>
     </div>
 
     <div class="sp-card">
@@ -21,7 +20,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.trash') }}</span>
-          <span class="sp-row-desc">{{ t('settings.trashDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <button class="btn btn-secondary btn-sm" @click.stop="onOpenTrash">
@@ -59,7 +57,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.export') }}</span>
-          <span class="sp-row-desc">{{ t('settings.exportDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-export-dropdown" @click.stop>

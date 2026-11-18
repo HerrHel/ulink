@@ -1,7 +1,7 @@
 <template>
   <div class="ctx-menu" id="ctxMenu" v-show="ctx.open && visibleItems.length > 0" role="menu" :aria-label="t('ctx.menu')"
        :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
-    <template v-for="item in visibleItems" :key="item.action">
+    <template v-for="(item, i) in visibleItems" :key="item.divider ? 'div-' + i : item.action">
       <div v-if="item.divider" class="ctx-divider" role="separator"></div>
       <button v-else class="ctx-item" :class="{ 'ctx-danger': item.danger }"
               role="menuitem" :data-action="item.action" @click="onItemClick(item.action)">
@@ -51,6 +51,8 @@ const visibleItems = computed(() => {
   const rules = MENU_RULES[ctx.type] || []
   const dataStore = useDataStore()
   const items: Array<{ action: string; text: string; danger?: boolean; divider?: boolean }> = []
+  // 上一个「实际显示」项的分组：按可见项比较，被过滤掉的项不会留下孤立或连续的分隔线
+  let lastGroup: number | undefined
   for (const entry of rules) {
     // 私密空间内不显示「移入私密空间」（已经在私密空间）
     if (entry.action === ACTIONS.MOVE_TO_SPACE && uiStore.curSpace !== 'main') continue
@@ -72,6 +74,9 @@ const visibleItems = computed(() => {
           : false
       text = isPinned ? t('ctx.unpin') : t('ctx.pin')
     }
+    const group = entry.group ?? 0
+    if (lastGroup !== undefined && group !== lastGroup) items.push({ action: '', text: '', divider: true })
+    lastGroup = group
     items.push({ action: entry.action, text, danger: entry.danger ?? MENU_ITEMS[entry.action]?.danger })
   }
   return items

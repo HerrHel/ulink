@@ -2,7 +2,12 @@
   <div class="modal-mask" data-testid="lv-bm-modal" role="dialog" aria-modal="true" :aria-label="t('modal.bookmark.ariaLabel')" :class="{ open: bmForm.isOpen, 'has-child-modal': childModalOpen }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal">
       <div class="modal-head">
-        <h2>{{ bmForm.isEdit ? t('ctx.editBookmark') : bmForm.addToGroupMode ? t('modal.bookmark.addToGroupNew') : bmForm.parentId ? t('modal.bookmark.addChildBm') : t('ctx.addBookmark') }}</h2>
+        <!-- 普通新建：标题即类型切换（新建书签 / 新建笔记），不另加控件 -->
+        <h2 v-if="isPlainCreate" class="bm-type-tabs">
+          <button type="button" class="bm-type-tab active" aria-pressed="true" data-testid="lv-bm-type-bookmark">{{ t('filter.newBookmark') }}</button>
+          <button type="button" class="bm-type-tab" aria-pressed="false" data-testid="lv-bm-type-note" @click="onSwitchToNote">{{ t('filter.newGroup') }}</button>
+        </h2>
+        <h2 v-else>{{ bmForm.isEdit ? t('ctx.editBookmark') : bmForm.addToGroupMode ? t('modal.bookmark.addToGroupNew') : t('modal.bookmark.addChildBm') }}</h2>
         <button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button>
       </div>
       <div class="modal-body">
@@ -225,6 +230,8 @@ import ChildBookmarkEditModal from './ChildBookmarkEditModal.vue'
 import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLogic, e2eHintPassword as e2eHintPasswordLogic } from './e2eHintText.js'
 import { selectableParents, selectableChildren, sortedParents, filterParents } from './bookmarkFormFilters.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
+import { createNoteAndFocus } from '../../composables/domain/useGroup.js'
+import { showConfirm } from '../../lib/toast.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -432,6 +439,20 @@ function toggleAttr(attrId: string, event: Event) {
 }
 
 function onClose() { closeBmModal() }
+
+/** 普通新建（非编辑 / 非子书签 / 非加入笔记）才显示「书签 / 笔记」切换 */
+const isPlainCreate = computed(() => !bmForm.isEdit && !bmForm.addToGroupMode && !bmForm.parentId)
+/** 表单里是否已有用户填写的内容（分类有默认值，不算） */
+function hasDraft(): boolean {
+  return [bmForm.url, bmForm.title, bmForm.username, bmForm.password, bmForm.notes, bmForm.icon, bmForm.iconDark]
+    .some(v => typeof v === 'string' && v.trim() !== '')
+}
+/** 切到笔记：已填内容会丢，先确认；随后关闭弹窗，新建笔记并直接进入编辑 */
+async function onSwitchToNote() {
+  if (hasDraft() && !(await showConfirm(t('modal.bookmark.discardToNote')))) return
+  closeBmModal()
+  createNoteAndFocus()
+}
 const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 async function onSave() {
   if (saving.value || isBmSaving()) return

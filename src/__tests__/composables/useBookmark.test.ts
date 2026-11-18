@@ -93,7 +93,6 @@ const mockUI = {
     shortcutHelp: false,
   },
   overlays: {
-    addDropdown: false,
     addPopover: false,
     deadLinks: false,
   },

@@ -5,6 +5,7 @@ export const modalsZh = {
       ariaLabel: '书签编辑',
       addToGroupNew: '新建书签并添加到笔记',
       addChildBm: '添加子书签',
+      discardToNote: '已填写的书签内容不会保存，确定改为新建笔记？',
       editChildBm: '编辑子书签',
       deleteChildBm: '删除子书签',
       update: '更新',

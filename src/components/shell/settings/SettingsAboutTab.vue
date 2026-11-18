@@ -2,7 +2,6 @@
   <div class="settings-tab-panel" data-testid="settings-panel-about">
     <div class="sp-tab-header">
       <h3 class="sp-tab-title">{{ t('settings.tabAbout') }}</h3>
-      <p class="sp-tab-desc">{{ t('settings.tabAboutDesc') }}</p>
     </div>
 
     <div class="sp-card">
@@ -22,7 +21,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.shortcutHelp') }}</span>
-          <span class="sp-row-desc">{{ t('settings.shortcutHelpDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <button class="btn btn-secondary btn-sm" @click.stop="onOpenShortcutHelp">
@@ -33,7 +31,6 @@
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.feedback') }}</span>
-          <span class="sp-row-desc">{{ t('settings.feedbackDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <button class="btn btn-primary btn-sm" @click.stop="onFeedback">{{ t('settings.feedback') }}</button>
@@ -42,11 +39,9 @@
     </div>
 
     <div class="sp-card">
-      <div class="sp-card-head">{{ t('settings.legalDocs') }}</div>
       <div class="sp-card-row" @click="showLegal = !showLegal" style="cursor: pointer;" data-testid="lv-legal-toggle">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.legalDocs') }}</span>
-          <span class="sp-row-desc">{{ t('settings.legalDocsDesc') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <span class="sp-sync-status">{{ showLegal ? '' : t('settings.legalDocsView') }}</span>

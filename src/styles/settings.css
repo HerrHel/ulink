@@ -163,11 +163,7 @@
 }
 .sp-tab-title{
   font-size:var(--fs-xl);font-weight:700;color:var(--text);
-  margin:0 0 4px;letter-spacing:-0.01em;line-height:1.3;
-}
-.sp-tab-desc{
-  font-size:var(--fs-sm);color:var(--text-muted);
-  margin:0;line-height:1.45;
+  margin:0;letter-spacing:-0.01em;line-height:1.3;
 }
 
 /* ==================== SETTING CARD SYSTEM (LINEAR STYLE) ==================== */
@@ -901,18 +897,9 @@
     animation:none;
   }
 
-  /* 移动端顶栏已有子分类标题，隐藏正文冗余大标题，仅保留简要说明 */
+  /* 移动端顶栏已有子分类标题，正文标题区整块隐藏 */
   .sp-tab-header{
-    margin:2px 2px 14px;
-  }
-  .sp-tab-title{
     display:none !important;
-  }
-  .sp-tab-desc{
-    font-size:var(--fs-xs);
-    color:var(--text-muted);
-    line-height:1.45;
-    margin:0;
   }
 
   /* ── 移动端内容区：充足舒服的 14px 外边距与安全区 ── */

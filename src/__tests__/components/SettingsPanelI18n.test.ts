@@ -55,9 +55,9 @@ describe('SettingsPanel.vue — 英文模式下设置界面国际化', () => {
     expect(tabLabels).toContain('Data & Backup')
     expect(tabLabels).toContain('About & Help')
 
-    // 导言段落 (Account Tab)
-    const tabDesc = wrapper.find('.sp-tab-desc')
-    expect(tabDesc.text()).toBe('Manage your cloud account, sync status, and end-to-end encryption')
+    // 标签页只有标题，不再有导言段落 (Account Tab)
+    expect(wrapper.find('.sp-tab-title').text()).toBe('Account & Security')
+    expect(wrapper.find('.sp-tab-desc').exists()).toBe(false)
 
     // 切换到外观页 Appearance
     const appearanceTab = wrapper.findAll('.settings-nav-item')[1]

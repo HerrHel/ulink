@@ -2,7 +2,6 @@
   <div class="settings-tab-panel" data-testid="settings-panel-account">
     <div class="sp-tab-header">
       <h3 class="sp-tab-title">{{ t('settings.tabAccount') }}</h3>
-      <p class="sp-tab-desc">{{ t('settings.tabAccountDesc') }}</p>
     </div>
 
     <!-- 账号与同步卡片 -->
@@ -146,7 +145,6 @@
         <div class="sp-card-row">
           <div class="sp-row-meta">
             <span class="sp-row-title">{{ t('settings.setPassword') }}</span>
-            <span class="sp-row-desc">{{ t('settings.setPasswordDesc') }}</span>
           </div>
           <div class="sp-row-ctrl">
             <button class="btn btn-secondary btn-sm" id="spSetPasswordBtn" @click.stop="onOpenSetPassword">
@@ -173,7 +171,6 @@
         <div class="sp-card-row">
           <div class="sp-row-meta">
             <span class="sp-row-title">{{ t('settings.loginAndSync') }}</span>
-            <span class="sp-row-desc">{{ t('settings.loginHint') }}</span>
           </div>
           <div class="sp-row-ctrl">
             <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">{{ t('settings.loginRegister') }}</button>
@@ -184,7 +181,6 @@
 
     <!-- 端到端加密卡片 -->
     <div class="sp-card">
-      <div class="sp-card-head">{{ t('userPopover.e2eTitle') }}</div>
       <div class="sp-card-row">
         <div class="sp-row-meta">
           <div class="sp-row-title-with-badge">

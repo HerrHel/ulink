@@ -8,6 +8,7 @@ export const modalsEn = {
       ariaLabel: 'Edit bookmark',
       addToGroupNew: 'New bookmark and add to note',
       addChildBm: 'Add sub-bookmark',
+      discardToNote: 'What you entered for this bookmark won’t be saved. Create a note instead?',
       editChildBm: 'Edit sub-bookmark',
       deleteChildBm: 'Delete sub-bookmark',
       update: 'Update',

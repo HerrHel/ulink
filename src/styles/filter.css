@@ -11,7 +11,6 @@
 }
 .filter-tools{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
 .add-wrap{display:flex;align-items:center;position:relative}
-.add-wrap .add-dropdown{position:absolute;top:calc(100% + 4px);right:0}
 /* Attribute filter */
 .attr-filter-wrap{display:flex;align-items:center;gap:8px;position:relative;flex:1;min-width:0}
 #filterTools{flex-wrap:nowrap;min-width:0;order:1}

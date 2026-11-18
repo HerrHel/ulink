@@ -13,7 +13,7 @@ const mockUI: any = {
   curCat: 'all',
   focusedGroupId: null,
   panels: { settings: false, detail: false, trash: false, history: false, rail: false, shortcutHelp: false },
-  overlays: { addDropdown: false, addPopover: false, deadLinks: false, feedback: false },
+  overlays: { addPopover: false, deadLinks: false, feedback: false },
   modals: { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false, quickLook: false },
 }
 vi.mock('../../stores/ui.js', () => ({ useUIStore: () => mockUI }))
@@ -45,7 +45,6 @@ vi.mock('../../composables/ui/useUI.js', () => ({
   closeQuickLook: closeQuickLookMock,
   hideSettingsMenu: vi.fn(),
   closeAddBmPopover: vi.fn(),
-  hideAddDropdown: vi.fn(),
   toggleDetailPanel: toggleDetailPanelMock,
 }))
 
@@ -100,7 +99,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   // 重置面板全部关闭 + 重建子对象避免跨测试引用同一实例污染
   mockUI.panels = { settings: false, detail: false, trash: false, history: false, rail: false, shortcutHelp: false }
-  mockUI.overlays = { addDropdown: false, addPopover: false, deadLinks: false, feedback: false }
+  mockUI.overlays = { addPopover: false, deadLinks: false, feedback: false }
   mockUI.modals = { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false }
   mockUI.curCat = 'all'
   mockUI.focusedGroupId = null
@@ -311,7 +310,7 @@ describe('d1-95 captureNavState 14 字段完整快照契约 + 可选链防御 + 
   it('全开态 → 15 字段逐字段真实映射 modal/panel/overlay 三组', () => {
     mockUI.modals = { bookmark: true, category: true, attribute: true, groupEdit: true, e2eSetup: false, e2eUnlock: false, setupGuide: false, quickLook: true }
     mockUI.panels = { settings: true, detail: true, trash: true, history: true, rail: false, shortcutHelp: true }
-    mockUI.overlays = { addDropdown: false, addPopover: false, deadLinks: true, feedback: true }
+    mockUI.overlays = { addPopover: false, deadLinks: true, feedback: true }
     mockUI.curCat = 'cat-a'
     mockUI.focusedGroupId = 'g2'
     const s = captureNavState()
@@ -329,7 +328,7 @@ describe('d1-95 captureNavState 14 字段完整快照契约 + 可选链防御 + 
     expect(s.feedback).toBe(true)       // overlays.feedback
     expect(s.curCat).toBe('cat-a')
     expect(s.focusedGroupId).toBe('g2')
-    // 非 NavState 字段（rail/addDropdown 等）不该泄漏进快照
+    // 非 NavState 字段（rail 等）不该泄漏进快照
     expect(Object.keys(s).sort()).toEqual(['attr','bm','cat','curCat','deadLinks','detailPanelOpen','feedback','focusedGroupId','groupEdit','history','quickLook','settings','shortcutHelp','trash'])
   })
 

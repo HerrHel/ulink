@@ -35,7 +35,7 @@ import { searchWithHighlights } from '../../lib/search.js'
 import { I } from '../../config/icons.js'
 import { openBookmark } from '../../composables/domain/useBookmark.js'
 import { openBmModal } from '../../composables/domain/useBookmark.js'
-import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
+import { toggleGroupFocus, createNoteAndFocus } from '../../composables/domain/useGroup.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { toast } from '../../lib/toast.js'
@@ -71,7 +71,7 @@ const auth = useAuth()
 // 命令项随语言切换重建（computed 依赖 locale ref，切换后重新求值）
 const commands = computed<CommandItem[]>(() => [
   { id: 'new-bm', label: t('filter.newBookmark'), icon: I.plus, shortcut: 'Ctrl+N', section: 'command', action() { close(); openBmModal() } },
-  { id: 'new-group', label: t('filter.newGroup'), icon: I.note, section: 'command', action() { close(); ui.modals.groupEdit = true } },
+  { id: 'new-group', label: t('filter.newGroup'), icon: I.note, section: 'command', action() { close(); createNoteAndFocus() } },
   { id: 'import', label: t('cmd.importData'), icon: I.import, section: 'command', action() { close(); document.getElementById('importFile')?.click() } },
   { id: 'export', label: t('cmd.exportData'), icon: I.export, section: 'command', action() { close(); pushNavState(); ui.panels.settings = true } },
   { id: 'sync', label: t('cmd.syncCloud'), icon: I.cloud, section: 'command', async action() { close(); if (!auth.isLoggedIn) { toast(t('cmd.loginFirst'), false); auth.authModalOpen = true; return } toast(t('sync.startSync')); await sync.fullSync() } },
