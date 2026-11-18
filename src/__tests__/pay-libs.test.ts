@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createRequire } from 'node:module'
-import { createCipheriv, randomBytes } from 'node:crypto'
+import { createCipheriv, randomBytes, generateKeyPairSync, createSign } from 'node:crypto'
 import { join } from 'node:path'
 
 const requireCjs = createRequire(import.meta.url)
@@ -24,6 +24,8 @@ const alipay = requireCjs(join(PAY_LIB, 'alipay.js')) as {
   yuanToCents: (y: string) => number | null
   buildSignContent: (p: Record<string, unknown>) => string
   verifyNotify: (p: Record<string, string>) => { ok: boolean; reason?: string }
+  parsePaidNotify: (p: Record<string, string>) => { ok: boolean; reason?: string }
+  buildVerifySignContent: (p: Record<string, unknown>) => string
   isAlipayConfigured: () => boolean
 }
 const wxpay = requireCjs(join(PAY_LIB, 'wxpay.js')) as {
@@ -188,3 +190,124 @@ describe('微信：回调 resource 解密（AES-256-GCM 真实加密）', () => 
     ).toThrow(/apiv3_key_invalid/)
   })
 })
+
+
+// ── 真实密钥对下的验签（变异测试发现：此前只测「没配密钥时拒绝」，把验签改成恒放行也全绿）──
+// 回调验签是「伪造到账通知 → 白拿会员」的唯一防线：签名对才放行，任何篡改 / 换钥 / 缺钥都必须拒绝。
+function rsaPair() {
+  return generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  })
+}
+const signB64 = (msg: string, privateKey: string) => createSign('RSA-SHA256').update(msg, 'utf8').sign(privateKey, 'base64')
+
+describe('微信：真实密钥对验签（公钥模式 / 平台证书模式）', () => {
+  const ORIGINAL = { ...process.env }
+  const platform = rsaPair()
+  const attacker = rsaPair()
+  const body = '{"id":"evt_1","event_type":"TRANSACTION.SUCCESS","resource":{}}'
+  const headersFor = (signature: string, serial = 'PUB_KEY_ID_0000000001') => {
+    const ts = String(Math.floor(Date.now() / 1000))
+    return { 'wechatpay-timestamp': ts, 'wechatpay-nonce': 'nonce-abc', 'wechatpay-serial': serial, 'wechatpay-signature': signature }
+  }
+  const signedHeaders = (privateKey: string, rawBody = body, serial?: string) => {
+    const h = headersFor('', serial)
+    h['wechatpay-signature'] = signB64(`${h['wechatpay-timestamp']}
+${h['wechatpay-nonce']}
+${rawBody}
+`, privateKey)
+    return h
+  }
+  beforeEach(() => {
+    process.env = { ...ORIGINAL }
+    delete process.env.WXPAY_PLATFORM_CERT
+    process.env.WXPAY_PUBLIC_KEY = platform.publicKey
+  })
+  afterEach(() => { process.env = { ...ORIGINAL } })
+
+  it('平台私钥签名 → 放行', () => {
+    expect(wxpay.verifyNotify(signedHeaders(platform.privateKey), body)).toEqual({ ok: true })
+  })
+
+  it('报文被篡改（签名不变）→ 拒绝', () => {
+    const h = signedHeaders(platform.privateKey)
+    const tampered = body.replace('evt_1', 'evt_forged')
+    expect(wxpay.verifyNotify(h, tampered)).toMatchObject({ ok: false, reason: 'signature_mismatch' })
+  })
+
+  it('攻击者自己的密钥签名 → 拒绝', () => {
+    expect(wxpay.verifyNotify(signedHeaders(attacker.privateKey), body)).toMatchObject({ ok: false, reason: 'signature_mismatch' })
+  })
+
+  it('签名不是合法 base64 / 乱码 → 拒绝（不放行、不抛出）', () => {
+    expect(wxpay.verifyNotify(headersFor('not-a-real-signature'), body).ok).toBe(false)
+  })
+
+  it('平台证书模式：WXPAY_PLATFORM_CERT 对应私钥签名放行、他钥拒绝', () => {
+    delete process.env.WXPAY_PUBLIC_KEY
+    process.env.WXPAY_PLATFORM_CERT = platform.publicKey
+    expect(wxpay.verifyNotify(signedHeaders(platform.privateKey, body, 'SERIAL_PLATFORM_1'), body)).toEqual({ ok: true })
+    expect(wxpay.verifyNotify(signedHeaders(attacker.privateKey, body, 'SERIAL_PLATFORM_1'), body).ok).toBe(false)
+  })
+
+  it('公钥模式 serial（PUB_KEY_ID_）但未配置公钥 → 拒绝（no_verification_key）', () => {
+    delete process.env.WXPAY_PUBLIC_KEY
+    expect(wxpay.verifyNotify(signedHeaders(platform.privateKey), body)).toMatchObject({ ok: false, reason: 'no_verification_key' })
+  })
+
+  it('parsePaidNotify：伪造签名的「支付成功」回调不得返回 ok', () => {
+    expect(wxpay.parsePaidNotify(signedHeaders(attacker.privateKey), body).ok).toBe(false)
+  })
+})
+
+describe('支付宝：真实密钥对验签（RSA2）', () => {
+  const ORIGINAL = { ...process.env }
+  const alipayKeys = rsaPair()
+  const attacker = rsaPair()
+  const baseParams = (): Record<string, string> => ({
+    app_id: '2021000000000001',
+    out_trade_no: 'ord_20261118_0001',
+    trade_no: '2026111822001400000000000001',
+    trade_status: 'TRADE_SUCCESS',
+    total_amount: '15.00',
+    buyer_pay_amount: '15.00',
+    charset: 'utf-8',
+    sign_type: 'RSA2',
+  })
+  const signParams = (params: Record<string, string>, privateKey: string) => ({
+    ...params,
+    sign: signB64(alipay.buildVerifySignContent(params), privateKey),
+  })
+  beforeEach(() => {
+    process.env = { ...ORIGINAL }
+    process.env.ALIPAY_PUBLIC_KEY = alipayKeys.publicKey
+    process.env.ALIPAY_APP_ID = '2021000000000001'
+  })
+  afterEach(() => { process.env = { ...ORIGINAL } })
+
+  it('支付宝私钥签名 → 放行', () => {
+    expect(alipay.verifyNotify(signParams(baseParams(), alipayKeys.privateKey))).toEqual({ ok: true })
+  })
+
+  it('金额被篡改（签名不变）→ 拒绝', () => {
+    const signed = signParams(baseParams(), alipayKeys.privateKey)
+    expect(alipay.verifyNotify({ ...signed, total_amount: '0.01', buyer_pay_amount: '0.01' })).toMatchObject({ ok: false, reason: 'signature_mismatch' })
+  })
+
+  it('订单号被替换（签名不变）→ 拒绝', () => {
+    const signed = signParams(baseParams(), alipayKeys.privateKey)
+    expect(alipay.verifyNotify({ ...signed, out_trade_no: 'ord_someone_else' }).ok).toBe(false)
+  })
+
+  it('攻击者自己的密钥签名 → 拒绝', () => {
+    expect(alipay.verifyNotify(signParams(baseParams(), attacker.privateKey))).toMatchObject({ ok: false, reason: 'signature_mismatch' })
+  })
+
+  it('parsePaidNotify：伪造签名的 TRADE_SUCCESS 不得返回 ok；真签名才 ok', () => {
+    expect(alipay.parsePaidNotify(signParams(baseParams(), attacker.privateKey)).ok).toBe(false)
+    expect(alipay.parsePaidNotify(signParams(baseParams(), alipayKeys.privateKey)).ok).toBe(true)
+  })
+})
+
