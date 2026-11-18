@@ -220,7 +220,7 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - UI 文本用中文，代码注释用中文
 - 测试文件放 `src/__tests__/`，子目录有 `composables/` 和 `stores/`
 - 单元测试使用 vitest + jsdom + @vue/test-utils
-- E2E 测试在 `e2e/`，使用 Playwright（`playwright.config.ts` 自动起 dev server，baseURL `localhost:5173`，仅 chromium，CI 下重试 2 次且 `failOnFlakyTests`——重试才过也判红）。dev 模式为 Supabase 形态（`e2e/helpers/supabaseMock.ts`）；**线上 CloudBase 形态的同步与支付只在 prod 模式跑**（`LV_E2E_PROD=1`）：`e2e/helpers/cloudbaseMock.ts` 是多设备共享的内存 PostgREST 云端（复刻 032/035 墓地与防复活触发器），用例 `cloudbase-sync.spec.ts`（双设备往返 / 删除不复活 / 离线补推 / 冲突 / 云端故障）与 `purchase-flow.spec.ts`
+- E2E 测试在 `e2e/`，使用 Playwright（`playwright.config.ts` 自动起 dev server，baseURL `localhost:5173`，仅 chromium，CI 下重试 2 次且 `failOnFlakyTests`——重试才过也判红）。dev 模式为 Supabase 形态（`e2e/helpers/supabaseMock.ts`）；**线上 CloudBase 形态的同步与支付只在 prod 模式跑**（`LV_E2E_PROD=1`）：`e2e/helpers/cloudbaseMock.ts` 是多设备共享的内存 PostgREST 云端（复刻 032/035 墓地与防复活触发器），用例 `cloudbase-sync.spec.ts`（双设备往返 / 删除不复活 / 离线补推 / 冲突 / 云端故障）、`cloudbase-security.spec.ts`（主密码跨设备：云端全表无明文 / base64 泄露、错误密码不改云端；私密空间数据不上云）与 `purchase-flow.spec.ts`；设备操作辅助在 `e2e/helpers/cloudbaseDevice.ts`
 - 测试 setup 文件 `src/__tests__/setup.ts`：mock localStorage，每个测试自动创建新 Pinia 实例
 
 ## 移动端拖拽排序

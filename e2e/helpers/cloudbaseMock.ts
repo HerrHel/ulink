@@ -50,6 +50,8 @@ export interface CbBackend {
   seed(table: string, row: Row): void
   /** 云端某表未软删的行 */
   live(table: string): Row[]
+  /** 云端全部表（含 data_history 等附属表、墓地）序列化文本：用于断言敏感明文从未上云 */
+  dump(): string
 }
 
 const CORS = {
@@ -80,6 +82,10 @@ export function createCloudBaseBackend(user: CbUser = CB_USER): CbBackend {
       t(table).set(key(row.user_id ?? user.sub, row.id), { user_id: user.sub, deleted_at: null, ...row })
     },
     live: (table) => [...t(table).values()].filter((r) => r.user_id === user.sub && r.deleted_at == null),
+    dump: () => JSON.stringify({
+      tables: Object.fromEntries([...tables].map(([name, m]) => [name, [...m.values()]])),
+      graveyard: [...graveyard],
+    }),
   }
 }
 
@@ -223,6 +229,14 @@ function handleRdb(backend: CbBackend, route: Route, table: string, url: URL, de
     const rows = Array.isArray(payload) ? payload : payload ? [payload] : []
     const written: Row[] = []
     for (const incoming of rows) {
+      if (table === 'user_security') {
+        // 每用户一行（主键 user_id）：upsert 按 user_id 合并（master_canary / vault_canary 分列写入）
+        const k = String(incoming.user_id)
+        const next = { ...(store.get(k) ?? {}), ...incoming }
+        store.set(k, next)
+        written.push(next)
+        continue
+      }
       if (!SYNC_TABLES.has(table)) {
         // data_history 等附属表：只记录，不参与同步语义
         store.set(`${store.size}`, { ...incoming })
@@ -339,7 +353,6 @@ export async function attachCloudBase(context: BrowserContext, backend: CbBacken
       const store = new Map(graveyardRows(backend).map((r) => [`${r.table_name}|${r.item_id}`, r]))
       backend.tables.set('deleted_item_graveyard', store)
     }
-    if (target === 'user_security') return reply(route, 200, [])
     return handleRdb(backend, route, target, url, device)
   })
   // 同域 HTTP 云函数（元数据提取、favicon 等）：一律 404，保证零真实出站

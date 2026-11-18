@@ -138,8 +138,10 @@ jobs:
       # e2e/cloudbase-sync.spec.ts（2026-11-18）：线上同步链路（CloudBase rdb）的端到端覆盖——
       # 双设备共用 e2e/helpers/cloudbaseMock.ts 内存云端（复刻 032/035 墓地与防复活触发器），
       # 覆盖往返、删除不复活、离线补推、冲突、云端故障恢复。
+      # e2e/cloudbase-security.spec.ts（2026-11-18）：主密码跨设备（云端全表含 data_history 无明文 /
+      # base64 泄露、错误密码不改云端）与私密空间不上云。
       - name: E2E Tests (prod build)
-        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts e2e/prod-backend-shape.spec.ts e2e/purchase-flow.spec.ts e2e/cloudbase-sync.spec.ts --config playwright.config.ts
+        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts e2e/prod-backend-shape.spec.ts e2e/purchase-flow.spec.ts e2e/cloudbase-sync.spec.ts e2e/cloudbase-security.spec.ts --config playwright.config.ts
         env:
           CI: true
           LV_E2E_PROD: '1'
