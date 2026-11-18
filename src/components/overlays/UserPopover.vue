@@ -115,7 +115,7 @@
               </button>
             </div>
 
-            <!-- 数据解密 / 加密状态 (index 1) -->
+            <!-- 数据加密 / 解锁状态 (index 1) -->
             <button class="up-menu-item" @click="handleE2EAction">
               <div class="up-item-left">
                 <span class="up-item-icon" aria-hidden="true" v-html="I.password"></span>

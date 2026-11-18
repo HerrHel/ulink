@@ -190,7 +190,7 @@ export const zh = {
     syncSuccess: '同步完成',
     syncError: '同步异常',
     pendingLocked: '{n} 项待解锁',
-    e2eTitle: '数据解密',
+    e2eTitle: '数据加密',
     e2eDisabled: '未设置主密码',
     e2eLocked: '数据已加密保护',
     e2eUnlocked: '已解密可用',

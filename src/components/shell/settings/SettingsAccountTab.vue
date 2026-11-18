@@ -193,7 +193,7 @@
               {{ e2eEnabled ? (e2eUnlocked ? t('settings.e2eUnlocked') : t('settings.e2eLocked')) : t('settings.e2eDisabled') }}
             </span>
           </div>
-          <span class="sp-row-desc">{{ t('settings.e2eHint') }}<span v-if="!auth.isLoggedIn">（{{ t('settings.e2eHintLocalOnly') }}）</span></span>
+          <span class="sp-row-desc">{{ t('settings.e2eHint') }}<span v-if="!auth.isLoggedIn">{{ t('settings.e2eHintLocalOnly') }}</span></span>
         </div>
         <div class="sp-row-ctrl">
           <button

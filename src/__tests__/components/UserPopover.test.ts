@@ -118,7 +118,7 @@ describe('UserPopover.vue', () => {
 
     const card = document.querySelector('.user-popover-card')
     const e2eItem = card?.querySelectorAll('.up-menu-item')[1]
-    expect(e2eItem?.textContent).toContain('数据解密')
+    expect(e2eItem?.textContent).toContain('数据加密')
     expect(e2eItem?.textContent).toContain('未设置主密码')
     expect(e2eItem?.textContent).toContain('开启')
 
@@ -148,7 +148,7 @@ describe('UserPopover.vue', () => {
 
     const card = document.querySelector('.user-popover-card')
     const e2eItem = card?.querySelectorAll('.up-menu-item')[1]
-    expect(e2eItem?.textContent).toContain('数据解密')
+    expect(e2eItem?.textContent).toContain('数据加密')
     expect(e2eItem?.textContent).toContain('数据已加密保护')
     expect(e2eItem?.textContent).toContain('解密')
 
@@ -177,7 +177,7 @@ describe('UserPopover.vue', () => {
 
     const card = document.querySelector('.user-popover-card')
     const e2eItem = card?.querySelectorAll('.up-menu-item')[1]
-    expect(e2eItem?.textContent).toContain('数据解密')
+    expect(e2eItem?.textContent).toContain('数据加密')
     expect(e2eItem?.textContent).toContain('已解密可用')
     expect(e2eItem?.textContent).toContain('加锁')
 

@@ -188,7 +188,7 @@ export const en = {
     syncSuccess: 'Synced',
     syncError: 'Sync error',
     pendingLocked: '{n} to unlock',
-    e2eTitle: 'Decryption',
+    e2eTitle: 'Encryption',
     e2eDisabled: 'Master password unset',
     e2eLocked: 'Data locked & encrypted',
     e2eUnlocked: 'Decrypted & active',
