@@ -398,7 +398,7 @@ const pages = [
   `
 ]
 
-const TOTAL_PAGES = pages.length
+const _TOTAL_PAGES = pages.length
 
 const html = `<!DOCTYPE html>
 <html lang="zh-CN">

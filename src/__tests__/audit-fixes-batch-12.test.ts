@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { clearSearchCache, pinyinMatch, _buildHighlightSegments } from '../lib/search.js'
+import { clearSearchCache, pinyinMatch, _buildHighlightSegments, _indicesToRanges } from '../lib/search.js'
 import { fetchUrlMetadataAsync } from '../lib/ai/smartIntake.js'
 import { getSmartPrefill } from '../lib/ai/smartPrefill.js'
 import { inferUrlSemantics } from '../lib/ai/universalUrlInference.js'
@@ -38,10 +38,12 @@ describe('Audit Fixes Batch 12', () => {
       expect(pinyinMatch('abc', undefined as any)).toBeNull()
     })
 
-    it('_buildHighlightSegments 处理重叠下标时不发生文本回退与重复拼接', () => {
-      // 模拟重叠 indices: [2, 5] 和 [4, 7]
+    it('_indicesToRanges 合并重叠下标为连续区间', () => {
+      // 模拟重叠 indices: 2..5 与 4..7
       const text = 'abcdefghijk'
-      const segments = _buildHighlightSegments(text, [[2, 5], [4, 7]])
+      const ranges = _indicesToRanges([2, 3, 4, 5, 4, 5, 6, 7])
+      expect(ranges).toEqual([[2, 7]])
+      const segments = _buildHighlightSegments(text, ranges)
       const combined = segments.map((s) => s.text).join('')
       expect(combined).toBe(text)
     })

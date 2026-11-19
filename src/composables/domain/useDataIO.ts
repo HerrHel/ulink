@@ -600,7 +600,7 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
   const attrs = _mergeAttributes(ds, customAttributes)
   const idMap = new Map<string, string>()
   const bms = _mergeBookmarks(ds, bookmarks, idMap)
-  const groups = _mergeGroups(ds, siblingGroups, idMap)
+  const groups = _mergeGroups(ds, siblingGroups)
 
   saveAppData()
   clearSearchCache()

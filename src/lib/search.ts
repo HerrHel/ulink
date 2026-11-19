@@ -469,12 +469,9 @@ export function _buildHighlightSegments(text: string, indices: ReadonlyArray<rea
   const segments: HighlightSegment[] = []
   let cursor = 0
   for (const [start, end] of indices) {
-    const safeStart = Math.max(cursor, start)
-    if (safeStart > cursor) segments.push({ text: text.slice(cursor, safeStart), highlight: false })
-    if (end >= safeStart) {
-      segments.push({ text: text.slice(safeStart, end + 1), highlight: true })
-      cursor = Math.max(cursor, end + 1)
-    }
+    if (start > cursor) segments.push({ text: text.slice(cursor, start), highlight: false })
+    segments.push({ text: text.slice(start, end + 1), highlight: true })
+    cursor = Math.max(cursor, end + 1)
   }
   if (cursor < text.length) segments.push({ text: text.slice(cursor), highlight: false })
   return segments.length ? segments : [{ text, highlight: false }]

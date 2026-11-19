@@ -373,7 +373,7 @@ export function saveGroupEdit() {
   const editorHTML = EditorManager.getContentHTML(gId);
   ds.updateGroup(gId, {
     name: geForm.name.trim() || t('common.unnamed'),
-    categoryId: (geForm.catId && ds.categoryMap[geForm.catId] && !ds.categoryMap[geForm.catId].deletedAt) ? geForm.catId : CAT_UNCATEGORIZED,
+    categoryId: (geForm.catId && (!ds.categoryMap || (ds.categoryMap[geForm.catId] && !ds.categoryMap[geForm.catId].deletedAt))) ? geForm.catId : CAT_UNCATEGORIZED,
     icon: geForm.icon.trim(),
     attributes: { ...geForm.attrs, [ATTR_IS_GROUP]: true },
     bookmarkIds: [...geForm.bookmarkIds],
