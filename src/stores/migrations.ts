@@ -8,10 +8,12 @@ import { esc, cleanZeroWidth } from '../utils.js'
 import { inlineCardHTML, groupRefCardHTML } from '../composables/useInlineCard.js'
 import { safeGetItem, safeRemoveItem, safeJsonParse } from '../lib/storageSafe.js'
 import type { AppData, Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
+import { getLocale } from '../i18n/index.js'
+import { getWelcomeNotes } from '../config/welcome-data.js'
 
 // 当前 schema 迁移版本。增量更新此值以触发新迁移。
 // 注意：与 persist 的 _writeSeq（写入序号）无关；勿再用 _dataVersion 混用。
-export const CURRENT_SCHEMA_VERSION = 3
+export const CURRENT_SCHEMA_VERSION = 4
 
 interface MigrationResult extends AppData {
 }
@@ -159,6 +161,23 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   if (aiAttr && aiAttr.name === 'Ai') {
     aiAttr.name = 'AI'
     needsPersist = true
+  }
+
+  // 9. 更新过时的「上手指南」引导笔记（v4）：清理历史版本遗留的过时文案（如「侧边栏底部导入导出」「点详按钮」等）
+  const welcomeGroup = result.siblingGroups.find(g => g.id === 'sg_welcome')
+  if (welcomeGroup && typeof welcomeGroup.notes === 'string') {
+    const n = welcomeGroup.notes
+    if (
+      n.includes('导入导出在侧边栏底部') ||
+      n.includes('点详按钮') ||
+      n.includes('组功能详解') ||
+      n.includes('storage usage shown in the sidebar') ||
+      n.includes('Click the <u>i</u> on a bookmark') ||
+      n.includes('Group features in detail')
+    ) {
+      welcomeGroup.notes = getWelcomeNotes(getLocale())
+      needsPersist = true
+    }
   }
 
   // 始终写入 schema 版本（与 writeSeq 分离）

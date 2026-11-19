@@ -311,4 +311,36 @@ describe('runMigrations', () => {
       expect(result.customAttributes.find((a: any) => a.id === 'ai')).toBeUndefined()
     })
   })
+
+  describe('步骤9：更新过时的「上手指南」引导笔记（v4）', () => {
+    it('旧盘 sg_welcome 包含过时文案时自动替换为新版 5 条快速上手指南', () => {
+      const oldNotes = '<h1>使用指南</h1><p>导入导出在侧边栏底部，点详按钮查看详情</p>'
+      const d: any = { _schemaVersion: 3 }
+      const result = makeResult({
+        siblingGroups: [
+          { id: 'sg_welcome', name: '上手指南', notes: oldNotes, attributes: {}, order: 0 },
+        ],
+      })
+      const needsPersist = runMigrations(d as any, result)
+      expect(needsPersist).toBe(true)
+      const guide = result.siblingGroups.find((g: any) => g.id === 'sg_welcome')!
+      expect(guide.notes).not.toContain('导入导出在侧边栏底部')
+      expect(guide.notes).not.toContain('点详按钮')
+      expect(guide.notes).toContain('快速上手指南')
+      expect(guide.notes).toContain('浏览与检索')
+    })
+
+    it('用户自定义编辑过的上手指南（不含旧模板过时文案）不被覆盖', () => {
+      const userCustomNotes = '<p>这是用户自己修改过的笔记正文</p>'
+      const d: any = { _schemaVersion: 3 }
+      const result = makeResult({
+        siblingGroups: [
+          { id: 'sg_welcome', name: '我的工作流', notes: userCustomNotes, attributes: {}, order: 0 },
+        ],
+      })
+      runMigrations(d as any, result)
+      const guide = result.siblingGroups.find((g: any) => g.id === 'sg_welcome')!
+      expect(guide.notes).toBe(userCustomNotes)
+    })
+  })
 })

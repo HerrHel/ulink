@@ -111,8 +111,8 @@ export const DEFAULTS: AppData = {
       isPublic: false,
     },
   ],
-  _schemaVersion: 3,
-  _dataVersion: 3, // 兼容旧读者；迁移门控以 _schemaVersion 为准
+  _schemaVersion: 4,
+  _dataVersion: 4, // 兼容旧读者；迁移门控以 _schemaVersion 为准
 }
 
 /**
@@ -211,7 +211,7 @@ export function buildSeedDefaults(locale?: Locale): AppData {
         isPublic: false,
       },
     ],
-    _schemaVersion: 3,
-    _dataVersion: 3,
+    _schemaVersion: 4,
+    _dataVersion: 4,
   }
 }
