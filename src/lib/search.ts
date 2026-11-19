@@ -340,13 +340,21 @@ export function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttri
   )
 }
 
-export function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkMap: Record<string, Bookmark>): Set<string> {
+export function _fallbackGrpIds(
+  groups: SiblingGroup[],
+  query: string,
+  bookmarkMap: Record<string, Bookmark>,
+  customAttributes: CustomAttribute[] = [],
+): Set<string> {
   const q = query.trim().toLowerCase()
+  const attrNameMap = _buildAttrNameMap(customAttributes)
   return new Set(
     groups
       .filter(g => {
         // 密文不进匹配：与 Fuse 索引路径口径一致
         if (_plain(g.name || '').toLowerCase().includes(q)) return true
+        // 属性名匹配：与 Fuse 路径的 attrNames 覆盖范围一致
+        if (q && _attrsToAttrNames(g.attributes, attrNameMap).toLowerCase().includes(q)) return true
         for (const bid of g.bookmarkIds || []) {
           const b = bookmarkMap[bid]
           if (b && (_plain(b.title || '').toLowerCase().includes(q) || _plain(b.url || '').toLowerCase().includes(q))) return true
@@ -421,7 +429,7 @@ export function searchGroupIds(
   const needsRebuild = forceRebuild || (!!_grpFuse && version !== _grpVersion)
   let matchedIds: Set<string>
   if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuild) || !_grpFuse) {
-    matchedIds = _fallbackGrpIds(groups, q, bookmarkMap)
+    matchedIds = _fallbackGrpIds(groups, q, bookmarkMap, customAttributes)
   } else {
     const results = _grpFuse.search(q)
     matchedIds = new Set(results.map(r => r.item.id))
@@ -561,7 +569,7 @@ export function searchWithHighlights(
     bookmarkResults = bookmarks.filter(b => bmIds.has(b.id)).slice(0, maxResults).map(b => ({
       id: b.id, title: _plain(b.title || ''), url: _plain(b.url || ''), _highlights: {},
     }))
-    const grpIds = _fallbackGrpIds(groups, q, bookmarkMap)
+    const grpIds = _fallbackGrpIds(groups, q, bookmarkMap, customAttributes)
     groupResults = groups.filter(g => grpIds.has(g.id)).slice(0, GROUP_SUGGEST_LIMIT).map(g => ({
       id: g.id, name: _plain(g.name || ''), _isGroup: true,
       _displayTitle: _plain(g.name || '') || t('cards.unnamedGroup'),

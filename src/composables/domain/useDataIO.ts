@@ -412,22 +412,55 @@ export function _mergeAttributes(ds: DataStore, customAttributes: AppData['custo
   return { imported, skipped }
 }
 
-/** 合并书签（去重：同 ID 或同 URL 跳过） */
-export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
+/** 合并书签（去重：同 ID 或同 URL 跳过，并维护 idMap 供组和子书签解析） */
+export function _mergeBookmarks(
+  ds: DataStore,
+  bookmarks: AppData['bookmarks'],
+  idMap: Map<string, string> = new Map(),
+): MergeStats {
   let imported = 0, skipped = 0
   // 缺陷11：与同步去重（syncDedup.normalizeSyncUrl）共用同一 URL 内容键，
   // 避免导入按 toLowerCase、同步按 URL 归一化去尾斜杠导致同一内容两套判据。
-  const existingUrls = new Set(ds.bookmarks.filter(b => !b.deletedAt).map(b => normalizeSyncUrl(b.url || '')).filter(Boolean))
+  const existingUrlToBm = new Map<string, Bookmark>()
+  for (const b of ds.bookmarks) {
+    if (!b.deletedAt && b.url) {
+      const key = normalizeSyncUrl(b.url)
+      if (key) existingUrlToBm.set(key, b)
+    }
+  }
+
+  // 记录已知存活及本次待导入的合法 ID，用于校验 parentId
+  const knownBmIds = new Set<string>(ds.bookmarks.filter(b => !b.deletedAt).map(b => b.id))
+  for (const b of bookmarks) {
+    if (b.id) knownBmIds.add(b.id)
+  }
+
   // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
   const orderBase = ds.nextBookmarkOrder()
   for (const b of bookmarks) {
     if (!b.title || !b.url) continue
-    if (ds.bookmarks.some(existing => existing.id === b.id)) continue
+    const targetId = b.id || newBookmarkId(imported)
+    if (ds.bookmarks.some(existing => existing.id === b.id)) {
+      if (b.id) idMap.set(b.id, b.id)
+      continue
+    }
     const urlKey = normalizeSyncUrl(b.url)
-    if (existingUrls.has(urlKey)) continue
+    const existingBm = urlKey ? existingUrlToBm.get(urlKey) : undefined
+    if (existingBm) {
+      if (b.id) idMap.set(b.id, existingBm.id)
+      continue
+    }
+
+    // 处理 parentId：若父书签命中已有本地书签，用 idMap 映射
+    let parentId = b.parentId ? (idMap.get(b.parentId) || b.parentId) : null
+    // 若 parentId 指向自身，或指向既不存在于本地也不存在于本次导入集合中的幽灵 ID，置 null 避免成为不可见孤儿
+    if (parentId && (parentId === targetId || !knownBmIds.has(parentId))) {
+      parentId = null
+    }
+
     const now = Date.now()
     const parsed = BookmarkSchema.safeParse({
-      id: b.id || newBookmarkId(imported),
+      id: targetId,
       title: b.title,
       url: b.url,
       username: b.username || '',
@@ -435,7 +468,7 @@ export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']):
       notes: b.notes || '',
       icon: b.icon || '',
       categoryId: b.categoryId && ds.categoryMap[b.categoryId] ? b.categoryId : CAT_UNCATEGORIZED,
-      parentId: b.parentId || null,
+      parentId,
       order: orderBase + imported,
       useCount: b.useCount || 0,
       attributes: b.attributes || {},
@@ -445,7 +478,9 @@ export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']):
     })
     if (!parsed.success) { skipped++; continue }
     ds.addBookmark(parsed.data)
-    existingUrls.add(urlKey)
+    if (b.id) idMap.set(b.id, targetId)
+    if (urlKey) existingUrlToBm.set(urlKey, parsed.data)
+    knownBmIds.add(targetId)
     imported++
   }
   return { imported, skipped }
@@ -454,7 +489,7 @@ export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']):
 /**
  * 合并组（去重：同 ID 跳过）。
  * bookmarkIds 过滤未存活书签：导入源 id 可能指向被去重/Zod 跳过/缺 title·url 的项，
- * 原样保留会让组引用悬空 id（bookmarkMap 查不到 → 组内空卡位，推云后远端同样悬空）。
+ * 经 idMap 解析至本地去重对应 ID，避免组丢失已有本地项。
  */
 export function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroups']): MergeStats {
   let imported = 0, skipped = 0
@@ -533,7 +568,8 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
   // 顺序固定：先 cat/attr，再 bm，最后 group（group 依赖 bm 已入库做悬空过滤）
   const cats = _mergeCategories(ds, categories)
   const attrs = _mergeAttributes(ds, customAttributes)
-  const bms = _mergeBookmarks(ds, bookmarks)
+  const idMap = new Map<string, string>()
+  const bms = _mergeBookmarks(ds, bookmarks, idMap)
   const groups = _mergeGroups(ds, siblingGroups)
 
   saveAppData()

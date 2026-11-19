@@ -127,4 +127,30 @@ describe('useDragDrop & EdgeStagingSidebar — 分类拖拽收起与背景框重
 
     wrapper.unmount()
   })
+
+  it('4. 书签拖入分类导航栏时，级联将其名下所有子孙书签一并迁入目标分类', () => {
+    const ds = useDataStore()
+    const pBm = {
+      id: 'bm_p', title: '父书签', url: 'https://p.com', categoryId: 'cat_work', order: 0,
+      createdAt: 1, updatedAt: 1,
+    } as Bookmark
+    const cBm = {
+      id: 'bm_c', title: '子书签', url: 'https://c.com', categoryId: 'cat_work', parentId: 'bm_p', order: 1,
+      createdAt: 1, updatedAt: 1,
+    } as Bookmark
+    ds.bookmarks = [pBm, cBm]
+    ds._syncMaps()
+
+    const railItem = document.createElement('div')
+    railItem.className = 'rail-item'
+    railItem.dataset.catId = 'cat_fun'
+    document.body.appendChild(railItem)
+
+    const payload = { type: 'bm', id: 'bm_p', srcGid: null }
+    _onDrop(createDragEvent('drop', { [PAYLOAD_KEY]: JSON.stringify(payload) }, railItem))
+
+    // 核心断言：父书签与子书签 categoryId 均更新至 cat_fun
+    expect(ds.bookmarkMap['bm_p'].categoryId).toBe('cat_fun')
+    expect(ds.bookmarkMap['bm_c'].categoryId).toBe('cat_fun')
+  })
 })

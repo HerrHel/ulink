@@ -196,4 +196,21 @@ describe('searchWithHighlights 降级编排（fuse/pinyin 加载失败 → inclu
     expect(g).toBeDefined()
     expect(g!.bookmarkIds).toEqual(['fb-td', 'fb-td2'])
   })
+
+  it('降级：组自定义属性名称可被检索命中（对齐 Fuse 正常路径 attrNames 权重覆盖）', async () => {
+    const search = await importDegradedSearch()
+    const customAttrs: CustomAttribute[] = [
+      { id: 'attr_ai', name: 'AI工具', type: 'boolean' } as any,
+    ]
+    const groups = [
+      {
+        id: 'g_ai',
+        name: '未命名组',
+        bookmarkIds: [],
+        attributes: { attr_ai: true },
+      } as any,
+    ]
+    const matched = search._fallbackGrpIds(groups, 'AI工具', {}, customAttrs)
+    expect(matched.has('g_ai')).toBe(true)
+  })
 })

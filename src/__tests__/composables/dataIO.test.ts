@@ -667,6 +667,40 @@ describe('_mergeBookmarks 合并去重护栏', () => {
     expect(b.isExpanded).toBe(false)
     expect(b.attributes).toEqual({})
   })
+
+  it('父书签同 URL 去重命中已有本地书签时，子书签 parentId 自动重映射到本地父书签 ID', () => {
+    const ds = useDataStore()
+    // 本地已有父书签，ID 为 local_parent_id
+    ds.addBookmark({
+      id: 'local_parent_id', title: '本地父级', url: 'https://parent.example',
+      username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED,
+      parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false,
+      createdAt: 1, updatedAt: 1,
+    } as any)
+
+    const idMap = new Map<string, string>()
+    // 待导入数据：含相同 URL 的父书签（不同 ID: import_parent_id）及挂在其下的子书签
+    const r = _mergeBookmarks(ds, [
+      { id: 'import_parent_id', title: '导入父级', url: 'https://parent.example', categoryId: CAT_UNCATEGORIZED } as any,
+      { id: 'import_child_id', title: '导入子级', url: 'https://child.example', parentId: 'import_parent_id', categoryId: CAT_UNCATEGORIZED } as any,
+    ], idMap)
+
+    expect(r.imported).toBe(1) // 仅子级导入，父级去重
+    const child = ds.bookmarkMap['import_child_id']
+    expect(child).toBeDefined()
+    expect(child.parentId).toBe('local_parent_id') // parentId 被正确映射到本地已有的父级 ID
+  })
+
+  it('导入数据中 parentId 指向不存在的幽灵 ID 时，自动置 null 避免成为不可见孤儿', () => {
+    const ds = useDataStore()
+    const r = _mergeBookmarks(ds, [
+      { id: 'ghost_child', title: '孤儿', url: 'https://ghost.example', parentId: 'nonexistent_parent', categoryId: CAT_UNCATEGORIZED } as any,
+    ])
+    expect(r.imported).toBe(1)
+    const child = ds.bookmarkMap['ghost_child']
+    expect(child).toBeDefined()
+    expect(child.parentId).toBeNull()
+  })
 })
 
 describe('_mergeGroups 合并去重护栏', () => {

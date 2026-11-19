@@ -71,6 +71,7 @@ export function resolveCsvColumns(headers: string[]): CsvColumns {
 }
 
 export function parseCSV(text: string): Bookmark[] {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
   const bookmarks: Bookmark[] = []
   const lines: string[][] = []
   let row: string[] = []

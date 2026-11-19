@@ -272,5 +272,14 @@ describe('parseCSV（CSV 书签解析护栏）', () => {
     it('空输入文本返空数组', () => {
       expect(parseCSV('')).toEqual([])
     })
+
+    it('支持 UTF-8 BOM（\uFEFF）开头的 CSV 文件（如 Windows Excel 导出）', () => {
+      const csvWithBom = '\uFEFFtitle,url\nExcelSite,https://excel.com'
+      const out = parseCSV(csvWithBom)
+      expect(out).toHaveLength(1)
+      expect(out[0].title).toBe('ExcelSite')
+      expect(out[0].url).toBe('https://excel.com')
+    })
+
   })
 })

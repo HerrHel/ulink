@@ -16,6 +16,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { EditorManager } from '../../lib/editor.js'
 import { getDragHintText } from '../../lib/dragHint.js'
+import { collectDescendantIds } from '../../lib/collectSubIds.js'
 import type { DragHintPayload } from '../../lib/dragHint.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 import { _samePinStatus, _swapAndMarkDirty } from '../../lib/dragSwap.js'
@@ -662,7 +663,14 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
     if (di >= 0) useUIStore().detailCards.splice(di, 1);
   }
   if (bm.categoryId === newCatId) return;
-  ds.updateBookmark(bm.id, { categoryId: newCatId });
+  // 级联移动子书签：将父书签及所有后代子书签一并更新至新分类
+  const ids = collectDescendantIds(pid => ds.childrenMap[pid], bm.id);
+  for (const id of ids) {
+    const b = ds.bookmarkMap[id];
+    if (b && b.categoryId !== newCatId) {
+      ds.updateBookmark(id, { categoryId: newCatId });
+    }
+  }
   debouncedSaveAppData();
   const catName = displayText(ds.categoryMap[newCatId]?.name) || (newCatId === CAT_UNCATEGORIZED ? t('cat.uncategorized') : (ds.categoryMap[newCatId]?.name || newCatId))
   toast(t('msg.movedToCategory', { name: catName }));
