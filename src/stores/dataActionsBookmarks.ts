@@ -338,9 +338,9 @@ export const bookmarkActions = {
         changes = { ...changes, parentId: null }
       } else {
         const parent = this._bmMap[changes.parentId]
-        if (!parent || parent.deletedAt) {
+        if (parent && parent.deletedAt) {
           changes = { ...changes, parentId: null }
-        } else {
+        } else if (parent) {
           // 深度防环检测：溯源祖先链，杜绝 A -> B -> A 间接循环与环状依赖导致的死循环
           const visited = new Set<string>([id])
           let ancestorId: string | null = changes.parentId

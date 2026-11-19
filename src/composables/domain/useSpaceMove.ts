@@ -236,7 +236,7 @@ export function useSpaceMove() {
     }
     // 解孤儿：若移入的书签其 parentId 不在迁入集合内（留在主页或已不存在），重置为 null 避免在私密空间不可见
     for (const b of bms) {
-      if (b.parentId && !allIds.has(b.parentId)) {
+      if (!b.parentId || !allIds.has(b.parentId)) {
         b.parentId = null
       }
     }
