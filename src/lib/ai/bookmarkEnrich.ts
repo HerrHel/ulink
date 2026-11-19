@@ -86,10 +86,12 @@ export async function enrichBookmarkMetadata(
     ? candidateNotes.trim()
     : ''
 
-  // 3. 建议分类（如果找到了合适分类且与当前分类不同）
+  // 3. 建议分类（严格从已有未删除分类中选取，若与当前分类不同则建议）
+  const activeCats = categories.filter(c => !c.deletedAt && c.id !== 'all' && c.id !== 'uncategorized')
+  const validCatIds = new Set(activeCats.map(c => c.id))
   const candidateCatId = realCategoryId || prefill.categoryId
   let suggestedCategoryId: string | undefined = undefined
-  if (candidateCatId && candidateCatId !== bookmark.categoryId && candidateCatId !== 'all') {
+  if (candidateCatId && candidateCatId !== bookmark.categoryId && validCatIds.has(candidateCatId)) {
     suggestedCategoryId = candidateCatId
   }
 

@@ -320,12 +320,15 @@ export function getSmartPrefill(
     return bHost === fullHost || bHost === rootDomain
   })
 
+  const activeCats = categories.filter(c => !c.deletedAt && c.id !== 'all' && c.id !== 'uncategorized')
+  const validCatIds = new Set(activeCats.map(c => c.id))
+
   if (sameDomainBms.length > 0) {
     // 统计同域名下最常用的已有分类与账号
     const catFrequency = new Map<string, number>()
     const usernameFrequency = new Map<string, number>()
     for (const b of sameDomainBms) {
-      if (b.categoryId && b.categoryId !== 'uncategorized' && b.categoryId !== 'all') {
+      if (b.categoryId && validCatIds.has(b.categoryId)) {
         catFrequency.set(b.categoryId, (catFrequency.get(b.categoryId) || 0) + 1)
       }
       if (b.username && b.username.trim()) {
@@ -361,7 +364,6 @@ export function getSmartPrefill(
 
   // 5. 分类匹配定位（严格从用户已有分类中预选）
   let finalCatId = inheritedCatId
-  const activeCats = categories.filter(c => !c.deletedAt && c.id !== 'all' && c.id !== 'uncategorized')
 
   if (!finalCatId && matchedCatKeyword && activeCats.length > 0) {
     const kwLower = matchedCatKeyword.toLowerCase()

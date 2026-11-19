@@ -227,7 +227,7 @@ export function useSpaceMove() {
               allIds.add(sid)
               const b = dataStore.bookmarkMap[sid]
               if (b) {
-                bms.push({ ..._clean(b), categoryId: CAT_UNCATEGORIZED, parentId: null })
+                bms.push({ ..._clean(b), categoryId: CAT_UNCATEGORIZED })
               }
             }
           }

@@ -188,12 +188,14 @@ export async function fetchUrlMetadataAsync(
   }
 
   // 结合真实抓取到的标题与描述做二次分类与属性匹配（优先使用服务端大模型推荐，若无则本地多级分类匹配）
-  let matchedCatId = serverCategoryId || suggestCategory(url, title || notes, categories) || undefined
-  if (!matchedCatId && categories.length > 0) {
+  const activeCats = categories.filter(c => !c.deletedAt && c.id !== 'all' && c.id !== 'uncategorized')
+  const validCatIds = new Set(activeCats.map(c => c.id))
+  let matchedCatId = (serverCategoryId && validCatIds.has(serverCategoryId) ? serverCategoryId : undefined) || suggestCategory(url, title || notes, activeCats) || undefined
+  if (!matchedCatId && activeCats.length > 0) {
     const fullText = `${url} ${title} ${notes}`.toLowerCase()
     for (const [kw, synonyms] of Object.entries(CATEGORY_SYNONYMS)) {
       if (synonyms.some(s => fullText.includes(s))) {
-        const matched = categories.find(c => {
+        const matched = activeCats.find(c => {
           const cn = c.name.toLowerCase()
           return cn.includes(kw.toLowerCase()) || synonyms.some(s => cn.includes(s) || s.includes(cn))
         })

@@ -119,8 +119,18 @@ const GFW_KNOWN_HOST_SUFFIXES = [
 
 export function isPrivateOrLocalHost(hostname: string): boolean {
   if (!hostname) return false
-  const h = hostname.toLowerCase().split(':')[0]
-  if (h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local') || h.endsWith('.lan') || h.endsWith('.internal')) return true
+  let h = hostname.toLowerCase().trim()
+  if (h.startsWith('[')) {
+    const end = h.indexOf(']')
+    if (end > 0) h = h.slice(1, end)
+  } else {
+    const colonCount = (h.match(/:/g) || []).length
+    if (colonCount === 1) {
+      h = h.split(':')[0]
+    }
+  }
+  if (h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || h === '::1' || h === '::') return true
+  if (h.endsWith('.local') || h.endsWith('.lan') || h.endsWith('.internal') || h.endsWith('.home.arpa') || h.endsWith('.corp') || h.endsWith('.localhost')) return true
   if (/^127\.\d+\.\d+\.\d+$/.test(h)) return true
   if (/^10\.\d+\.\d+\.\d+$/.test(h)) return true
   if (/^192\.168\.\d+\.\d+$/.test(h)) return true
@@ -130,6 +140,7 @@ export function isPrivateOrLocalHost(hostname: string): boolean {
     const octet = parseInt(m172[1], 10)
     if (octet >= 16 && octet <= 31) return true
   }
+  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
   return false
 }
 

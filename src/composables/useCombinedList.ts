@@ -56,8 +56,10 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
       }
       case 'custom': {
         // A1-002：候选集一律 filtered*，避免分类/搜索/属性被自定义顺序旁路
+        // 顶层书签或其父已软删/不存在的孤儿书签均作为顶层卡片呈现，杜绝幽灵书签在主视图中消失
+        const isTopOrOrphan = (b: Bookmark) => !b.parentId || !ds.bookmarkMap[b.parentId] || !!ds.bookmarkMap[b.parentId]?.deletedAt
         const filteredGs = ds.filteredGroups
-        const filteredBms = ds.filteredBookmarks.filter((b: Bookmark) => !b.parentId)
+        const filteredBms = ds.filteredBookmarks.filter(isTopOrOrphan)
         const gMap = Object.fromEntries(filteredGs.map(g => [g.id, g]))
         const bmMap = Object.fromEntries(filteredBms.map(b => [b.id, b]))
         const order = ds._customCardOrder!
@@ -104,8 +106,9 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         return combined
       }
       case 'normal': {
+        const isTopOrOrphan = (b: Bookmark) => !b.parentId || !ds.bookmarkMap[b.parentId] || !!ds.bookmarkMap[b.parentId]?.deletedAt
         const groups = ds.filteredGroups
-        const topLevel = ds.filteredBookmarks.filter((b: Bookmark) => !b.parentId)
+        const topLevel = ds.filteredBookmarks.filter(isTopOrOrphan)
         const combined: CardItem[] = []
         for (const g of groups) combined.push({ type: 'group', data: g })
         for (const b of topLevel) combined.push({ type: 'bm', data: b })

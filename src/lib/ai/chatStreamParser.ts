@@ -70,6 +70,14 @@ export function formatLightMarkdown(raw: string): string {
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<!--[\s\S]*$/g, '')
 
+  // 0.1 提取并占位围栏代码块 (```lang\n...\n```)，防止其内部代码被后续行内语法（行内代码/链接/加粗）干扰破坏
+  const codeBlocks: string[] = []
+  text = text.replace(/```(?:[a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g, (_, code) => {
+    const idx = codeBlocks.length
+    codeBlocks.push(`<pre class="chat-flow-pre"><code class="chat-flow-code">${code.replace(/\n+$/, '')}</code></pre>`)
+    return `\n\n%%CODEBLOCK_${idx}%%\n\n`
+  })
+
   // 1. 转义基础 HTML 实体防注入
   text = text
     .replace(/&/g, '&amp;')
@@ -84,19 +92,18 @@ export function formatLightMarkdown(raw: string): string {
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
 
   // 4. 行内代码 (`code`)
-  text = text.replace(/`([^`]+)`/g, '<code class="chat-flow-code">$1</code>')
+  text = text.replace(/`([^`\n]+)`/g, '<code class="chat-flow-code">$1</code>')
 
-  // 5. 链接识别与清理：先识别 Markdown 链接 [text](url)，再识别单独成行的原始网址
+  // 5. 链接识别与清理：先识别 Markdown 链接 [text](url)，再识别未被标签包裹的裸网址
   text = text.replace(
     /\[([^\]]+)\]\((https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer" class="chat-flow-link">$1</a>',
   )
+  // 匹配已有 HTML 标签（如 <a ...>...</a> 或 <.../>）与裸露 URL，避免将 <a> 内的 URL 重复包裹导致嵌套 <a>
   text = text.replace(
-    /(https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)/g,
-    (match, url, offset, fullStr) => {
-      // 若该 URL 已在 href="..." 中，不重复包裹
-      const before = fullStr.slice(Math.max(0, offset - 10), offset)
-      if (/href=["']$/.test(before)) return match
+    /(<a\b[^>]*>[\s\S]*?<\/a>|<[^>]+>)|(https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)/g,
+    (match, existingTag, url) => {
+      if (existingTag) return existingTag
       return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-flow-link">${url}</a>`
     },
   )
@@ -133,6 +140,29 @@ export function formatLightMarkdown(raw: string): string {
       flushTextBuffer()
       blocks.push(trimmedLine)
       i++
+      continue
+    }
+
+    // 围栏代码块占位还原
+    const cbMatch = trimmedLine.match(/^%%CODEBLOCK_(\d+)%%$/)
+    if (cbMatch) {
+      flushTextBuffer()
+      blocks.push(codeBlocks[Number(cbMatch[1])])
+      i++
+      continue
+    }
+
+    // 代码块起始：以 ``` 开头
+    if (trimmedLine.startsWith('```')) {
+      flushTextBuffer()
+      const codeLines: string[] = []
+      i++
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeLines.push(lines[i])
+        i++
+      }
+      if (i < lines.length) i++
+      blocks.push(`<pre class="chat-flow-pre"><code class="chat-flow-code">${codeLines.join('\n')}</code></pre>`)
       continue
     }
 
@@ -253,6 +283,7 @@ export function formatLightMarkdown(raw: string): string {
       'ol',
       'li',
       'code',
+      'pre',
       'br',
       'a',
       'span',
@@ -351,7 +382,7 @@ export function parseTurnContentSegments(
 
             const prefill = getSmartPrefill(fixedUrl, [], categories, attributes)
             const matchedCat = categories.find(
-              c => c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized'
+              c => !c.deletedAt && c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized'
             )
 
             const candidate: AiCandidateBookmark = {

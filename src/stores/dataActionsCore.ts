@@ -44,7 +44,7 @@ export const coreActions = {
       }
       if (b.parentId) {
         const parent = bmMap[b.parentId]
-        if (b.parentId === b.id || !parent) {
+        if (b.parentId === b.id || !parent || (parent.deletedAt && !b.deletedAt)) {
           b.parentId = null
           b.updatedAt = Date.now()
           this._markDirty(b.id)
