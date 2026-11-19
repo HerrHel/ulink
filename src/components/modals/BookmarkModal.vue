@@ -10,7 +10,7 @@
         <h2 v-else>{{ bmForm.isEdit ? t('ctx.editBookmark') : bmForm.addToGroupMode ? t('modal.bookmark.addToGroupNew') : t('modal.bookmark.addChildBm') }}</h2>
         <button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" ref="modalBodyRef">
         <div class="form-group">
           <div class="bm-url-header">
             <label class="form-label" for="bmUrl">{{ t('ctx.url') }} *</label>
@@ -27,11 +27,32 @@
               <span>{{ bmForm.isAiFetching ? t('modal.bookmark.aiFetching') : (bmForm.aiFetchedSuccess ? t('modal.bookmark.aiFetched') : t('modal.bookmark.aiFetchBtn')) }}</span>
             </button>
           </div>
-          <input type="text" class="form-input" id="bmUrl" data-testid="lv-bm-url" v-model="bmForm.url" :placeholder="t('modal.bookmark.urlPlaceholder')" @input="onUrlInput" autocomplete="off">
+          <input
+            type="text"
+            class="form-input"
+            id="bmUrl"
+            data-testid="lv-bm-url"
+            v-model="bmForm.url"
+            :placeholder="t('modal.bookmark.urlPlaceholder')"
+            @input="onUrlInput"
+            @keydown.enter="onSave"
+            autocomplete="off"
+            ref="urlRef"
+          >
         </div>
         <div class="form-group">
           <label class="form-label" for="bmTitle">{{ t('modal.bookmark.siteName') }}</label>
-          <input type="text" class="form-input" id="bmTitle" data-testid="lv-bm-title" v-model="bmForm.title" :placeholder="t('modal.bookmark.titlePlaceholder')" @input="onTitleInput" ref="titleRef">
+          <input
+            type="text"
+            class="form-input"
+            id="bmTitle"
+            data-testid="lv-bm-title"
+            v-model="bmForm.title"
+            :placeholder="t('modal.bookmark.titlePlaceholder')"
+            @input="onTitleInput"
+            @keydown.enter="onSave"
+            ref="titleRef"
+          >
         </div>
         <div v-if="aiSuggestionText" class="ai-suggest-bar">
           <span class="ai-suggest-icon"></span>
@@ -39,66 +60,58 @@
           <button class="btn btn-xs btn-primary" @click="onApplyAi">{{ t('modal.bookmark.applyAi') }}</button>
           <button class="btn btn-xs btn-ghost" @click="onDismissAi">{{ t('modal.bookmark.dismissAi') }}</button>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="bmUsername">{{ t('cards.account') }}</label>
-            <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintAccount" @hint-click="onE2EHintClick">
-              <input type="text" class="form-input" id="bmUsername" v-model="bmForm.username" :placeholder="t('modal.bookmark.username')">
-            </E2ELockOverlay>
-            <div v-if="bmForm.candidateUsernames && bmForm.candidateUsernames.length > 1" class="candidate-users-row">
-              <span class="cu-hint">{{ t('modal.bookmark.multiAccounts') }}:</span>
-              <button
-                v-for="uname in bmForm.candidateUsernames"
-                :key="uname"
-                type="button"
-                class="cu-chip"
-                :class="{ active: bmForm.username === uname }"
-                @click="bmForm.username = uname"
-              >
-                {{ uname }}
-              </button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="bmPassword">{{ t('cards.password') }}</label>
-            <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintPassword" @hint-click="onE2EHintClick">
-              <div class="pw-wrap">
-                <input :type="bmForm.showPassword ? 'text' : 'password'" class="form-input pw-input" id="bmPassword" v-model="bmForm.password" :placeholder="t('cards.password')">
-                <button class="pw-toggle" type="button" :title="bmForm.showPassword ? t('cards.hidePassword') : t('cards.showPassword')" @click="bmForm.showPassword = !bmForm.showPassword" v-html="bmForm.showPassword ? I.eyeOff : I.eye"></button>
+        <div class="form-group">
+          <label class="form-label" for="bmCategoryId">{{ t('modal.bookmark.category') }}</label>
+          <select class="form-select" id="bmCategoryId" v-model="bmForm.categoryId" @change="onCategoryChange">
+            <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ displayText(cat.name) }}</option>
+          </select>
+        </div>
+        <div class="bm-more-toggle-wrap">
+          <button
+            type="button"
+            class="bm-more-toggle-btn"
+            data-testid="lv-bm-more-toggle"
+            @click="showMore = !showMore"
+            :aria-expanded="showMore"
+          >
+            <span>{{ showMore ? t('common.collapse') : t('common.more') }}</span>
+            <span class="bm-more-chevron" :class="{ 'is-open': showMore }" aria-hidden="true" v-html="I.chevronDown"></span>
+          </button>
+        </div>
+        <div v-show="showMore" class="bm-more-fields" data-testid="lv-bm-more-fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="bmUsername">{{ t('cards.account') }}</label>
+              <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintAccount" @hint-click="onE2EHintClick">
+                <input type="text" class="form-input" id="bmUsername" v-model="bmForm.username" :placeholder="t('modal.bookmark.username')" @keydown.enter="onSave">
+              </E2ELockOverlay>
+              <div v-if="bmForm.candidateUsernames && bmForm.candidateUsernames.length > 1" class="candidate-users-row">
+                <span class="cu-hint">{{ t('modal.bookmark.multiAccounts') }}:</span>
+                <button
+                  v-for="uname in bmForm.candidateUsernames"
+                  :key="uname"
+                  type="button"
+                  class="cu-chip"
+                  :class="{ active: bmForm.username === uname }"
+                  @click="bmForm.username = uname"
+                >
+                  {{ uname }}
+                </button>
               </div>
-            </E2ELockOverlay>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="bmNotes">{{ t('modal.bookmark.notes') }}</label>
-          <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" :placeholder="t('modal.bookmark.notesPlaceholder')" @input="onNotesInput"></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="bmIcon">{{ t('modal.bookmark.customIcon') }}</label>
-          <div class="icon-input-row">
-            <input type="url" class="form-input" id="bmIcon" v-model="bmForm.icon" :placeholder="t('modal.bookmark.iconUrlPlaceholder')" @input="onPreviewIconUrl">
-            <div class="icon-thumbs" v-show="bmForm.logoPreviewVisible || bmForm.iconPreviewVisible">
-              <img v-if="bmForm.logoPreviewVisible" :src="bmForm.logoPreviewUrl" class="icon-thumb" :class="{ active: bmForm.icon === bmForm.logoPreviewUrl }" @click="useFaviconAsIcon" :title="t('modal.bookmark.useFavicon')">
-              <img v-if="bmForm.iconPreviewVisible && bmForm.iconPreviewUrl !== bmForm.logoPreviewUrl" :src="bmForm.iconPreviewUrl" class="icon-thumb active" :title="t('modal.bookmark.currentIcon')">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="bmPassword">{{ t('cards.password') }}</label>
+              <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintPassword" @hint-click="onE2EHintClick">
+                <div class="pw-wrap">
+                  <input :type="bmForm.showPassword ? 'text' : 'password'" class="form-input pw-input" id="bmPassword" v-model="bmForm.password" :placeholder="t('cards.password')" @keydown.enter="onSave">
+                  <button class="pw-toggle" type="button" :title="bmForm.showPassword ? t('cards.hidePassword') : t('cards.showPassword')" @click="bmForm.showPassword = !bmForm.showPassword" v-html="bmForm.showPassword ? I.eyeOff : I.eye"></button>
+                </div>
+              </E2ELockOverlay>
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm mt-1" v-show="bmForm.clearIconVisible" @click="onClearIcon">{{ t('modal.bookmark.clearIcon') }}</button>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="bmIconDark">{{ t('modal.bookmark.customIconDark') }}</label>
-          <div class="icon-input-row">
-            <input type="url" class="form-input" id="bmIconDark" v-model="bmForm.iconDark" :placeholder="t('modal.bookmark.iconDarkUrlPlaceholder')">
-            <div class="icon-thumbs" v-show="bmForm.iconDark">
-              <img :src="bmForm.iconDark" class="icon-thumb active" :title="t('modal.bookmark.currentDarkIcon')">
-            </div>
-          </div>
-        </div>
-        <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="bmCategoryId">{{ t('modal.bookmark.category') }}</label>
-            <select class="form-select" id="bmCategoryId" v-model="bmForm.categoryId" @change="onCategoryChange">
-              <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ displayText(cat.name) }}</option>
-            </select>
+            <label class="form-label" for="bmNotes">{{ t('modal.bookmark.notes') }}</label>
+            <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" :placeholder="t('modal.bookmark.notesPlaceholder')" @input="onNotesInput"></textarea>
           </div>
           <!-- 父级书签可搜索下拉框 -->
           <div class="form-group parent-select-wrap" ref="parentDropdownRef">
@@ -183,27 +196,47 @@
               </div>
             </Teleport>
           </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">{{ t('modal.bookmark.attributes') }}</label>
-          <div class="check-group">
-            <label v-for="attr in selectableAttrs" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
-              <input type="checkbox" :checked="bmForm.attributes[attr.id]"
-                     @change="toggleAttr(attr.id, $event)">
-              {{ displayText(attr.name) }}
-            </label>
+          <div class="form-group">
+            <label class="form-label" for="bmIcon">{{ t('modal.bookmark.customIcon') }}</label>
+            <div class="icon-input-row">
+              <input type="url" class="form-input" id="bmIcon" v-model="bmForm.icon" :placeholder="t('modal.bookmark.iconUrlPlaceholder')" @input="onPreviewIconUrl" @keydown.enter="onSave">
+              <div class="icon-thumbs" v-show="bmForm.logoPreviewVisible || bmForm.iconPreviewVisible">
+                <img v-if="bmForm.logoPreviewVisible" :src="bmForm.logoPreviewUrl" class="icon-thumb" :class="{ active: bmForm.icon === bmForm.logoPreviewUrl }" @click="useFaviconAsIcon" :title="t('modal.bookmark.useFavicon')">
+                <img v-if="bmForm.iconPreviewVisible && bmForm.iconPreviewUrl !== bmForm.logoPreviewUrl" :src="bmForm.iconPreviewUrl" class="icon-thumb active" :title="t('modal.bookmark.currentIcon')">
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm mt-1" v-show="bmForm.clearIconVisible" @click="onClearIcon">{{ t('modal.bookmark.clearIcon') }}</button>
           </div>
-        </div>
-        <!-- 子书签列表（仅编辑模式且有子书签时显示） -->
-        <div v-if="childBookmarks.length > 0" class="form-group">
-          <label class="form-label">{{ t('modal.bookmark.childCount', { n: childBookmarks.length }) }}</label>
-          <div class="child-bookmarks-list">
-            <span v-for="child in childBookmarks" :key="child.id" class="group-inline-card">
-              <img v-if="child.icon" :src="child.icon" alt="">
-              <span class="gic-name" :title="displayText(child.title) || child.url">{{ displayText(child.title) || child.url }}</span>
-              <span class="gic-edit-btn" :title="t('modal.bookmark.editChildBm')" @click.stop="onEditChild(child.id)" v-html="I.edit"></span>
-              <span class="gic-remove" :title="t('modal.bookmark.deleteChildBm')" @click.stop="onDeleteChild(child.id)" v-html="I.trash"></span>
-            </span>
+          <div class="form-group">
+            <label class="form-label" for="bmIconDark">{{ t('modal.bookmark.customIconDark') }}</label>
+            <div class="icon-input-row">
+              <input type="url" class="form-input" id="bmIconDark" v-model="bmForm.iconDark" :placeholder="t('modal.bookmark.iconDarkUrlPlaceholder')" @keydown.enter="onSave">
+              <div class="icon-thumbs" v-show="bmForm.iconDark">
+                <img :src="bmForm.iconDark" class="icon-thumb active" :title="t('modal.bookmark.currentDarkIcon')">
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">{{ t('modal.bookmark.attributes') }}</label>
+            <div class="check-group">
+              <label v-for="attr in selectableAttrs" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
+                <input type="checkbox" :checked="bmForm.attributes[attr.id]"
+                       @change="toggleAttr(attr.id, $event)">
+                {{ displayText(attr.name) }}
+              </label>
+            </div>
+          </div>
+          <!-- 子书签列表（仅编辑模式且有子书签时显示） -->
+          <div v-if="childBookmarks.length > 0" class="form-group">
+            <label class="form-label">{{ t('modal.bookmark.childCount', { n: childBookmarks.length }) }}</label>
+            <div class="child-bookmarks-list">
+              <span v-for="child in childBookmarks" :key="child.id" class="group-inline-card">
+                <img v-if="child.icon" :src="child.icon" alt="">
+                <span class="gic-name" :title="displayText(child.title) || child.url">{{ displayText(child.title) || child.url }}</span>
+                <span class="gic-edit-btn" :title="t('modal.bookmark.editChildBm')" @click.stop="onEditChild(child.id)" v-html="I.edit"></span>
+                <span class="gic-remove" :title="t('modal.bookmark.deleteChildBm')" @click.stop="onDeleteChild(child.id)" v-html="I.trash"></span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -235,7 +268,9 @@ import { showConfirm } from '../../lib/toast.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
+const urlRef = ref<HTMLInputElement | null>(null)
 const titleRef = ref<HTMLInputElement | null>(null)
+const modalBodyRef = ref<HTMLElement | null>(null)
 const e2e = useE2E()
 // A6-004：仅「已启用且已解锁」才开放字段；hint 区分 setup / unlock
 // 三态判定+文案复用 e2eHintText 纯模块（与 ChildBookmarkEditModal 同源单一真相防漂移）
@@ -415,6 +450,28 @@ const childBookmarks = computed(() => {
   return selectableChildren(store.bookmarks, bmForm.id)
 })
 
+const showMore = ref(false)
+
+function shouldAutoExpandMore(): boolean {
+  if (bmForm.isEdit) {
+    return Boolean(
+      (bmForm.username && bmForm.username.trim()) ||
+      (bmForm.password && bmForm.password.trim()) ||
+      (bmForm.notes && bmForm.notes.trim()) ||
+      (bmForm.icon && bmForm.icon.trim()) ||
+      (bmForm.iconDark && bmForm.iconDark.trim()) ||
+      bmForm.parentId ||
+      Object.values(bmForm.attributes || {}).some(Boolean) ||
+      childBookmarks.value.length > 0
+    )
+  }
+  return false
+}
+
+watch(showMore, (val) => {
+  if (!val) closeParentDropdown()
+})
+
 const aiSuggestionText = computed(() => {
   const parts: string[] = []
   if (bmForm.aiSuggestCatId && bmForm.categoryId !== bmForm.aiSuggestCatId) {
@@ -515,11 +572,22 @@ function onApplyAi() {
 }
 function onDismissAi() { dismissAiSuggestions() }
 
-// Auto-focus title input when modal opens
+// Auto-focus URL input (or title input when editing) when modal opens
 // 组件由 App.vue 的 v-if 在打开瞬间创建，isOpen 在 setup 时已为 true，必须 immediate。
 watch(() => bmForm.isOpen, (open) => {
-  if (open) nextTick(() => titleRef.value?.focus())
-  else closeParentDropdown()
+  if (open) {
+    showMore.value = shouldAutoExpandMore()
+    nextTick(() => {
+      if (modalBodyRef.value) {
+        modalBodyRef.value.scrollTop = 0
+      }
+      const target = bmForm.isEdit ? (titleRef.value || urlRef.value) : (urlRef.value || titleRef.value)
+      target?.focus({ preventScroll: true })
+    })
+  } else {
+    showMore.value = false
+    closeParentDropdown()
+  }
 }, { immediate: true })
 
 onBeforeUnmount(() => {

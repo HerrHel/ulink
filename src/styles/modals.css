@@ -192,6 +192,31 @@
 .cu-chip:hover{border-color:var(--accent);color:var(--accent)}
 .cu-chip.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
 
+/* ── BookmarkModal 更多选项折叠 ── */
+.bm-more-toggle-wrap{
+  display:flex;align-items:center;margin:8px 0 6px;
+}
+.bm-more-toggle-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  background:none;border:none;padding:4px 0;
+  font-size:var(--fs-xs);font-weight:500;color:var(--text-muted);
+  cursor:pointer;transition:color 0.15s ease;
+}
+.bm-more-toggle-btn:hover{color:var(--text)}
+.bm-more-chevron{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:12px;height:12px;opacity:0.6;
+  transition:transform 0.2s ease;
+}
+.bm-more-chevron svg{width:12px;height:12px;display:block}
+.bm-more-chevron.is-open{transform:rotate(180deg)}
+.bm-more-fields{
+  padding-top:10px;margin-top:4px;
+  border-top:1px dashed var(--border-light);
+  animation:bmMoreIn 0.2s var(--ease-out);
+}
+@keyframes bmMoreIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
 /* ── CategoryModal ── */
 .cat-sort-list{max-height:50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-gutter:stable}
 .cat-sort-list::-webkit-scrollbar{width:4px}
