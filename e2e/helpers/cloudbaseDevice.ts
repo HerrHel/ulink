@@ -52,6 +52,12 @@ export async function createBookmark(page: Page, title: string, url: string, ext
   await expect(modal).toBeVisible({ timeout: 5000 })
   await page.getByTestId('lv-bm-url').fill(url)
   await page.getByTestId('lv-bm-title').fill(title)
+  if (extra.username != null || extra.password != null) {
+    const moreToggle = page.getByTestId('lv-bm-more-toggle')
+    if (await moreToggle.isVisible()) {
+      await moreToggle.click()
+    }
+  }
   if (extra.username != null) await page.locator('#bmUsername').fill(extra.username)
   if (extra.password != null) await page.locator('#bmPassword').fill(extra.password)
   await page.getByTestId('lv-bm-save').click()
