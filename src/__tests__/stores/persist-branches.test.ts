@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import * as persist from '../../stores/persist.js'
 import { STORAGE_KEY, DEFAULTS } from '../../config/constants.js'
+import { CURRENT_SCHEMA_VERSION } from '../../stores/migrations.js'
 import type { AppData } from '../../types.js'
 
 vi.mock('../../stores/storage.js', () => ({
@@ -44,7 +45,7 @@ describe('persist - 分支补测', () => {
         siblingGroups: [], categories: DEFAULTS.categories.map(c => ({ ...c })), customAttributes: [],
         // 钉到当前 schema 版本（= migrations.ts 的 CURRENT_SCHEMA_VERSION）：runMigrations
         // 判定无需迁移 → loadFromIDB 不会因 needsm 触发 saveData 回写，保证「零写副作用」稳定。
-        _schemaVersion: 3, _writeSeq: 7, _savedAt: 999,
+        _schemaVersion: CURRENT_SCHEMA_VERSION, _writeSeq: 7, _savedAt: 999,
       } as AppData
       _idbGet.mockResolvedValue(idbData)
       const result = await persist.loadData()

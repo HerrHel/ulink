@@ -59,6 +59,7 @@ export const zh = {
     open: '打开',
     view: '查看',
     more: '更多',
+    collapse: '收起',
     details: '详情',
     undo: '撤销',
     redo: '重做',

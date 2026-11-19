@@ -56,6 +56,7 @@ export const en = {
     open: 'Open',
     view: 'View',
     more: 'More',
+    collapse: 'Collapse',
     details: 'Details',
     undo: 'Undo',
     redo: 'Redo',
