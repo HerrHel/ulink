@@ -63,4 +63,52 @@ describe('上手指南卡片「导入书签」', () => {
     expect(wrapper.find('[data-testid="lv-guide-import"]').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('处于特定分类且标签名与该分类相同时，tagNames 中隐藏该标签', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ui.batchMode = false
+    ds.categories = [
+      { id: 'cat_ai', name: 'AI', icon: '', color: '' },
+      { id: 'cat_dev', name: '开发', icon: '', color: '' },
+    ] as any
+    ds.customAttributes = [
+      { id: 'attr_ai', name: 'AI', type: 'boolean' },
+      { id: 'attr_notes', name: '常用笔记', type: 'boolean' },
+    ] as any
+    ;(ds as any)._syncMaps()
+
+    const group: SiblingGroup = {
+      id: 'g_test',
+      name: 'AI 笔记组',
+      categoryId: 'cat_ai',
+      icon: '',
+      order: 0,
+      isExpanded: false,
+      attributes: { attr_ai: true, attr_notes: true },
+      bookmarkIds: [],
+      notes: '<p>content</p>',
+      updatedAt: 1000,
+      useCount: 0,
+    }
+    ds.siblingGroups = [group]
+
+    // 1. 全部视图下（ui.curCat = 'all'），全部标签均显示
+    ui.curCat = 'all'
+    const wrapper = mount(GroupCard, { props: { group } })
+    await flushPromises()
+    expect((wrapper.vm as any).tagNames).toEqual(['AI', '常用笔记'])
+
+    // 2. 切换到 AI 分类下，同名标签 'AI' 隐藏
+    ui.curCat = 'cat_ai'
+    await wrapper.vm.$nextTick()
+    expect((wrapper.vm as any).tagNames).toEqual(['常用笔记'])
+
+    // 3. 切换到 开发 分类下，'AI' 标签恢复显示
+    ui.curCat = 'cat_dev'
+    await wrapper.vm.$nextTick()
+    expect((wrapper.vm as any).tagNames).toEqual(['AI', '常用笔记'])
+
+    wrapper.unmount()
+  })
 })

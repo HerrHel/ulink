@@ -119,6 +119,7 @@ import { t, tN } from '../../i18n/index.js'
 import type { Bookmark } from '../../types.js'
 import BrandLogo from '../ui/BrandLogo.vue'
 import { OFFICIAL_SITE_BM_ID, OFFICIAL_SITE_LANDING_ID, OFFICIAL_SITE_APP_ID } from '../../stores/dataActionsBookmarks.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 function onImgError(e: Event) {
   (e.target as HTMLImageElement).classList.add('img-error')
@@ -247,7 +248,14 @@ function onSubImgLoad(e: Event, sub: Bookmark) {
     })
   }
 }
-const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttributes))
+const curCatName = computed(() => {
+  if (!uiStore.curCat || uiStore.curCat === CAT_ALL) return ''
+  const cat = dataStore.categoryMap[uiStore.curCat]
+  if (cat?.name) return displayText(cat.name).trim()
+  if (uiStore.curCat === CAT_UNCATEGORIZED) return t('cat.uncategorized').trim()
+  return ''
+})
+const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttributes, curCatName.value))
 const children = computed(() => dataStore.childrenMap[props.bookmark.id] || [])
 const hasExpandableContent = computed(() => !!(displayText(props.bookmark.username) || props.bookmark.password || children.value.length))
 const previewText = computed(() => bookmarkPreview(props.bookmark))

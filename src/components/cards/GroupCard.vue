@@ -165,6 +165,7 @@ import { useListNav } from '../../composables/useListNav.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 import { highlight } from './highlight.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 const props = defineProps({
   group: { type: Object as () => SiblingGroup, required: true },
@@ -261,7 +262,14 @@ const hlRegex = computed<RegExp | null>(() => {
 })
 const hlName = computed(() => hlRegex.value ? highlight(groupDisplayName.value, hlRegex.value, searchQuery.value) : '')
 
-const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
+const curCatName = computed(() => {
+  if (!ui.curCat || ui.curCat === CAT_ALL) return ''
+  const cat = ds.categoryMap[ui.curCat]
+  if (cat?.name) return displayText(cat.name).trim()
+  if (ui.curCat === CAT_UNCATEGORIZED) return t('cat.uncategorized').trim()
+  return ''
+})
+const tagNames = computed(() => getTagNames(props.group, ds.customAttributes, curCatName.value))
 const isPinned = computed(() => !!props.group.pinnedAt)
 const isPublic = computed(() => !isShareReadonly.value && Boolean(props.group.isPublic))
 function onPublicBadgeClick() {

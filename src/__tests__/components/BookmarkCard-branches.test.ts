@@ -524,6 +524,33 @@ describe('BookmarkCard — filterByTagName 标签筛选契约', () => {
     await w.vm.filterByTagName('no-such-tag')
     expect(mocks.toggleAttrFilter).not.toHaveBeenCalled()
   })
+
+  it('当处于特定分类且标签名与该分类相同时，tagNames 中隐藏该标签', async () => {
+    ds.categories = [
+      { id: 'cat_ai', name: 'AI', icon: '', color: '' },
+      { id: 'cat_dev', name: '开发', icon: '', color: '' },
+    ] as any
+    ds.customAttributes = [
+      { id: 'attr_ai', name: 'AI', type: 'boolean' },
+      { id: 'attr_chat', name: 'ChatGPT', type: 'boolean' },
+    ] as any
+    ;(ds as any)._syncMaps()
+
+    // 1. 全部视图下（ui.curCat = 'all'），两个标签均显示
+    ui.curCat = 'all'
+    const w = mountCard({ bm: { attributes: { attr_ai: true, attr_chat: true } } })
+    expect(w.vm.tagNames).toEqual(['AI', 'ChatGPT'])
+
+    // 2. 切换到 AI 分类下，同名标签 'AI' 被过滤隐藏，只留 'ChatGPT'
+    ui.curCat = 'cat_ai'
+    await w.vm.$nextTick()
+    expect(w.vm.tagNames).toEqual(['ChatGPT'])
+
+    // 3. 切换到 开发 分类下，'AI' 标签不再与当前分类同名，恢复显示
+    ui.curCat = 'cat_dev'
+    await w.vm.$nextTick()
+    expect(w.vm.tagNames).toEqual(['AI', 'ChatGPT'])
+  })
 })
 
 describe('BookmarkCard — 转发函数契约', () => {

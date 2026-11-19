@@ -386,11 +386,25 @@ if (_mobileMql) {
 
 export function isMobile(): boolean { return _isMobile }
 
-export function getTagNames(item: Bookmark | SiblingGroup, customAttributes: CustomAttribute[]): string[] {
+export function getTagNames(
+  item: Bookmark | SiblingGroup,
+  customAttributes: CustomAttribute[],
+  excludeCategoryName?: string | null
+): string[] {
   if (!item.attributes) return []
+  const exclude = excludeCategoryName?.trim().toLowerCase()
   // 排除软删定义 + 内置 is-group，避免回收站属性仍出现在卡片 tag 上
+  // 若传入 excludeCategoryName（如当前分类名），隐藏与该分类同名的属性标签
   return customAttributes
-    .filter(a => !a.deletedAt && a.id !== ATTR_IS_GROUP && item.attributes[a.id])
+    .filter(a => {
+      if (a.deletedAt || a.id === ATTR_IS_GROUP || !item.attributes[a.id]) return false
+      if (exclude && a.name) {
+        const raw = String(a.name).trim().toLowerCase()
+        const disp = displayText(a.name).trim().toLowerCase()
+        if (raw === exclude || disp === exclude) return false
+      }
+      return true
+    })
     .map(a => a.name)
 }
 

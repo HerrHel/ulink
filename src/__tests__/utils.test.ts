@@ -427,5 +427,26 @@ describe('utils', () => {
       // 源码 .map(a => a.name) 不跳过缺 name，t1 无 name→undefined 进数组
       expect(getTagNames(item, attrsNoName)).toEqual([undefined, '标签二'])
     })
+    it('传入 excludeCategoryName 时，自动过滤同名标签（忽略大小写与首尾空格）', () => {
+      const customAttrs = [
+        { id: 't1', name: 'AI', type: 'boolean' as const },
+        { id: 't2', name: '设计', type: 'boolean' as const },
+        { id: 't3', name: '工具', type: 'boolean' as const },
+      ] as any
+      const item = { attributes: { t1: true, t2: true, t3: true } } as any
+
+      // 1. 同名精确匹配：'AI' 排除
+      expect(getTagNames(item, customAttrs, 'AI')).toEqual(['设计', '工具'])
+      // 2. 大小写不敏感：'ai' 也能排除 'AI'
+      expect(getTagNames(item, customAttrs, 'ai')).toEqual(['设计', '工具'])
+      // 3. 首尾空格容忍：'  AI  '
+      expect(getTagNames(item, customAttrs, '  AI  ')).toEqual(['设计', '工具'])
+      // 4. 中文匹配：'设计' 排除
+      expect(getTagNames(item, customAttrs, '设计')).toEqual(['AI', '工具'])
+      // 5. excludeCategoryName 为空串/null/undefined 时不过滤任何标签
+      expect(getTagNames(item, customAttrs, '')).toEqual(['AI', '设计', '工具'])
+      expect(getTagNames(item, customAttrs, null)).toEqual(['AI', '设计', '工具'])
+      expect(getTagNames(item, customAttrs, undefined)).toEqual(['AI', '设计', '工具'])
+    })
   })
 })
