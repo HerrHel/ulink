@@ -407,7 +407,7 @@ export function inferUrlSemantics(
   if (pathInfo.type === 'docs') expectedTags.push('文档')
   if (pathInfo.type === 'article') expectedTags.push('文章')
 
-  const activeAttrs = customAttributes.filter(a => !a.deletedAt)
+  const activeAttrs = customAttributes.filter(a => !a.deletedAt && a.id !== 'is-group')
   for (const attr of activeAttrs) {
     const an = attr.name.toLowerCase()
     if (expectedTags.some(t => an.includes(t.toLowerCase()) || t.toLowerCase().includes(an))) {

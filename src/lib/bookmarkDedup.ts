@@ -1,4 +1,5 @@
 import type { Bookmark } from '../types.js'
+import { isThreePartCipher } from '../crypto.js'
 
 /**
  * bookmarkDedup.ts — 书签 URL 去重与父子层级关系判定纯函数（从 composables/domain/useBookmark.ts 抽取）
@@ -28,7 +29,7 @@ export function findBestParentBookmark(
   bookmarks: Bookmark[],
   excludeId?: string
 ): Bookmark | null {
-  if (!newUrlInput || newUrlInput.trim().length < 4) return null
+  if (!newUrlInput || isThreePartCipher(newUrlInput.trim()) || newUrlInput.trim().length < 4) return null
   let newUrl: URL
   try {
     const raw = newUrlInput.trim()
@@ -41,8 +42,8 @@ export function findBestParentBookmark(
   const newPath = newUrl.pathname.replace(/\/+$/, '')
   const newFull = newUrl.href
 
-  // 顶层、未删除且非自身候选
-  const candidates = bookmarks.filter(b => !b.parentId && !b.deletedAt && b.id !== excludeId)
+  // 顶层、未删除且非自身候选（排除密文）
+  const candidates = bookmarks.filter(b => !b.parentId && !b.deletedAt && b.id !== excludeId && !isThreePartCipher(b.url || ''))
 
   let bestParent: Bookmark | null = null
   let bestScore = 0

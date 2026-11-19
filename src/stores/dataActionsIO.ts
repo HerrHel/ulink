@@ -203,6 +203,8 @@ export const ioActions = {
     if (ui.aiEnrichTargetBmId) { ui.aiEnrichTargetBmId = null; ui.modals.aiEnrich = false }
     if (Array.isArray(ui.aiAttachedCards)) ui.aiAttachedCards.splice(0)
     ui.modals.bookmark = false
+    ui.modals.category = false
+    ui.modals.attribute = false
     ui.modals.groupEdit = false
     ui.panels.detail = false
     ui.panels.history = false

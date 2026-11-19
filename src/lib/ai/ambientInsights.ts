@@ -11,6 +11,8 @@ import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import { runAmbientGroomingScan } from './ambientGrooming.js'
 import { findSerendipityMatches } from './serendipityEngine.js'
 import { t } from '../../i18n/index.js'
+import { displayText } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { ref } from 'vue'
 
 export const K_AI_AMBIENT = 'lv_ai_ambient_v1'
@@ -81,6 +83,7 @@ export class AmbientInsightsHub {
    * 当用户保存/更新书签时，触发单点偶遇探测
    */
   public triggerSerendipityCheck(target: Bookmark, allBookmarks: Bookmark[]): AmbientInsightItem | null {
+    if (target.deletedAt || !target.url || isThreePartCipher(target.url)) return null
     const matches = findSerendipityMatches(target, allBookmarks, { maxMatches: 1 })
     if (matches.length === 0) return null
 
@@ -92,17 +95,19 @@ export class AmbientInsightsHub {
     const exists = this.insights.some((i) => i.id === insightId)
     if (exists) return null
 
+    const curTitle = displayText(target.title || '当前书签')
+    const relTitle = displayText(match.candidate.title || '')
     const conceptsStr = match.commonConcepts.length ? `（交集: ${match.commonConcepts.join(' / ')}）` : ''
     const item: AmbientInsightItem = {
       id: insightId,
       category: 'serendipity',
       type: 'serendipity',
-      title: t('ai.ambientSerendipityTitle', { current: target.title || '当前书签', related: match.candidate.title }),
+      title: t('ai.ambientSerendipityTitle', { current: curTitle, related: relTitle }),
       description: `${match.reason}${conceptsStr}。建议建立两者的对比沉淀或放入同一工作台。`,
       severity: 'serendipity',
       sourceId: target.id,
       targetId: match.candidate.id,
-      actionCommand: `帮我深度对比「${target.title}」与「${match.candidate.title}」的定位与差异`,
+      actionCommand: `帮我深度对比「${curTitle}」与「${relTitle}」的定位与差异`,
       actionName: 'compare_cards',
       createdAt: Date.now(),
     }

@@ -225,7 +225,7 @@ export function usePayment() {
       }
       if (!res.ok || body.ok !== true) return null
       const o = normalizeOrder(body.order)
-      if (o) order.value = o
+      if (o && (!order.value || order.value.orderId === o.orderId)) order.value = o
       return o
     } catch {
       return null

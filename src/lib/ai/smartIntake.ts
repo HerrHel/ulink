@@ -206,8 +206,10 @@ export async function fetchUrlMetadataAsync(
       }
     }
   }
-  const localAttrIds = suggestAttributes(url, `${title} ${notes}`, attributes)
-  const suggestedAttrIds = [...new Set([...serverSuggestedAttrIds, ...localAttrIds])]
+  const activeAttrs = attributes.filter(a => !a.deletedAt && a.id !== 'is-group')
+  const activeAttrIdSet = new Set(activeAttrs.map(a => a.id))
+  const localAttrIds = suggestAttributes(url, `${title} ${notes}`, activeAttrs)
+  const suggestedAttrIds = [...new Set([...serverSuggestedAttrIds, ...localAttrIds])].filter(id => activeAttrIdSet.has(id))
 
   return {
     success: true,

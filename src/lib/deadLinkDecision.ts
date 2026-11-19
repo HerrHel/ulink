@@ -398,7 +398,9 @@ export function decideWithRule(
   let isGfwHost = false
   let isIntranet = false
   try {
-    const host = new URL(url).hostname
+    const raw = (url || '').trim()
+    const parsed = new URL(/^https?:\/\//i.test(raw) ? raw : 'http://' + raw)
+    const host = parsed.hostname
     isGfwHost = isKnownGfwHost(host)
     isIntranet = isPrivateOrLocalHost(host)
   } catch {

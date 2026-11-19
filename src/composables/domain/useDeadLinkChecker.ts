@@ -453,9 +453,10 @@ export function useDeadLinkChecker() {
       return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'no_edge' })
     }
 
+    const targetUrl = /^https?:\/\//i.test((url || '').trim()) ? (url || '').trim() : 'http://' + (url || '').trim()
     let isIntranet = false
     try {
-      isIntranet = isPrivateOrLocalHost(new URL(url).hostname)
+      isIntranet = isPrivateOrLocalHost(new URL(targetUrl).hostname)
     } catch { /* ignore */ }
 
     // 本机明确离线：内网直连必然失败，不能据此落 dead 标（离线结论一律 inconclusive）
@@ -463,7 +464,7 @@ export function useDeadLinkChecker() {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         return makeCheckResult({ verdict: 'inconclusive', reason: 'offline' })
       }
-      const direct = await checkDirect(url, 3000)
+      const direct = await checkDirect(targetUrl, 3000)
       if (direct.reachable) {
         return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'ssrf' })
       } else {

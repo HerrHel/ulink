@@ -12,7 +12,7 @@
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
-import { esc, gid, favicon } from '../../utils.js'
+import { esc, gid, favicon, displayText, fixUrl } from '../../utils.js'
 import {
   findDuplicateCandidates,
   isUncategorized,
@@ -253,7 +253,7 @@ export async function applyInboxZeroClustering(
   for (const rel of relations) {
     const parent = ds.bookmarkMap[rel.parentId]
     const child = ds.bookmarkMap[rel.childId]
-    if (!parent || parent.deletedAt || !child || child.deletedAt) continue
+    if (!parent || parent.deletedAt || !child || child.deletedAt || parent.id === child.id || parent.parentId === child.id) continue
     revertMap.push({ id: rel.childId, prevCatId: child.categoryId, prevParentId: child.parentId })
     const parentCatId =
       parent.categoryId && parent.categoryId !== CAT_UNCATEGORIZED ? parent.categoryId : child.categoryId
@@ -366,14 +366,18 @@ export async function createTopicWorkspace(
       (b: Bookmark) => !b.deletedAt && (b.url.trim().toLowerCase() === cClean.toLowerCase() || (!!cNorm && normalizeUrlForDedup(b.url) === cNorm)),
     )
     if (existing) {
-      allBookmarkIds.push(existing.id)
-      savedBookmarks.push(existing)
+      if (!allBookmarkIds.includes(existing.id)) {
+        allBookmarkIds.push(existing.id)
+        savedBookmarks.push(existing)
+      }
     } else {
       const bm = candidateToBookmark(ds, { ...c, categoryId: finalCatId })
       ds.addBookmark(bm)
       createdBmIds.push(bm.id)
-      allBookmarkIds.push(bm.id)
-      savedBookmarks.push(bm)
+      if (!allBookmarkIds.includes(bm.id)) {
+        allBookmarkIds.push(bm.id)
+        savedBookmarks.push(bm)
+      }
     }
   }
 
@@ -471,7 +475,7 @@ export async function healDeadlink(
   }
 
   const confirmed = await askConfirm(
-    buildHealConfirmMessage(bm.title, replacement.title || replacement.url),
+    buildHealConfirmMessage(displayText(bm.title), displayText(replacement.title || replacement.url)),
   )
   if (context?.signal?.aborted) return { success: false, message: '' }
   if (!confirmed) {
@@ -490,10 +494,11 @@ export async function healDeadlink(
   delete newAttributes['dead-link']
   newAttributes['dead-link-healed'] = true
 
+  const cleanUrl = fixUrl(replacement.url) || replacement.url
   ds.updateBookmark(deadBmId, {
-    title: replacement.title || bm.title,
-    url: replacement.url,
-    icon: replacement.icon || favicon(replacement.url),
+    title: replacement.title ? displayText(replacement.title) : bm.title,
+    url: cleanUrl,
+    icon: replacement.icon || favicon(cleanUrl),
     notes: replacement.notes || bm.notes,
     attributes: newAttributes,
   })
@@ -501,7 +506,7 @@ export async function healDeadlink(
 
   pushUndoAction({
     type: 'heal_deadlink',
-    description: t('aiCmd.undoHealDesc', { from: prev.title, to: replacement.title }),
+    description: t('aiCmd.undoHealDesc', { from: displayText(prev.title), to: displayText(replacement.title || '') }),
     revert: () => {
       ds.updateBookmark(deadBmId, {
         title: prev.title,
@@ -551,7 +556,7 @@ export async function batchTagBookmarks(
   // 1. 现有属性名 → 属性 id 快速映射
   const attrNameMap = new Map<string, string>()
   for (const a of ds.customAttributes) {
-    if (a && !a.deletedAt && a.name) {
+    if (a && !a.deletedAt && a.name && a.id !== 'is-group') {
       attrNameMap.set(a.name.toLowerCase().trim(), a.id)
     }
   }
@@ -588,11 +593,13 @@ export async function batchTagBookmarks(
 
     for (const tag of validTags) {
       const tagLower = tag.toLowerCase()
+      if (tagLower === 'is-group' || tagLower === '组') continue
       let attrId = attrNameMap.get(tagLower)
+      if (attrId === 'is-group') continue
       if (!attrId) {
         // 创建新属性
         attrId = attrSlug(tag) || gid()
-        if (ds.attributeMap[attrId]) {
+        if (attrId === 'is-group' || ds.attributeMap[attrId]) {
           attrId = `attr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
         }
         ds.addAttribute({
@@ -608,7 +615,7 @@ export async function batchTagBookmarks(
 
     ds.updateBookmark(target.id, { attributes: nextAttrs })
     details.push({
-      title: target.title || '无标题',
+      title: displayText(target.title || '无标题'),
       url: target.url,
       tags: appliedTags,
     })

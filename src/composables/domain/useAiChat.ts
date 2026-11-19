@@ -250,7 +250,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
   }
 
   function addAllInTurn(turn: ChatTurn) {
-    if (!turn.candidates) return
+    if (!turn.candidates || !turn.candidates.length) return
     let count = 0
     for (const c of turn.candidates) {
       if (!c.isAdded) {
@@ -259,8 +259,10 @@ export function useAiChat(options: UseAiChatOptions = {}) {
         count++
       }
     }
-    if (count) saveAppData()
-    toast(t('ai.addedBatchSuccess', { n: count }), true)
+    if (count > 0) {
+      saveAppData()
+      toast(t('ai.addedBatchSuccess', { n: count }), true)
+    }
   }
 
   function applySlashCommand(cmd: string) {

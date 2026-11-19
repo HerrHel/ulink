@@ -55,7 +55,7 @@ export function parseMiMoReply(
 
             const prefill = getSmartPrefill(fixedUrl, [], categories, attributes)
             const matchedCat = categories.find(
-              c => c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized'
+              c => !c.deletedAt && c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized'
             )
             // 低置信度的本地启发式不得冒充推荐语——fallback 级 prefill 只用于分类/属性建议
             const fallbackNotes = prefill.confidence !== 'fallback' ? (prefill.notes || '') : ''

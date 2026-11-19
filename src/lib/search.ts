@@ -80,6 +80,7 @@ function ensureSearchLibs(): boolean {
  * 本模块加载即预拉分包，用户开始输入时通常已就绪。
  */
 export function pinyinMatch(text: string, query: string, opts?: { continuous?: boolean }): number[] | null {
+  if (!text || !query) return null
   if (!matchFn) { ensureSearchLibs(); return null }
   return matchFn(text, query, opts)
 }
@@ -468,9 +469,12 @@ export function _buildHighlightSegments(text: string, indices: ReadonlyArray<rea
   const segments: HighlightSegment[] = []
   let cursor = 0
   for (const [start, end] of indices) {
-    if (start > cursor) segments.push({ text: text.slice(cursor, start), highlight: false })
-    segments.push({ text: text.slice(start, end + 1), highlight: true })
-    cursor = end + 1
+    const safeStart = Math.max(cursor, start)
+    if (safeStart > cursor) segments.push({ text: text.slice(cursor, safeStart), highlight: false })
+    if (end >= safeStart) {
+      segments.push({ text: text.slice(safeStart, end + 1), highlight: true })
+      cursor = Math.max(cursor, end + 1)
+    }
   }
   if (cursor < text.length) segments.push({ text: text.slice(cursor), highlight: false })
   return segments.length ? segments : [{ text, highlight: false }]
@@ -673,6 +677,6 @@ export function searchWithHighlights(
 export function clearSearchCache(): void {
   _pyCache.clear()
   _pyInitialCache.clear()
-  _bmBaseRef = null; _bmBaseItems = []; _bmBaseAttrs = null; _bmFuse = null
-  _grpBaseRef = null; _grpBaseItems = []; _grpBaseMap = null; _grpBaseAttrs = null; _grpFuse = null
+  _bmBaseRef = null; _bmBaseItems = []; _bmBaseAttrs = null; _bmFuse = null; _bmVersion = -1
+  _grpBaseRef = null; _grpBaseItems = []; _grpBaseMap = null; _grpBaseAttrs = null; _grpFuse = null; _grpVersion = -1
 }

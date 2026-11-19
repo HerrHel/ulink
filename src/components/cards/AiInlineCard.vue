@@ -174,7 +174,7 @@ function saveToVault() {
   localSaved.value = true
 
   emit('saved', props.candidate)
-  toast(t('ai.savedToast', { title: props.candidate.title }), true)
+  toast(t('ai.savedToast', { title: displayText(props.candidate.title || domainStr.value) }), true)
 }
 </script>
 

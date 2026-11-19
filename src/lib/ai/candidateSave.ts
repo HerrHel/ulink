@@ -22,7 +22,15 @@ export function candidateToBookmark(
   const now = Date.now()
   const attributes: Record<string, boolean> = {}
   if (c.suggestedAttrIds?.length) {
-    for (const aid of c.suggestedAttrIds) attributes[aid] = true
+    const validAttrIds = new Set(
+      ds?.customAttributes?.filter(a => !a.deletedAt && a.id !== 'is-group').map(a => a.id) ?? []
+    )
+    for (const aid of c.suggestedAttrIds) {
+      if (aid === 'is-group') continue
+      if (validAttrIds.size === 0 || validAttrIds.has(aid)) {
+        attributes[aid] = true
+      }
+    }
   }
   let categoryId = c.categoryId
   if (categoryId && categoryId !== CAT_UNCATEGORIZED) {

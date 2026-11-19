@@ -13,6 +13,7 @@ import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { findDuplicateCandidates, isUncategorized } from './localClustering.js'
 import { isThreePartCipher } from '../../crypto.js'
+import { displayText } from '../../utils.js'
 import { t } from '../../i18n/index.js'
 
 export type GroomingInsightType = 'drift' | 'inbox' | 'vague' | 'duplicates'
@@ -83,14 +84,15 @@ export function runAmbientGroomingScan(params: {
     if (totalCount >= 25) {
       const cat = categories.find((c) => c.id === catId && !c.deletedAt)
       if (cat) {
+        const catName = displayText(cat.name)
         insights.push({
           id: `groom-drift-${catId}`,
           type: 'drift',
-          title: t('ai.ambientDriftTitle', { name: cat.name, count: totalCount }),
-          description: t('ai.ambientDriftDesc', { name: cat.name }),
+          title: t('ai.ambientDriftTitle', { name: catName, count: totalCount }),
+          description: t('ai.ambientDriftDesc', { name: catName }),
           count: totalCount,
           targetCategoryId: catId,
-          suggestedActionCommand: `/pack ${cat.name}`,
+          suggestedActionCommand: `/pack ${catName}`,
           suggestedActionName: 'create_workspace',
           severity: 'suggestion',
         })

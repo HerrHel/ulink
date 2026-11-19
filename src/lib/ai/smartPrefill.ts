@@ -340,7 +340,7 @@ export function getSmartPrefill(
       }
       if (b.attributes) {
         for (const [aid, val] of Object.entries(b.attributes)) {
-          if (val && !tagList.includes(aid)) tagList.push(aid)
+          if (val && aid !== 'is-group' && !tagList.includes(aid)) tagList.push(aid)
         }
       }
     }
@@ -397,7 +397,7 @@ export function getSmartPrefill(
 
   // 6. 属性标签匹配（严格从用户已有的属性中预选）
   const suggestedAttrIds: string[] = []
-  const activeAttrs = customAttributes.filter(a => !a.deletedAt)
+  const activeAttrs = customAttributes.filter(a => !a.deletedAt && a.id !== 'is-group')
   for (const attr of activeAttrs) {
     const attrLower = attr.name.toLowerCase()
     const isMatched = tagList.some(t => {

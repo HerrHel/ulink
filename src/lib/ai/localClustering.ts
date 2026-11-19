@@ -5,7 +5,7 @@
  */
 
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
-import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { suggestCategory } from '../ai-classify.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { registrableDomain } from '../registrableDomain.js'
@@ -121,7 +121,7 @@ export function clusterUncategorizedBookmarks(
   categories: Category[],
   groupedBookmarkIds?: Set<string>,
 ): BookmarkCluster[] {
-  const activeCategories = categories.filter(c => !c.deletedAt)
+  const activeCategories = categories.filter(c => !c.deletedAt && c.id !== CAT_ALL && c.id !== CAT_UNCATEGORIZED)
   const categoryMap = new Map(activeCategories.map(c => [c.id, c]))
 
   // 1. 过滤出严格待整理的书签
@@ -299,7 +299,9 @@ export function detectParentChildRelations(bookmarks: Bookmark[]): ParentChildLi
       guard.add(top)
       top = bestParent.get(top)!
     }
-    links.push({ childId, parentId: top })
+    if (top !== childId) {
+      links.push({ childId, parentId: top })
+    }
   }
   return links
 }
@@ -320,7 +322,7 @@ export function findUncategorizedGroups(
   categories: Category[],
   bookmarks: Bookmark[],
 ): UncategorizedGroupItem[] {
-  const activeCats = categories.filter(c => !c.deletedAt)
+  const activeCats = categories.filter(c => !c.deletedAt && c.id !== CAT_ALL && c.id !== CAT_UNCATEGORIZED)
   const catMap = new Map(activeCats.map(c => [c.id, c]))
   const bmMap = new Map(bookmarks.filter(b => !b.deletedAt).map(b => [b.id, b]))
 
