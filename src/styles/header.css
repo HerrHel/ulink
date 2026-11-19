@@ -44,6 +44,8 @@
 .panel-count{
   font-size:var(--fs-sm);color:var(--text-muted);
   font-weight:500;flex-shrink:0;
+  user-select:none;-webkit-user-select:none;
+  cursor:default;
 }
 /* Focus mode title input (used by AppHeader.vue) */
 .focus-title-input{

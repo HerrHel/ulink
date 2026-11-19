@@ -10,7 +10,7 @@
           <span aria-hidden="true" v-html="I.back"></span>
         </span>
         <span class="panel-breadcrumb">{{ displayName }}</span>
-        <span class="panel-count">{{ tN('count.bookmarks', focusBookmarkCount) }}</span>
+        <span v-if="focusBookmarkCount > 0" class="panel-count">{{ tN('count.bookmarks', focusBookmarkCount) }}</span>
       </template>
       <!-- Share readonly mode: category / group view -->
       <template v-else-if="shareMode">
@@ -32,7 +32,7 @@
               :class="{ 'focus-title-unnamed': !focusedGroup.name || isUnnamed(focusedGroup.name) }"
               @blur="$emit('focus-title-change', $event)" @keydown.enter.prevent="($event.target as HTMLElement).blur()"
               @focus="onTitleFocus">{{ displayName }}</span>
-        <span class="panel-count">{{ tN('count.bookmarks', focusBookmarkCount) }}</span>
+        <span v-if="focusBookmarkCount > 0" class="panel-count" contenteditable="false" @mousedown.prevent>{{ tN('count.bookmarks', focusBookmarkCount) }}</span>
       </template>
       <!-- Normal mode -->
       <template v-else>
@@ -186,9 +186,13 @@ watch(() => ui.searchQuery, (val) => {
   }
 })
 
-const focusedGroup = computed(() =>
-  ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
-)
+const focusedGroup = computed(() => {
+  if (!ui.focusedGroupId) return null
+  return dataStore.groupMap[ui.focusedGroupId]
+    || (share.group?.id === ui.focusedGroupId ? share.group : null)
+    || share.groups.find(g => g.id === ui.focusedGroupId)
+    || null
+})
 const isFocusedGroupPublic = computed(() => Boolean(focusedGroup.value?.isPublic))
 /** 「未命名」同时兼容旧存量数据的中文占位值 */
 function isUnnamed(v: string): boolean {
@@ -220,8 +224,7 @@ const panelCountText = computed(() => {
   return tN('count.items', dataStore.filteredBookmarks.filter(b => !b.parentId).length + dataStore.filteredGroups.length)
 })
 const focusBookmarkCount = computed(() => {
-  const g = ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
-  return g ? (g.bookmarkIds?.length || 0) : 0
+  return focusedGroup.value?.bookmarkIds?.length || 0
 })
 
 onUnmounted(() => {
@@ -243,7 +246,7 @@ function onTitleFocus(e: FocusEvent) {
 }
 
 function onDblClick(e: MouseEvent) {
-  if (ui.focusedGroupId && !(e.target as HTMLElement).closest('input, button')) {
+  if (ui.focusedGroupId && !(e.target as HTMLElement).closest('input, button, .focus-title-input, .panel-count')) {
     emit('exit-focus')
   }
 }
