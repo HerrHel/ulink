@@ -167,6 +167,9 @@ const trashCount = computed(() => ds.trashCount)
 
 // ── 多选状态：key 为 `type:id`，与 4 个 trashed getter 求交集过滤脏 key ──
 const selected = ref<Set<string>>(new Set())
+watch(() => props.open, (open) => {
+  if (!open) selected.value.clear()
+})
 const isSelected = (t: TrashType, id: string) => selected.value.has(trashKey(t, id))
 function toggle(t: TrashType, id: string) {
   const k = trashKey(t, id)

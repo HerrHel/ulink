@@ -82,6 +82,10 @@ export async function executeManageCategories(
     if (!rawName) {
       return { success: false, message: '创建失败：未提供有效的分类名称。' }
     }
+    const reserved = ['all', '全部', 'uncategorized', '未分类']
+    if (reserved.includes(rawName.toLowerCase())) {
+      return { success: false, message: `创建失败：「${rawName}」为系统保留名称。` }
+    }
     const exists = ds.categories.find((c: Category) => !c.deletedAt && c.name.toLowerCase() === rawName.toLowerCase())
     if (exists) {
       return { success: false, message: `分类「${rawName}」已存在，无需重复创建。` }
@@ -120,12 +124,23 @@ export async function executeManageCategories(
     if (!cat) {
       return { success: false, message: `未找到欲重命名的分类「${rawName || params.categoryId}」。` }
     }
+    if (cat.id === 'all' || cat.id === CAT_UNCATEGORIZED) {
+      return { success: false, message: '系统内置分类受保护，不支持重命名。' }
+    }
     if (cat.name && isThreePartCipher(cat.name)) {
       return { success: false, message: '分类当前处于加密锁定状态，为防密文损坏，禁止重命名。' }
     }
     const nextName = (params.newName || '').trim()
     if (!nextName) {
       return { success: false, message: '重命名失败：新分类名称不能为空。' }
+    }
+    const reserved = ['all', '全部', 'uncategorized', '未分类']
+    if (reserved.includes(nextName.toLowerCase())) {
+      return { success: false, message: `重命名失败：「${nextName}」为系统保留名称。` }
+    }
+    const dup = ds.categories.find((c: Category) => !c.deletedAt && c.id !== cat.id && c.name.toLowerCase() === nextName.toLowerCase())
+    if (dup) {
+      return { success: false, message: `重命名失败：分类「${nextName}」已存在。` }
     }
     const prevName = cat.name
     ds.renameCategory(cat.id, nextName)
@@ -315,6 +330,9 @@ export async function executeManageTags(
   if (action === 'rename') {
     const tag = findTag(params.tagId || rawName)
     if (!tag) return { success: false, message: `未找到标签「${rawName || params.tagId}」。` }
+    if (tag.id === ATTR_IS_GROUP) {
+      return { success: false, message: '系统内置属性「笔记」受保护，不支持重命名。' }
+    }
     if (tag.name && isThreePartCipher(tag.name)) {
       return { success: false, message: '标签当前处于加密锁定状态，为防密文损坏，禁止重命名。' }
     }
@@ -339,6 +357,9 @@ export async function executeManageTags(
   if (action === 'delete') {
     const tag = findTag(params.tagId || rawName)
     if (!tag) return { success: false, message: `未找到待删除的标签「${rawName || params.tagId}」。` }
+    if (tag.id === ATTR_IS_GROUP) {
+      return { success: false, message: '系统内置属性「笔记」受保护，不支持删除。' }
+    }
     const tagName = tag.name
     ds.deleteAttribute(tag.id)
     app.save?.()

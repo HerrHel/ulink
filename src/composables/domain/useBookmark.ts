@@ -368,8 +368,8 @@ export async function saveBm() {
       notes: bmForm.notes.trim(),
       icon: bmForm.icon.trim(),
       iconDark: bmForm.iconDark.trim() || undefined,
-      categoryId: bmForm.categoryId || CAT_UNCATEGORIZED,
-      parentId: bmForm.parentId || null,
+      categoryId: (bmForm.categoryId && ds.categoryMap[bmForm.categoryId] && !ds.categoryMap[bmForm.categoryId].deletedAt) ? bmForm.categoryId : CAT_UNCATEGORIZED,
+      parentId: (bmForm.parentId && ds.bookmarkMap[bmForm.parentId] && !ds.bookmarkMap[bmForm.parentId].deletedAt && bmForm.parentId !== bmForm.id) ? bmForm.parentId : null,
       attributes: { ...bmForm.attributes },
     }
 

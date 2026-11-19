@@ -17,11 +17,21 @@ export const groupActions = {
     const attributes = { ...(g.attributes || {}), [ATTR_IS_GROUP]: true }
     const bookmarkIds = Array.isArray(g.bookmarkIds) ? [...g.bookmarkIds] : []
     const group = { ...g, bookmarkIds, attributes }
+    const existingIdx = _indexOfById(this.siblingGroups, this._grpMap, group.id)
+    if (existingIdx >= 0) {
+      this.siblingGroups[existingIdx] = group
+      this._grpMap[group.id] = group
+      this._markDirty(group.id)
+      this._searchIndexDirty = true
+      this._debouncedBumpSearchVersion()
+      return
+    }
     this.siblingGroups = [...this.siblingGroups, group]
     this._grpMap[group.id] = group
     this._markDirty(group.id)
     this._newIds.add(group.id)
     this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
   },
   updateGroup(this: DataStoreThis, id: string, changes: Partial<SiblingGroup>) {
     if (_denyWrite()) return

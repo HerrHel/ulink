@@ -202,6 +202,11 @@ export const ioActions = {
     if (ui.shareModalTarget) ui.closeShareModal()
     if (ui.aiEnrichTargetBmId) { ui.aiEnrichTargetBmId = null; ui.modals.aiEnrich = false }
     if (Array.isArray(ui.aiAttachedCards)) ui.aiAttachedCards.splice(0)
+    ui.modals.bookmark = false
+    ui.modals.groupEdit = false
+    ui.panels.detail = false
+    ui.panels.history = false
+    ui.panels.trash = false
     // 旧实现对 shareMode 在这里兜底置 null —— 现已是死代码：本函数入口就有
     // `if (ui.shareMode) return`（分享态禁止切空间，防止半切换态把主页数据写进
     // 私密空间键）。退出分享态的唯一路径是 share.ts 的 _teardown，它会 shadowClear()。

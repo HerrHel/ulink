@@ -360,8 +360,10 @@ export async function createTopicWorkspace(
   const createdBmIds: string[] = []
 
   for (const c of items) {
+    const cClean = (c.url || '').trim()
+    const cNorm = normalizeUrlForDedup(cClean)
     const existing = ds.bookmarks.find(
-      (b: Bookmark) => !b.deletedAt && b.url.toLowerCase() === c.url.toLowerCase(),
+      (b: Bookmark) => !b.deletedAt && (b.url.trim().toLowerCase() === cClean.toLowerCase() || (!!cNorm && normalizeUrlForDedup(b.url) === cNorm)),
     )
     if (existing) {
       allBookmarkIds.push(existing.id)

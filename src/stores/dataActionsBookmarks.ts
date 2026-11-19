@@ -82,6 +82,16 @@ export const bookmarkActions = {
     if (entry.parentId && (entry.parentId === entry.id || !parent || parent.deletedAt)) {
       entry.parentId = null
     }
+    const existingIdx = _indexOfById(this.bookmarks, this._bmMap, entry.id)
+    if (existingIdx >= 0) {
+      this.bookmarks[existingIdx] = entry
+      this._bmMap[entry.id] = entry
+      this._syncMaps()
+      this._markDirty(entry.id)
+      this._searchIndexDirty = true
+      this._debouncedBumpSearchVersion()
+      return
+    }
     this.bookmarks = [...this.bookmarks, entry]
     this._bmMap[entry.id] = entry
     if (entry.parentId) {

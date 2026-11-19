@@ -3,6 +3,7 @@
  * 比较两个版本的字段级差异，用于历史版本 diff UI
  */
 import { t } from '../i18n/index.js'
+import { isThreePartCipher } from '../crypto.js'
 export interface DiffField {
   key: string
   label: string
@@ -28,6 +29,7 @@ const SENSITIVE_KEYS = new Set(['password'])
 
 function _truncate(val: unknown, max = 80): string {
   if (val === null || val === undefined) return '（空）'
+  if (typeof val === 'string' && isThreePartCipher(val)) return '（加密数据）'
   let s: string
   try {
     s = typeof val === 'object' ? JSON.stringify(val) : String(val)

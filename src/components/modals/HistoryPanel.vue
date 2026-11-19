@@ -116,6 +116,12 @@ watch([() => props.open, () => props.itemId], async ([isOpen, itemId]) => {
     } finally {
       if (gen === _gen) loading.value = false
     }
+  } else {
+    _gen++
+    versions.value = []
+    loading.value = false
+    selectedIdx.value = -1
+    diffMode.value = false
   }
 })
 

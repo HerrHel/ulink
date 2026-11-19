@@ -25,6 +25,15 @@ export const categoryActions = {
     if (_denyWrite()) return
     if (cat.id === CAT_ALL || cat.id === CAT_UNCATEGORIZED) return
     cat.updatedAt = Date.now()
+    const existingIdx = _indexOfById(this.categories, this._catMap, cat.id)
+    if (existingIdx >= 0) {
+      this.categories[existingIdx] = cat
+      this._catMap[cat.id] = cat
+      this._markDirty(cat.id)
+      this._searchIndexDirty = true
+      this._debouncedBumpSearchVersion()
+      return
+    }
     this.categories = [...this.categories, cat]
     this._catMap[cat.id] = cat
     this._markDirty(cat.id); this._newIds.add(cat.id)

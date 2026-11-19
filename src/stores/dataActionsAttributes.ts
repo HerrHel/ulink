@@ -27,6 +27,15 @@ export const attributeActions = {
   addAttribute(this: DataStoreThis, attr: CustomAttribute) {
     if (_denyWrite()) return
     attr.updatedAt = Date.now()
+    const existingIdx = _indexOfById(this.customAttributes, this._attrMap, attr.id)
+    if (existingIdx >= 0) {
+      this.customAttributes[existingIdx] = attr
+      this._attrMap[attr.id] = attr
+      this._markDirty(attr.id)
+      this._searchIndexDirty = true
+      this._debouncedBumpSearchVersion()
+      return
+    }
     this.customAttributes = [...this.customAttributes, attr]
     this._attrMap[attr.id] = attr
     this._markDirty(attr.id); this._newIds.add(attr.id)
