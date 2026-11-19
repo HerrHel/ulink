@@ -12,6 +12,7 @@
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { findDuplicateCandidates, isUncategorized } from './localClustering.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { t } from '../../i18n/index.js'
 
 export type GroomingInsightType = 'drift' | 'inbox' | 'vague' | 'duplicates'
@@ -97,9 +98,10 @@ export function runAmbientGroomingScan(params: {
     }
   }
 
-  // 3. 纯 URL / 模糊未命名书签扫描（排除子书签）
+  // 3. 纯 URL / 模糊未命名书签扫描（排除子书签与加密锁定书签）
   const vagueBms = validBookmarks.filter((b) => {
     if (b.parentId) return false
+    if (isThreePartCipher(b.title) || isThreePartCipher(b.url)) return false
     const title = (b.title || '').trim()
     return !title || /^https?:\/\//i.test(title) || title === '未命名书签' || title === 'Untitled'
   })

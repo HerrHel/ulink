@@ -109,7 +109,7 @@ export function calculatePlanProgress(plan: TaskDagPlan): PlanProgress {
  */
 export function getExecutableSteps(plan: TaskDagPlan): TaskDagStep[] {
   const successStepIds = new Set(
-    plan.steps.filter((s) => s.status === 'success' || s.status === 'skipped').map((s) => s.id),
+    plan.steps.filter((s) => s.status === 'success').map((s) => s.id),
   )
 
   return plan.steps.filter((step) => {

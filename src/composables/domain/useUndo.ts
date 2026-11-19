@@ -109,6 +109,7 @@ export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
         }
         ds._grpMap[gid] = ds.siblingGroups[idx]
         ds._markDirty(gid)
+        ds._searchIndexDirty = true
         ds._bumpSearchVersion()
       }
     }

@@ -59,6 +59,10 @@ function isTableDelimiter(cells: string[]): boolean {
   return cells.every(c => /^\s*:?-{1,}:?\s*$/.test(c))
 }
 
+function _escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 /**
  * 极简、安全的轻量 Markdown 格式化（消除 ## 与 **，带来原生杂志级纸质排版）
  */
@@ -74,7 +78,8 @@ export function formatLightMarkdown(raw: string): string {
   const codeBlocks: string[] = []
   text = text.replace(/```(?:[a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g, (_, code) => {
     const idx = codeBlocks.length
-    codeBlocks.push(`<pre class="chat-flow-pre"><code class="chat-flow-code">${code.replace(/\n+$/, '')}</code></pre>`)
+    const cleanCode = _escapeHtml(code.replace(/\n+$/, ''))
+    codeBlocks.push(`<pre class="chat-flow-pre"><code class="chat-flow-code">${cleanCode}</code></pre>`)
     return `\n\n%%CODEBLOCK_${idx}%%\n\n`
   })
 

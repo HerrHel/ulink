@@ -134,15 +134,24 @@ export class EvolvingKnowledgeGraph {
    * 记录或强化单个节点
    */
   public touchNode(name: string, type: GraphNode['type'] = 'concept'): GraphNode {
-    const id = this.normalizeId(name)
-    if (!id) throw new Error('Invalid node name')
+    const trimmed = (name || '').trim()
+    const id = this.normalizeId(trimmed)
+    if (!id) {
+      return {
+        id: '',
+        name: '',
+        type,
+        frequency: 0,
+        lastSeenAt: Date.now(),
+      }
+    }
 
     let node = this.nodes.get(id)
     const now = Date.now()
     if (!node) {
       node = {
         id,
-        name: name.trim(),
+        name: trimmed,
         type,
         frequency: 1,
         lastSeenAt: now,

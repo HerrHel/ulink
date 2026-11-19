@@ -91,6 +91,8 @@ export async function purgeAccount(): Promise<AccountDeletionResult> {
     ds.categories = []
     ds.customAttributes = []
     ds._syncMaps()
+    ds._searchIndexDirty = true
+    ds._bumpSearchVersion()
   } catch { /* ignore */ }
   try {
     const { useEntitlement } = await import('./useEntitlement.js')
