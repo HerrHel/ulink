@@ -1,3 +1,9 @@
 node_modules/
 /out/
+animatic/
+audio/
+film/
+voice/
+*.md
+.env.local
 
