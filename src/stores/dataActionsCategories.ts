@@ -29,6 +29,7 @@ export const categoryActions = {
     this._catMap[cat.id] = cat
     this._markDirty(cat.id); this._newIds.add(cat.id)
     this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
   },
   /**
    * B-11：按传入数组顺序重写 categories.order + updatedAt，并 track/markDirty。
@@ -62,6 +63,7 @@ export const categoryActions = {
       this._catMap[id] = this.categories[idx]
       this._markDirty(id)
       this._searchIndexDirty = true
+      this._debouncedBumpSearchVersion()
     }
   },
   deleteCategory(this: DataStoreThis, id: string) {

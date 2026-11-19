@@ -6,7 +6,7 @@
 
 import type { Category, CustomAttribute, Bookmark } from '../../types.js'
 import type { AiEnrichDiff } from '../../types/ai.js'
-import { domain } from '../../utils.js'
+import { domain, displayText } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { isPrivateUrl } from './urlGuard.js'
 import { t } from '../../i18n/index.js'
@@ -25,8 +25,8 @@ export async function enrichBookmarkMetadata(
   if (!rawUrl || isThreePartCipher(rawUrl)) {
     return {
       bookmarkId: bookmark.id,
-      currentTitle: bookmark.title || '',
-      currentNotes: bookmark.notes || '',
+      currentTitle: displayText(bookmark.title) || '',
+      currentNotes: displayText(bookmark.notes) || '',
       currentCategoryId: bookmark.categoryId || '',
       suggestedNotes: '',
       suggestedAttrIds: [],
@@ -36,8 +36,8 @@ export async function enrichBookmarkMetadata(
   if (isPrivateUrl(validUrl)) {
     return {
       bookmarkId: bookmark.id,
-      currentTitle: bookmark.title || '',
-      currentNotes: bookmark.notes || '',
+      currentTitle: displayText(bookmark.title) || '',
+      currentNotes: displayText(bookmark.notes) || '',
       currentCategoryId: bookmark.categoryId || '',
       suggestedNotes: '',
       suggestedAttrIds: [],
@@ -102,9 +102,9 @@ export async function enrichBookmarkMetadata(
 
   return {
     bookmarkId: bookmark.id,
-    currentTitle: bookmark.title || '',
+    currentTitle: displayText(bookmark.title) || '',
     suggestedTitle,
-    currentNotes: bookmark.notes || '',
+    currentNotes: displayText(bookmark.notes) || '',
     suggestedNotes,
     currentCategoryId: bookmark.categoryId,
     suggestedCategoryId,

@@ -31,6 +31,7 @@ export const attributeActions = {
     this._attrMap[attr.id] = attr
     this._markDirty(attr.id); this._newIds.add(attr.id)
     this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
   },
   renameAttribute(this: DataStoreThis, id: string, name: string) {
     if (_denyWrite()) return
@@ -41,6 +42,7 @@ export const attributeActions = {
       this.customAttributes[idx] = { ...this.customAttributes[idx], name, updatedAt: Date.now() }
       this._attrMap[id] = this.customAttributes[idx]
       this._markDirty(id); this._searchIndexDirty = true
+      this._debouncedBumpSearchVersion()
     }
   },
   deleteAttribute(this: DataStoreThis, id: string) {
@@ -87,6 +89,7 @@ export const attributeActions = {
     const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
     const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
     this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
   },
   restoreAttribute(this: DataStoreThis, id: string) {
     if (_denyWrite()) return
@@ -134,8 +137,9 @@ export const attributeActions = {
         this._deletedAttrMemberships.delete(id)
       }
       this._persistDeletedAttrMemberships()
-      this._searchIndexDirty = true
     }
+    this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
   },
 
   /**
@@ -235,6 +239,7 @@ export const attributeActions = {
     const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
     const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
     this._searchIndexDirty = true
+    if (!opts?.skipPersist) this._debouncedBumpSearchVersion()
   },
 
   /** 持久化 _deletedAttrMemberships 到 localStorage，用于恢复时跨会话保持属性关联 */
@@ -297,6 +302,7 @@ export const attributeActions = {
     }
     if (changed) {
       this._searchIndexDirty = true
+      this._debouncedBumpSearchVersion()
     }
     return changed
   },

@@ -148,6 +148,9 @@ export async function deleteGroup(dGid: string, skipConfirm?: boolean) {
   const sg = ds.groupMap[dGid];
   if (!sg) return;
   const doDelete = () => {
+    if (geForm.id === dGid || ui.editingGeId === dGid) {
+      closeGroupEdit({ discard: true });
+    }
     ds.deleteGroup(dGid);
     saveAppData();
     if (ui.focusedGroupId === dGid) ui.focusedGroupId = null;
@@ -370,7 +373,7 @@ export function saveGroupEdit() {
   const editorHTML = EditorManager.getContentHTML(gId);
   ds.updateGroup(gId, {
     name: geForm.name.trim() || t('common.unnamed'),
-    categoryId: geForm.catId,
+    categoryId: (geForm.catId && ds.categoryMap[geForm.catId] && !ds.categoryMap[geForm.catId].deletedAt) ? geForm.catId : CAT_UNCATEGORIZED,
     icon: geForm.icon.trim(),
     attributes: { ...geForm.attrs, [ATTR_IS_GROUP]: true },
     bookmarkIds: [...geForm.bookmarkIds],

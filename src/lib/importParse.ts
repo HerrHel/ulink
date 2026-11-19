@@ -172,8 +172,14 @@ export function parseRaindropJSON(data: unknown): Bookmark[] {
       // 先 filter 出 string 元素再 map，单条坏数据不影响其它项。
       ? Object.fromEntries((r.tags as unknown[]).filter((t): t is string => typeof t === 'string').map((t) => ['tag_' + t.replace(/\s+/g, '_').toLowerCase(), true]))
       : {},
-    createdAt: r.created ? new Date(r.created as string).getTime() : now,
-    updatedAt: r.lastUpdate ? new Date(r.lastUpdate as string).getTime() : now,
+    createdAt: (() => {
+      const ms = r.created ? new Date(r.created as string).getTime() : NaN
+      return Number.isFinite(ms) ? ms : now
+    })(),
+    updatedAt: (() => {
+      const ms = r.lastUpdate ? new Date(r.lastUpdate as string).getTime() : NaN
+      return Number.isFinite(ms) ? ms : now
+    })(),
     username: '', password: '', parentId: null, order: i, useCount: 0, isExpanded: false,
   }})
 }

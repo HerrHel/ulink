@@ -437,9 +437,14 @@ export function _mergeBookmarks(
 
   // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
   const orderBase = ds.nextBookmarkOrder()
+  const pendingChildParents = new Map<string, string>()
+
   for (const b of bookmarks) {
     if (!b.title || !b.url) continue
     const targetId = b.id || newBookmarkId(imported)
+    if (b.parentId) {
+      pendingChildParents.set(targetId, b.parentId)
+    }
     if (ds.bookmarks.some(existing => existing.id === b.id)) {
       if (b.id) idMap.set(b.id, b.id)
       continue
@@ -483,6 +488,26 @@ export function _mergeBookmarks(
     knownBmIds.add(targetId)
     imported++
   }
+
+  // 二次对账：若有子书签的 parentId 指向被去重重映射的父 ID 或导入时父书签尚未入库，刷新其 parentId 为映射后的真实本地 ID
+  let reconciled = false
+  for (const [childId, rawParentId] of pendingChildParents) {
+    const childBm = ds.bookmarkMap[childId]
+    if (!childBm || childBm.deletedAt) continue
+    const mappedParentId = idMap.get(rawParentId) || rawParentId
+    const parentBm = ds.bookmarkMap[mappedParentId]
+    if (parentBm && !parentBm.deletedAt && mappedParentId !== childId) {
+      if (childBm.parentId !== mappedParentId) {
+        childBm.parentId = mappedParentId
+        ds._markDirty(childBm.id)
+        reconciled = true
+      }
+    }
+  }
+  if (reconciled) {
+    ds._syncMaps()
+  }
+
   return { imported, skipped }
 }
 
@@ -491,12 +516,17 @@ export function _mergeBookmarks(
  * bookmarkIds 过滤未存活书签：导入源 id 可能指向被去重/Zod 跳过/缺 title·url 的项，
  * 经 idMap 解析至本地去重对应 ID，避免组丢失已有本地项。
  */
-export function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroups']): MergeStats {
+export function _mergeGroups(
+  ds: DataStore,
+  siblingGroups: AppData['siblingGroups'],
+  idMap?: Map<string, string>,
+): MergeStats {
   let imported = 0, skipped = 0
   for (const g of siblingGroups) {
     if (!g.id || !g.name) continue
     if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
-    const liveBookmarkIds = (g.bookmarkIds || []).filter(bid => {
+    const remappedIds = (g.bookmarkIds || []).map(bid => idMap?.get(bid) || bid)
+    const liveBookmarkIds = Array.from(new Set(remappedIds)).filter(bid => {
       const bm = ds.bookmarkMap[bid]
       return !!bm && !bm.deletedAt
     })
@@ -570,7 +600,7 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
   const attrs = _mergeAttributes(ds, customAttributes)
   const idMap = new Map<string, string>()
   const bms = _mergeBookmarks(ds, bookmarks, idMap)
-  const groups = _mergeGroups(ds, siblingGroups)
+  const groups = _mergeGroups(ds, siblingGroups, idMap)
 
   saveAppData()
   clearSearchCache()

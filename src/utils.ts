@@ -414,6 +414,11 @@ export function createCategory(name: string): Category {
 export function addNewCategory(name: string, store: AppStore): Category | null {
   const trimmed = name.trim()
   if (!trimmed) { toast(t('msg.enterCategoryName'), false); return null }
+  const reserved = ['all', '全部', 'uncategorized', '未分类']
+  if (reserved.includes(trimmed.toLowerCase())) {
+    toast(t('msg.categoryNameExists'), false)
+    return null
+  }
   if (store.categories.some(c => !c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase())) { toast(t('msg.categoryNameExists'), false); return null }
   const softDeletedCat = store.categories.find(c => c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase())
   if (softDeletedCat && store.restoreCategory) {

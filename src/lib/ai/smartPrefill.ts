@@ -331,7 +331,7 @@ export function getSmartPrefill(
       if (b.categoryId && validCatIds.has(b.categoryId)) {
         catFrequency.set(b.categoryId, (catFrequency.get(b.categoryId) || 0) + 1)
       }
-      if (b.username && b.username.trim()) {
+      if (b.username && !isThreePartCipher(b.username) && b.username.trim()) {
         const u = b.username.trim()
         usernameFrequency.set(u, (usernameFrequency.get(u) || 0) + 1)
         if (!candidateUsernames.includes(u)) {

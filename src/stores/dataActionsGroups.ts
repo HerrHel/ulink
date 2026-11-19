@@ -71,7 +71,10 @@ export const groupActions = {
     const ui = useUIStore()
     if (ui.focusedGroupId === id) ui.focusedGroupId = null
     if (ui.editingId === id || ui.editingId === 'group:' + id) ui.editingId = null
-    if (ui.editingGeId === id) ui.editingGeId = null
+    if (ui.editingGeId === id) {
+      ui.editingGeId = null
+      ui.modals.groupEdit = false
+    }
     if (ui.addToGid === id) ui.addToGid = null
     if (ui.saveToGroup === id) ui.saveToGroup = null
     if (ui.ctxGid === id) ui.ctxGid = null
@@ -151,7 +154,10 @@ export const groupActions = {
     const ui = useUIStore()
     if (ui.focusedGroupId === id) ui.focusedGroupId = null
     if (ui.editingId === id || ui.editingId === 'group:' + id) ui.editingId = null
-    if (ui.editingGeId === id) ui.editingGeId = null
+    if (ui.editingGeId === id) {
+      ui.editingGeId = null
+      ui.modals.groupEdit = false
+    }
     if (ui.addToGid === id) ui.addToGid = null
     if (ui.saveToGroup === id) ui.saveToGroup = null
     if (ui.ctxGid === id) ui.ctxGid = null

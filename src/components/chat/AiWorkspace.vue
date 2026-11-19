@@ -766,6 +766,8 @@ watch(chatTurns, () => {
 })
 
 onMounted(() => {
+  window.addEventListener('dragend', resetDragState)
+  window.addEventListener('drop', resetDragState)
   scrollContainerRef.value?.addEventListener('scroll', onScrollSpy, { passive: true })
   updateActiveTurnId()
 })
@@ -935,9 +937,6 @@ function resetDragState() {
   dragEnterCount = 0
   isDragOver.value = false
 }
-
-window.addEventListener('dragend', resetDragState)
-window.addEventListener('drop', resetDragState)
 
 function onWorkspaceDrop(e: DragEvent) {
   resetDragState()

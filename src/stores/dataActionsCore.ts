@@ -205,5 +205,7 @@ export const coreActions = {
     this._persistDeletedGroupMemberships()
     this._persistDeletedAttrMemberships()
     this._syncMaps()
+    this._searchIndexDirty = true
+    this._bumpSearchVersion()
   },
 }
