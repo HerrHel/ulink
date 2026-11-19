@@ -56,7 +56,6 @@ export const programmaticEn = {
     dupeSiblingDesc: 'Save alongside the existing bookmark',
 
     // ── Notes (useGroup / useDragDrop / useMention) ──
-    groupCreated: 'Note created',
     groupDeleted: 'Note deleted',
     groupRestored: 'Note restored',
     confirmDeleteGroup: 'Delete note "{name}"?',

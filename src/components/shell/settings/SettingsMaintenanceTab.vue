@@ -1,8 +1,5 @@
 <template>
   <div class="settings-tab-panel" data-testid="settings-panel-maintenance">
-    <div class="sp-tab-header">
-      <h3 class="sp-tab-title">{{ t('settings.tabMaintenance') }}</h3>
-    </div>
 
     <div class="sp-card">
       <div class="sp-card-head">{{ t('settings.maintenance') }}</div>

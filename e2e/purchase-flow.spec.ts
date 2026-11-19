@@ -156,10 +156,10 @@ async function login(page: Page) {
   await expect(page.locator('.modal-mask.open')).toHaveCount(0, { timeout: 15000 })
 }
 
-/** 设置 → 会员与账单 → 升级，打开收银台 */
+/** 设置 → 账号与会员 → 升级，打开收银台 */
 async function openPurchase(page: Page) {
   const drawer = await openSettings(page)
-  await drawer.getByTestId('settings-tab-billing').click()
+  await drawer.getByTestId('settings-tab-account').click()
   await drawer.getByTestId('lv-upgrade-btn').click()
   const modal = page.locator('.pur-modal')
   await expect(modal).toBeVisible()

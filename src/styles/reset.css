@@ -32,6 +32,9 @@ svg{vertical-align:middle}
   outline:none;
   box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent);
 }
+/* 可编辑文本（笔记正文、聚焦标题、行内重命名）：浏览器对它们一律判定 :focus-visible，
+   但它们已有光标与各自的聚焦样式；再叠通用焦点环会被滚动容器裁成上下两条横线夹住正文 */
+[contenteditable]:not([contenteditable="false"]):focus-visible{box-shadow:none}
 ::selection{
   background:color-mix(in srgb, var(--accent) 24%, transparent);
   color:inherit;

@@ -1,8 +1,5 @@
 <template>
   <div class="settings-tab-panel" data-testid="settings-panel-billing">
-    <div class="sp-tab-header">
-      <h3 class="sp-tab-title">{{ t('settings.tabBilling') }}</h3>
-    </div>
 
     <!-- 会员与权益卡片 -->
     <div class="sp-card">

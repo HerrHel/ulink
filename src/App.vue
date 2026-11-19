@@ -83,7 +83,6 @@
 <E2ECanaryConflictModal :open="store.modals.e2eCanaryConflict" @close="store.modals.e2eCanaryConflict = false" />
 <VaultSetupModal :open="store.modals.vaultSetup" @close="store.modals.vaultSetup = false" />
 <VaultUnlockModal :open="store.modals.vaultUnlock" @close="onVaultClose" @unlocked="onVaultUnlocked" />
-<SetupGuide />
 </ErrorBoundary>
 
 <ErrorBoundary name="Overlays">
@@ -228,7 +227,6 @@ const E2EUnlockModal = defineAsyncComponent({
 })
 const VaultSetupModal = defineAsyncComponent(() => import('./components/modals/VaultSetupModal.vue'))
 const VaultUnlockModal = defineAsyncComponent(() => import('./components/modals/VaultUnlockModal.vue'))
-const SetupGuide = defineAsyncComponent(() => import('./components/modals/SetupGuide.vue'))
 
 // 分享只读态（主应用内）：见 stores/share.ts。
 const share = useShareStore()

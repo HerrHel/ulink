@@ -48,7 +48,6 @@ export const programmaticZh = {
     dupeSiblingDesc: '与已有书签平级保存',
 
     // ── 笔记（useGroup / useDragDrop / useMention）──
-    groupCreated: '笔记已创建',
     groupDeleted: '已删除笔记',
     groupRestored: '笔记已恢复',
     confirmDeleteGroup: '确认删除笔记「{name}」？',

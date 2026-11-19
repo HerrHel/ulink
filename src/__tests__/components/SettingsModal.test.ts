@@ -30,7 +30,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
     vi.spyOn(useDataShareModule, 'fetchUserCategoryShares').mockResolvedValue([])
   })
 
-  it('1. 默认展示大弹窗结构，且包含 6 个分类导航项（无 emoji）', async () => {
+  it('1. 默认展示大弹窗结构，且包含 5 个分类导航项（无 emoji）', async () => {
     ui.panels.settings = true
     const wrapper = mount(SettingsPanel, {
       global: {
@@ -46,9 +46,9 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
     expect(wrapper.find('.settings-dialog').exists()).toBe(true)
     expect(wrapper.find('.settings-nav').exists()).toBe(true)
 
-    // 6 个选项卡
+    // 5 个选项卡：账号与会员 / 外观 / AI / 数据与维护 / 关于
     const tabs = wrapper.findAll('.settings-nav-item')
-    expect(tabs.length).toBe(7)
+    expect(tabs.length).toBe(5)
 
     // 检查选项卡不含任何 emoji
     const emojiRegex = /[\uD83C-\uDBFF\uDC00-\uDFFF]/
@@ -75,11 +75,14 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
       },
     })
 
-    // 切换至会员与账单 (billing)
-    const billingTab = wrapper.find('[data-testid="settings-tab-billing"]')
-    expect(billingTab.exists()).toBe(true)
-    await billingTab.trigger('click')
-    expect(billingTab.classes()).toContain('active')
+    // 会员已并入「账号与会员」(account)：同一页同时显示账号与会员两段，旧的 billing / maintenance 标签不再存在
+    expect(wrapper.find('[data-testid="settings-tab-billing"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="settings-tab-maintenance"]').exists()).toBe(false)
+    expect(wrapper.findAll('.settings-nav-item')).toHaveLength(5)
+    const accountTab = wrapper.find('[data-testid="settings-tab-account"]')
+    await accountTab.trigger('click')
+    expect(accountTab.classes()).toContain('active')
+    expect(wrapper.find('[data-testid="settings-panel-account"]').isVisible()).toBe(true)
     const billingPanel = wrapper.find('[data-testid="settings-panel-billing"]')
     expect(billingPanel.isVisible()).toBe(true)
 
@@ -105,6 +108,8 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
     expect(dataTab.classes()).toContain('active')
     const dataPanel = wrapper.find('[data-testid="settings-panel-data"]')
     expect(dataPanel.isVisible()).toBe(true)
+    // 维护已并入「数据与维护」：数据页同时显示维护段
+    expect(wrapper.find('[data-testid=\"settings-panel-maintenance\"]').isVisible()).toBe(true)
   })
 
   it('3. 点击右上角关闭按钮与快捷键问号按钮行为正常', async () => {
@@ -307,7 +312,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
       },
     })
 
-    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    const aiTab = wrapper.findAll('.settings-nav-item')[2]
     await aiTab.trigger('click')
 
     const toggle = wrapper.find('[data-testid="lv-semantic-search-toggle"]')
@@ -341,7 +346,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
       },
     })
 
-    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    const aiTab = wrapper.findAll('.settings-nav-item')[2]
     await aiTab.trigger('click')
 
     const toggle = wrapper.find('[data-testid="lv-semantic-search-toggle"]')
@@ -377,7 +382,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
       },
     })
 
-    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    const aiTab = wrapper.findAll('.settings-nav-item')[2]
     await aiTab.trigger('click')
 
     const toggle = wrapper.find('[data-testid="lv-smart-fill-toggle"]')
@@ -407,7 +412,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
       },
     })
 
-    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    const aiTab = wrapper.findAll('.settings-nav-item')[2]
     await aiTab.trigger('click')
 
     const toggle = wrapper.find('[data-testid="lv-smart-fill-toggle"]')
@@ -443,7 +448,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
       },
     })
 
-    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    const aiTab = wrapper.findAll('.settings-nav-item')[2]
     await aiTab.trigger('click')
 
     const toggle = wrapper.find('[data-testid="lv-smart-fill-toggle"]')
@@ -507,7 +512,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
     expect(wrapper.find('[data-testid="sp-mobile-back-btn"]').exists()).toBe(false)
   })
 
-  it('14. 移动端携带 settingsInitialTab 时直接进入对应子页面', async () => {
+  it('14. 移动端携带旧 settingsInitialTab（billing）时兼容进入「账号与会员」子页面', async () => {
     ui.isMobile = true
     ui.settingsInitialTab = 'billing'
     ui.panels.settings = true
@@ -519,7 +524,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
       },
     })
 
-    // 直接处于 billing 子页面
+    // 旧 id billing 归一到 account，直接处于该子页面，会员段可见
     expect(wrapper.find('[data-testid="sp-mobile-menu"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sp-mobile-back-btn"]').exists()).toBe(true)
     const billingPanel = wrapper.find('[data-testid="settings-panel-billing"]')

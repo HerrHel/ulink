@@ -80,7 +80,7 @@ test.describe('宣传落地页', () => {
     await page.goto('/?stay=1')
     await page.locator('.hero-ctas a[href="/app"]').click()
     await page.waitForURL(/\/app$/)
-    // 应用挂载完成（进入应用内首启引导属正常路径，此处只验证入口打通）
+    // 应用挂载完成（此处只验证入口打通）
     await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
   })
 

@@ -17,7 +17,6 @@ export function onShareRoute(cb: (gid: string) => void) { _onShareRoute = cb }
 // E1 门闩实现见 lib/dataReady；此处 re-export 便于 App 与其它入口使用
 export { whenDataReady, isDataHydrated } from '../lib/dataReady.js'
 import { markDataReady } from '../lib/dataReady.js'
-import { safeGetItem } from '../lib/storageSafe.js'
 
 // 多设备主密码一致性维护（每会话一次）：登录后先确保本机 canary 上云（打通
 // 「一个主密码解锁所有设备」——本机设置时未登录、之后登录，云端无 canary 则推送），
@@ -94,10 +93,6 @@ export function useAppLifecycle() {
       }
     }
 
-    // D1: 首启分流引导
-    if (!safeGetItem('lv_setup_done') && !shareGid) {
-      useUIStore().modals.setupGuide = true
-    }
     updateCardTagsOverflow()
 
     // 初始化认证 & 云同步

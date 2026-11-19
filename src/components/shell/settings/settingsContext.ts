@@ -17,7 +17,8 @@ import type { useE2E } from '../../../composables/domain/useE2E.js'
 import type { useEntitlement } from '../../../composables/domain/useEntitlement.js'
 import type { useTransactions } from '../../../composables/domain/useTransactions.js'
 
-export type SettingsTab = 'account' | 'appearance' | 'billing' | 'ai' | 'maintenance' | 'data' | 'about'
+/** 会员并入 account、维护并入 data（旧 id 由 SettingsPanel.normalizeTab 兼容） */
+export type SettingsTab = 'account' | 'appearance' | 'ai' | 'data' | 'about'
 
 /** 公开分享条目（分组 / 分类），维护页列表与导航角标共用 */
 export interface PublicShareItem {

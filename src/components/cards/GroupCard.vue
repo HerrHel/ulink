@@ -100,6 +100,8 @@
       <div class="card-tags" v-if="tagNames.length && ui.layoutMode === 'list' && !detailMode">
         <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
+      <!-- 上手指南：新手的导入入口（原欢迎弹窗的「从其他工具导入」移到这里） -->
+      <button v-if="isGuide && !ui.batchMode && !isShareReadonly" type="button" class="guide-import-btn" data-testid="lv-guide-import" @click.stop="openImport">{{ t('cards.importBookmarks') }}</button>
       <div class="group-head-actions" v-if="!ui.batchMode && !isShareReadonly">
         <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" :title="t('common.undo')" :aria-label="t('common.undo')" v-html="I.undo"></button>
         <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" :title="t('common.redo')" :aria-label="t('common.redo')" v-html="I.redo"></button>
@@ -187,6 +189,12 @@ useCardOverflow(cardEl)
 const isFocused = computed(() => !props.detailMode && ui.focusedGroupId === props.group.id)
 /** 分享只读态：任何分享态下组卡一律只读（组分享聚焦 / 分类分享网格内聚焦） */
 const isShareReadonly = computed(() => !!ui.shareMode)
+/** 示例数据里的「上手指南」笔记（固定 id，见 config/constants.ts） */
+const isGuide = computed(() => props.group.id === 'sg_welcome')
+function openImport() {
+  const el = document.getElementById('importFile') as HTMLInputElement | null
+  if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() }
+}
 const isExpanded = computed(() => ui.layoutMode === 'list' && ui.expandedIds.includes(props.group.id) && !ui.batchMode)
 const isSelected = computed(() => (ui.batchSelected ?? []).includes('group:' + props.group.id))
 const noteIcon = I.note

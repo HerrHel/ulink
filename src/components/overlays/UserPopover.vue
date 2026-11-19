@@ -261,7 +261,7 @@ watch(
 function openPurchase() {
   close()
   if (memberIsPaid.value) {
-    uiStore.settingsInitialTab = 'billing'
+    uiStore.settingsInitialTab = 'account'
     if (!uiStore.panels.settings) pushNavState()
     uiStore.panels.settings = true
   } else {

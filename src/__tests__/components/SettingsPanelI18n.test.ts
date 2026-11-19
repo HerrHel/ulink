@@ -47,16 +47,15 @@ describe('SettingsPanel.vue — 英文模式下设置界面国际化', () => {
 
     // 选项卡名称
     const tabLabels = wrapper.findAll('.nav-item-label').map(el => el.text())
-    expect(tabLabels).toContain('Account & Security')
+    expect(tabLabels).toHaveLength(5)
+    expect(tabLabels).toContain('Account & Membership')
     expect(tabLabels).toContain('Appearance')
-    expect(tabLabels).toContain('Membership & Billing')
     expect(tabLabels).toContain('AI & Smart')
-    expect(tabLabels).toContain('Maintenance & Sharing')
-    expect(tabLabels).toContain('Data & Backup')
+    expect(tabLabels).toContain('Data & Maintenance')
     expect(tabLabels).toContain('About & Help')
 
     // 标签页只有标题，不再有导言段落 (Account Tab)
-    expect(wrapper.find('.sp-tab-title').text()).toBe('Account & Security')
+    expect(wrapper.find('.sp-tab-title').text()).toBe('Account & Membership')
     expect(wrapper.find('.sp-tab-desc').exists()).toBe(false)
 
     // 切换到外观页 Appearance

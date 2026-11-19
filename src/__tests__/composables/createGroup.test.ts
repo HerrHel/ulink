@@ -3,7 +3,7 @@ import { setActivePinia, createPinia } from 'pinia'
 
 // ---- 模块级可改 mock store / gid 桩（沿用 d1-64/d1-66 已验证的 vi.mock 闭包 mock 范本）----
 // createGroup 读 dataStore.bookmarks/siblingGroups（算 max order）+ 调 addGroup；
-// 读 uiStore.curCat（算 categoryId 兜底）；调 saveAppData + toast；调 utils.gid() 拼 id。
+// 读 uiStore.curCat（算 categoryId 兜底）；调 saveAppData（不再 toast）；调 utils.gid() 拼 id。
 // 不读 EditorManager（无编辑器交互），但 useGroup.ts 顶层 import 了 editor.js 故仍需 mock 档位。
 const mockData = {
   bookmarks: [] as any[],
@@ -208,12 +208,11 @@ describe('createGroup — 新建组的三路 categoryId 解析 + order 公式 + 
     expect(added.order).toBe(9)
   })
 
-  it('⑨副作用链：调 ds.addGroup(新组对象) + saveAppData + toast("笔记已创建") 各一次', () => {
+  it('⑨副作用链：调 ds.addGroup(新组对象) + saveAppData 各一次，不弹「已创建」提示（新建后直接进入编辑即反馈）', () => {
     const id = createGroup()
     expect(mockData.addGroup).toHaveBeenCalledTimes(1)
     expect(saveAppData).toHaveBeenCalledTimes(1)
-    expect(toast).toHaveBeenCalledTimes(1)
-    expect(toast).toHaveBeenCalledWith('笔记已创建')
+    expect(toast).not.toHaveBeenCalled()
     // addGroup 入参是一个完整 SiblingGroup 对象
     const added = mockData.addGroup.mock.calls[0][0]
     expect(added).toEqual(expect.objectContaining({

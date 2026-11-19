@@ -238,7 +238,6 @@ describe('Universal Agent Operations & Undo Stack (universalAgent.ts)', () => {
         e2eCanaryConflictUpgraded: false,
         vaultSetup: false,
         vaultUnlock: false,
-        setupGuide: false,
         share: false,
         aiEnrich: false,
         quickLook: false,

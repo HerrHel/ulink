@@ -10,9 +10,8 @@
  */
 import { test, expect } from '@playwright/test'
 
-// 首启引导（SetupGuide）在没有 lv_setup_done 时会弹出欢迎模态遮罩，intercept 所有
-// 首屏点击。CI 是全新环境、localStorage 干净，故每个用例 navigation 前注入该标记，
-// 模拟"已用过一次"的用户，避免欢迎模态挡住后续断言点击。属测试侧硬化，不改产品逻辑。
+// lv_setup_done：旧版首启欢迎弹窗的完成标记（弹窗已移除）。保留注入是因为落地页 landing.js
+// 仍把它当「老用户」痕迹之一，模拟已用过一次的用户。
 // 同时锁定 lv_locale=zh-CN：CI 无头浏览器 navigator.language 默认 en-US，i18n 会渲染
 // 英文导致全文件中文文案断言（已锁定/解锁数据 等）失配——测试断言以中文为准。
 test.beforeEach(async ({ page }) => {

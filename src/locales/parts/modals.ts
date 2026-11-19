@@ -158,15 +158,6 @@ export const modalsZh = {
       restoredCount: '已恢复 {n} 项',
       emptiedToast: '回收站已清空',
     }, // TrashPanel
-    setupGuide: {
-      welcome: '欢迎使用与链',
-      tagline: '全能型书签管理工具，高效整理你的网络资源',
-      freshStart: '全新开始',
-      freshStartDesc: '从一个示例笔记开始，探索功能后再整理自己的书签',
-      importTitle: '从其他工具导入',
-      importDesc: '从浏览器书签、Raindrop 或 CSV 文件导入',
-      skip: '跳过，直接开始',
-    }, // SetupGuide
     share: {
       ariaLabel: '分享管理',
       titleGroup: '分享笔记',

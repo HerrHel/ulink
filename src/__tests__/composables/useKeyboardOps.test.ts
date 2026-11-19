@@ -14,7 +14,7 @@ const mockUI: any = {
   focusedGroupId: null,
   panels: { settings: false, detail: false, trash: false, history: false, rail: false, shortcutHelp: false },
   overlays: { addPopover: false, deadLinks: false, feedback: false },
-  modals: { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false, quickLook: false },
+  modals: { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, quickLook: false },
 }
 vi.mock('../../stores/ui.js', () => ({ useUIStore: () => mockUI }))
 
@@ -100,7 +100,7 @@ beforeEach(() => {
   // 重置面板全部关闭 + 重建子对象避免跨测试引用同一实例污染
   mockUI.panels = { settings: false, detail: false, trash: false, history: false, rail: false, shortcutHelp: false }
   mockUI.overlays = { addPopover: false, deadLinks: false, feedback: false }
-  mockUI.modals = { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false }
+  mockUI.modals = { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false }
   mockUI.curCat = 'all'
   mockUI.focusedGroupId = null
   // d1-95: 重置各 close spy 调用计数，让「modal closer 是否被调」断言跨用例隔离
@@ -308,7 +308,7 @@ describe('d1-95 captureNavState 14 字段完整快照契约 + 可选链防御 + 
   })
 
   it('全开态 → 15 字段逐字段真实映射 modal/panel/overlay 三组', () => {
-    mockUI.modals = { bookmark: true, category: true, attribute: true, groupEdit: true, e2eSetup: false, e2eUnlock: false, setupGuide: false, quickLook: true }
+    mockUI.modals = { bookmark: true, category: true, attribute: true, groupEdit: true, e2eSetup: false, e2eUnlock: false, quickLook: true }
     mockUI.panels = { settings: true, detail: true, trash: true, history: true, rail: false, shortcutHelp: true }
     mockUI.overlays = { addPopover: false, deadLinks: true, feedback: true }
     mockUI.curCat = 'cat-a'
@@ -366,7 +366,7 @@ describe('d1-95 captureNavState 14 字段完整快照契约 + 可选链防御 + 
 
 describe('d1-95 restoreNavState closers 顺序短路 + prev!==true 严格判断 + focus/curCat 兜底 closer', () => {
   it('modal 四优先级短路：bm+groupEdit+cat+attr 全开 + prev 全 false → 只关 bm modal 其余 modal 仍开 + 只调 closeBmModal', () => {
-    mockUI.modals = { bookmark: true, category: true, attribute: true, groupEdit: true, e2eSetup: false, e2eUnlock: false, setupGuide: false }
+    mockUI.modals = { bookmark: true, category: true, attribute: true, groupEdit: true, e2eSetup: false, e2eUnlock: false }
     const prev = { curCat: 'all', focusedGroupId: null, detailPanelOpen: false, bm: false, groupEdit: false, cat: false, attr: false, settings: false, trash: false, deadLinks: false, shortcutHelp: false, history: false, feedback: false }
     restoreNavState(prev)
     // closers[0] bm 命中（prev.bm !== true 且 ui.modals.bookmark=true）→ closeBmModal + return true 短路
@@ -1034,7 +1034,7 @@ describe('r9 #12 _onGlobalKeydown：Escape 7 优先级层 + 兜底全家桶', ()
     // 重置所有 store 单例状态 + clear spy
     mockActionSheet.visible = false; mockActionSheet.hide.mockClear?.()
     mockAuth.authModalOpen = false
-    mockUI.modals.e2eUnlock = false; mockUI.modals.e2eSetup = false; mockUI.modals.setupGuide = false
+    mockUI.modals.e2eUnlock = false; mockUI.modals.e2eSetup = false
     mockUI.overlays.feedback = false
     mockE2E.pendingUnlock = []
     mockAttrDropdown.open = false; mockAttrDropdown.close.mockClear?.()
@@ -1105,12 +1105,6 @@ describe('r9 #12 _onGlobalKeydown：Escape 7 优先级层 + 兜底全家桶', ()
     mockUI.modals.e2eSetup = true
     _onGlobalKeydown(makeKey('Escape'))
     expect(mockUI.modals.e2eSetup).toBe(false)
-  })
-
-  it('层5 setupGuide=true → 关', () => {
-    mockUI.modals.setupGuide = true
-    _onGlobalKeydown(makeKey('Escape'))
-    expect(mockUI.modals.setupGuide).toBe(false)
   })
 
   it('层6 overlays.feedback=true → 关', () => {

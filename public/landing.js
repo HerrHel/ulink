@@ -78,7 +78,7 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
   var seen = false;
   try {
     // persist.ts 每次保存都写 localStorage 缓存（linkvault_v2）；
-    // lv_setup_done 是首启引导完成标记。二者任一存在即视为老用户。
+    // lv_setup_done 是旧版首启欢迎弹窗的完成标记（弹窗已移除，老用户本地仍有）。二者任一存在即视为老用户。
     returning = !!(localStorage.getItem('linkvault_v2') || localStorage.getItem('lv_setup_done'));
     seen = !!localStorage.getItem(SEEN_KEY);
   } catch (e) { /* 隐私模式等存取失败时按新访客处理 */ }

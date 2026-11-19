@@ -71,7 +71,6 @@ interface ModalState {
   e2eCanaryConflictUpgraded: boolean
   vaultSetup: boolean
   vaultUnlock: boolean
-  setupGuide: boolean
   share: boolean
   aiEnrich: boolean
   quickLook: boolean
@@ -221,7 +220,6 @@ export const useUIStore = defineStore('ui', {
         e2eCanaryConflictUpgraded: false,
         vaultSetup: false,
         vaultUnlock: false,
-        setupGuide: false,
         share: false,
         aiEnrich: false,
         quickLook: false,

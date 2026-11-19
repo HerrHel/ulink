@@ -1,4 +1,4 @@
-import { reactive, nextTick } from 'vue';
+import { reactive, nextTick, watch } from 'vue';
 import { useDataStore } from '../../stores/data.js';
 import { useUIStore } from '../../stores/ui.js';
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js';
@@ -114,8 +114,46 @@ export function createGroup(catId?: string): string {
     bookmarkIds: [], notes: '',
     updatedAt: Date.now(), useCount: 0
   };
-  ds.addGroup(g); saveAppData(); toast(t('msg.groupCreated'));
+  // 新建后直接进入该笔记编辑（createNoteAndFocus），画面本身即反馈，不再弹「已创建」提示
+  ds.addGroup(g); saveAppData();
   return g.id;
+}
+
+/** 空笔记：无标题（或默认「未命名」）、正文无文字/图片/媒体/书签卡片、无成员书签、无图标 */
+export function isEmptyNote(sg: SiblingGroup): boolean {
+  const name = (sg.name || '').trim();
+  if (name && name !== t('common.unnamed') && name !== '未命名' && name !== 'Untitled') return false;
+  if ((sg.bookmarkIds || []).length || (sg.icon || '').trim()) return false;
+  const notes = sg.notes || '';
+  if (/<(img|video|audio|iframe)\b|data-bm-id/i.test(notes)) return false;
+  return notes.replace(/<[^>]*>/g, '').replace(/&nbsp;| /g, ' ').trim() === '';
+}
+
+/**
+ * 刚新建的笔记一旦被离开（focusedGroupId 不再是它，任何途径：返回、点侧栏、浏览器后退、AI 跳转…），
+ * 若仍为空则直接彻底删除（不进回收站、不弹提示，与备忘录一致）。只盯 createNoteAndFocus 新建的这一张，
+ * 已有笔记哪怕是空的也不碰。
+ *
+ * flush:'sync'：在 focusedGroupId 被赋值的同一刻判定，此时标题输入框与编辑器仍在 DOM 中——
+ * 有的离开途径不会先触发标题 blur / saveGroupBody，故以界面上的实时内容兜底，绝不误删已写了东西的笔记。
+ */
+function _watchFreshNote(gid: string) {
+  const ui = useUIStore();
+  const stop = watch(() => ui.focusedGroupId, (cur) => {
+    if (cur === gid) return;
+    stop();
+    const ds = useDataStore();
+    const sg = ds.groupMap[gid];
+    if (!sg || sg.deletedAt) return;
+    saveGroupBody(gid);
+    const liveTitle = (document.querySelector<HTMLElement>('.focus-title-input')?.textContent || '').trim();
+    const titled = !!liveTitle && liveTitle !== t('common.unnamed') && liveTitle !== '未命名' && liveTitle !== 'Untitled';
+    // 标题已输入但还没 blur 落库（如光标在标题里直接后退）：顺手存下，免得留下笔记却丢了标题
+    if (titled && liveTitle !== (sg.name || '').trim()) ds.updateGroup(gid, { name: liveTitle });
+    if (titled || !isEmptyNote(ds.groupMap[gid])) return;
+    ds.permanentDeleteGroup(gid);
+    saveAppData();
+  }, { flush: 'sync' });
 }
 
 /**
@@ -129,6 +167,7 @@ export function createNoteAndFocus(catId?: string): string {
   }
   const id = createGroup(catId);
   toggleGroupFocus(id);
+  _watchFreshNote(id);
   void nextTick(() => {
     const el = document.querySelector<HTMLElement>('.focus-title-input');
     if (el) {

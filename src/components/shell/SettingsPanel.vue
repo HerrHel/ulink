@@ -104,19 +104,17 @@
 
             <!-- 右侧设置内容主视窗 -->
             <div v-show="!uiStore.isMobile || mobileSubPage" class="settings-content-pane">
-              <!-- Tab 1: 账号与安全 -->
+              <!-- 账号与会员：账号/同步/加密 + 会员/额度/兑换码/交易 -->
               <SettingsAccountTab v-show="currentTab === 'account'" />
-              <!-- Tab 2: 外观与视图 -->
+              <SettingsBillingTab v-show="currentTab === 'account'" />
+              <!-- 外观与视图 -->
               <SettingsAppearanceTab v-show="currentTab === 'appearance'" />
-              <!-- Tab 3: 会员与账单 -->
-              <SettingsBillingTab v-show="currentTab === 'billing'" />
-              <!-- Tab 4: AI 与智能 -->
+              <!-- AI 与智能 -->
               <SettingsAiTab v-show="currentTab === 'ai'" />
-              <!-- Tab 5: 维护与分享 -->
-              <SettingsMaintenanceTab v-show="currentTab === 'maintenance'" />
-              <!-- Tab 6: 数据与备份 -->
+              <!-- 数据与维护：存储/备份/导入导出 + 死链检测/公开分享 -->
               <SettingsDataTab v-show="currentTab === 'data'" />
-              <!-- Tab 7: 关于与帮助 -->
+              <SettingsMaintenanceTab v-show="currentTab === 'data'" />
+              <!-- 关于与帮助 -->
               <SettingsAboutTab v-show="currentTab === 'about'" />
             </div>
           </div>
@@ -207,16 +205,18 @@ const tabGroups = computed(() => [
     tabs: tabs.value.filter(t => t.group === 'account'),
   },
   {
-    key: 'experience',
-    titleKey: 'settings.navGroupExperience',
-    tabs: tabs.value.filter(t => t.group === 'experience'),
-  },
-  {
     key: 'system',
     titleKey: 'settings.navGroupSystem',
     tabs: tabs.value.filter(t => t.group === 'system'),
   },
 ])
+
+/** 旧标签 id 兼容：会员并入「账号」、维护并入「数据」（外部仍可能传入旧 id） */
+function normalizeTab(id: string): SettingsTab {
+  if (id === 'billing') return 'account'
+  if (id === 'maintenance') return 'data'
+  return id as SettingsTab
+}
 
 // 用户交易明细与记录
 const {
@@ -362,8 +362,8 @@ async function loadUserCategoryShares() {
 watch(() => uiStore.panels.settings, (open) => {
   if (open) {
     if (uiStore.settingsInitialTab) {
-      currentTab.value = uiStore.settingsInitialTab as SettingsTab
-      mobileSubPage.value = uiStore.settingsInitialTab as SettingsTab
+      currentTab.value = normalizeTab(uiStore.settingsInitialTab)
+      mobileSubPage.value = currentTab.value
       uiStore.settingsInitialTab = ''
     } else {
       mobileSubPage.value = null
@@ -371,7 +371,7 @@ watch(() => uiStore.panels.settings, (open) => {
     loadUserCategoryShares()
     if (auth.isLoggedIn) {
       void refreshEntitlement()
-      if (currentTab.value === 'billing' || currentTab.value === 'account') {
+      if (currentTab.value === 'account') {
         void fetchTransactions()
         void loadAiQuota()
       }
@@ -382,7 +382,7 @@ watch(() => uiStore.panels.settings, (open) => {
 })
 
 watch(() => currentTab.value, (tab) => {
-  if ((tab === 'billing' || tab === 'account') && uiStore.panels.settings && auth.isLoggedIn) {
+  if (tab === 'account' && uiStore.panels.settings && auth.isLoggedIn) {
     void fetchTransactions()
     void refreshEntitlement()
     void loadAiQuota()
@@ -397,8 +397,8 @@ watch(() => auth.isLoggedIn, (logged) => {
 
 if (uiStore.panels.settings) {
   if (uiStore.settingsInitialTab) {
-    currentTab.value = uiStore.settingsInitialTab as SettingsTab
-    mobileSubPage.value = uiStore.settingsInitialTab as SettingsTab
+    currentTab.value = normalizeTab(uiStore.settingsInitialTab)
+    mobileSubPage.value = currentTab.value
     uiStore.settingsInitialTab = ''
   }
   loadUserCategoryShares()
@@ -451,30 +451,19 @@ const tabs = computed(() => [
     group: 'account',
   },
   {
-    id: 'billing' as SettingsTab,
-    labelKey: 'settings.tabBilling',
-    icon: I.creditCard || I.sparkles,
-    group: 'experience',
-  },
-  {
     id: 'ai' as SettingsTab,
     labelKey: 'settings.tabAi',
     icon: I.sparkles,
-    group: 'experience',
-  },
-  {
-    id: 'maintenance' as SettingsTab,
-    labelKey: 'settings.tabMaintenance',
-    icon: I.radar,
-    badge: (deadCount.value + blockedCount.value > 0)
-      ? String(deadCount.value + blockedCount.value)
-      : (allPublicShares.value.length > 0 ? String(allPublicShares.value.length) : undefined),
-    group: 'system',
+    group: 'account',
   },
   {
     id: 'data' as SettingsTab,
     labelKey: 'settings.tabData',
     icon: I.database || I.import,
+    // 死链 / 公开分享计数随「维护」并入数据页
+    badge: (deadCount.value + blockedCount.value > 0)
+      ? String(deadCount.value + blockedCount.value)
+      : (allPublicShares.value.length > 0 ? String(allPublicShares.value.length) : undefined),
     group: 'system',
   },
   {

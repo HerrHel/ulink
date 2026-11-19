@@ -20,12 +20,6 @@ async function enterStage2(page: import('@playwright/test').Page) {
   await page.goto('/app')
   await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 15000 })
 
-  // 未登录首访会弹首启引导，遮罩会挡住头部
-  const skip = page.getByText('跳过，直接开始')
-  if (await skip.isVisible().catch(() => false)) {
-    await skip.click()
-    await page.waitForTimeout(300)
-  }
 
   // 直接加 Stage 2 class（等价于滚动 >140px），不依赖页面实际可滚动高度
   await page.evaluate(() => {
@@ -75,11 +69,6 @@ test.describe('移动端 Stage 2 头部', () => {
     await page.setViewportSize(MOBILE)
     await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 15000 })
-    const skip = page.getByText('跳过，直接开始')
-    if (await skip.isVisible().catch(() => false)) {
-      await skip.click()
-      await page.waitForTimeout(300)
-    }
 
     // 未滚动：未登录 + 移动端 → 登录入口在头部
     await expect(page.getByTestId('header-login-btn')).toBeVisible()

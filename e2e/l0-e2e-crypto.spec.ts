@@ -5,7 +5,7 @@
  * 禁止仅注入 fake canary 冒充加密成功（fake 门闩见 e2e/app.spec.ts 同名用例）。
  *
  * Playwright 每用例独立 browser context，localStorage 默认干净，
- * 故只需注入 lv_setup_done，勿在 initScript 里 remove canary（reload 会误清）。
+ * 故只需注入老用户标记 lv_setup_done，勿在 initScript 里 remove canary（reload 会误清）。
  */
 import { test, expect } from '@playwright/test'
 

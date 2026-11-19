@@ -163,15 +163,6 @@ export const modalsEn = {
       restoredCount_one: 'Restored {n} item',
       emptiedToast: 'Trash emptied',
     }, // TrashPanel
-    setupGuide: {
-      welcome: 'Welcome to ulink',
-      tagline: 'An all-in-one bookmark manager to organize your web resources efficiently',
-      freshStart: 'Start fresh',
-      freshStartDesc: 'Start with a sample note, explore the features, then organize your own bookmarks',
-      importTitle: 'Import from other tools',
-      importDesc: 'Import from browser bookmarks, Raindrop, or CSV files',
-      skip: 'Skip and get started',
-    }, // SetupGuide
     share: {
       ariaLabel: 'Share Management',
       titleGroup: 'Share Note',

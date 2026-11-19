@@ -56,6 +56,15 @@
   background:var(--surface);
 }
 .group-card-head.drag-over{background:var(--surface-hover);border-radius:var(--radius-base)}
+/* 上手指南卡片的「导入书签」：靠右的小按钮，常驻可见 */
+.guide-import-btn{
+  margin-left:auto;align-self:center;flex-shrink:0;
+  padding:3px 10px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--surface);
+  color:var(--text-secondary);font:inherit;font-size:var(--fs-xs);font-weight:600;
+  white-space:nowrap;cursor:pointer;transition:color .15s ease,border-color .15s ease;
+}
+@media (hover: hover) and (pointer: fine){.guide-import-btn:hover{color:var(--text);border-color:var(--border-hover)}}
 
 .focus-view{
   display:flex;flex-direction:column;
