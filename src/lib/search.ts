@@ -236,7 +236,7 @@ export function _buildBookmarkSearchItems(
   })
 }
 
-function _buildGroupSearchItems(
+export function _buildGroupSearchItems(
   groups: SiblingGroup[],
   bookmarkMap: Record<string, Bookmark>,
   customAttributes: CustomAttribute[],
@@ -247,7 +247,7 @@ function _buildGroupSearchItems(
     const childUrls: string[] = []
     for (const bid of g.bookmarkIds || []) {
       const b = bookmarkMap[bid]
-      if (b) { childTitles.push(_plain(b.title || '')); childUrls.push(_plain(b.url || '')) }
+      if (b && !b.deletedAt) { childTitles.push(_plain(b.title || '')); childUrls.push(_plain(b.url || '')) }
     }
     const ct = childTitles.join(' ')
     const name = _plain(g.name || '')
@@ -357,7 +357,7 @@ export function _fallbackGrpIds(
         if (q && _attrsToAttrNames(g.attributes, attrNameMap).toLowerCase().includes(q)) return true
         for (const bid of g.bookmarkIds || []) {
           const b = bookmarkMap[bid]
-          if (b && (_plain(b.title || '').toLowerCase().includes(q) || _plain(b.url || '').toLowerCase().includes(q))) return true
+          if (b && !b.deletedAt && (_plain(b.title || '').toLowerCase().includes(q) || _plain(b.url || '').toLowerCase().includes(q))) return true
         }
         return false
       })
@@ -562,7 +562,7 @@ export function searchWithHighlights(
   let groupResults: SearchResultItem[] = []
 
   // 版本匹配则直接搜索；版本不匹配（CRUD 后）强制重建
-  const needsRebuildBm = !!_bmFuse && version !== _bmVersion
+  const needsRebuildBm = forceRebuild || (!!_bmFuse && version !== _bmVersion)
   if (!_ensureBookmarkBase(bookmarks, customAttributes, version, needsRebuildBm) || !_bmFuse) {
     // 降级：无高亮
     const bmIds = _fallbackBmIds(bookmarks, q, customAttributes)
@@ -598,7 +598,7 @@ export function searchWithHighlights(
       }
     })
 
-    const needsRebuildGrp = !!_grpFuse && version !== _grpVersion
+    const needsRebuildGrp = forceRebuild || (!!_grpFuse && version !== _grpVersion)
     if (_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuildGrp) && _grpFuse) {
       const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
       groupResults = grpResults.map(r => {

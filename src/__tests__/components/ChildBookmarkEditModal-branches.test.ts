@@ -27,13 +27,18 @@ const decryptMock = vi.hoisted(() => vi.fn())
 const encryptMock = vi.hoisted(() => vi.fn())
 const safeDecodePasswordMock = vi.hoisted(() => vi.fn())
 const isThreePartCipherMock = vi.hoisted(() => vi.fn())
-vi.mock('../../crypto.js', () => ({
-  decrypt: decryptMock,
-  decryptPasswordWithKey: (stored: any, key: any) => decryptMock(typeof stored === 'object' && stored ? `${stored.salt}.${stored.iv}.${stored.data}` : stored, key),
-  encrypt: encryptMock,
-  safeDecodePassword: safeDecodePasswordMock,
-  isThreePartCipher: isThreePartCipherMock,
-}))
+vi.mock('../../crypto.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return {
+    ...mod,
+    decrypt: decryptMock,
+    decryptPasswordWithKey: (stored: any, key: any) => decryptMock(typeof stored === 'object' && stored ? `${stored.salt}.${stored.iv}.${stored.data}` : stored, key),
+    encrypt: encryptMock,
+    safeDecodePassword: safeDecodePasswordMock,
+    isThreePartCipher: isThreePartCipherMock,
+    safeBtoa: (s: string) => mod.safeBtoa(s),
+  }
+})
 
 const toastMock = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/toast.js', () => ({ toast: toastMock }))

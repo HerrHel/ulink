@@ -281,7 +281,7 @@ const showNoneOption = computed(() => {
 
 const selectedParentLabel = computed(() => {
   if (!bmForm.parentId) return t('common.none')
-  const found = parentOptions.value.find(b => b.id === bmForm.parentId)
+  const found = parentOptions.value.find(b => b.id === bmForm.parentId) || store.bookmarkMap[bmForm.parentId]
   return found ? (displayText(found.title) || found.url || t('common.unnamed')) : t('common.none')
 })
 

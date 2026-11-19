@@ -99,8 +99,15 @@ export const categoryActions = {
     if (ui.shareModalTarget?.type === 'category' && ui.shareModalTarget.id === id) {
       ui.closeShareModal()
     }
+    this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
   },
-  restoreCategory(this: DataStoreThis, id: string) { if (_denyWrite()) return; this._restoreItem('categories', id) },
+  restoreCategory(this: DataStoreThis, id: string) {
+    if (_denyWrite()) return
+    this._restoreItem('categories', id)
+    this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
+  },
   permanentDeleteCategory(this: DataStoreThis, id: string) {
     if (_denyWrite()) return
     if (id === CAT_ALL || id === CAT_UNCATEGORIZED) return
@@ -130,6 +137,7 @@ export const categoryActions = {
       ui.closeShareModal()
     }
     this._searchIndexDirty = true
+    this._debouncedBumpSearchVersion()
   },
 
   /**

@@ -251,6 +251,7 @@ export async function applyDraftDiff(
     categoryId: string
   }>()
   const revertGroupMap = new Map<string, string[]>()
+  const revertChildParentMap = new Map<string, string | null>()
 
   for (const item of selectedItems) {
     // 提取真实的实体 ID（去掉 `diff-move-` / `diff-nest-` / `diff-dup-` 前缀）
@@ -319,6 +320,15 @@ export async function applyDraftDiff(
               ds.updateGroup(grp.id, { bookmarkIds: ids })
             }
           }
+          // 子书签引用改写到保留项，避免父软删后沦为孤儿
+          for (const b of ds.bookmarks || []) {
+            if (!b.deletedAt && b.parentId === bm.id && b.id !== canonical.id) {
+              if (!revertChildParentMap.has(b.id)) {
+                revertChildParentMap.set(b.id, b.parentId)
+              }
+              ds.updateBookmark(b.id, { parentId: canonical.id })
+            }
+          }
           ds.updateBookmark(canonical.id, {
             notes: newNotes,
             attributes: newAttrs,
@@ -342,17 +352,26 @@ export async function applyDraftDiff(
       type: 'draft_diff_apply',
       description: tN('ai.undoDraftDiffDesc', appliedCount),
       revert: () => {
+        // 1. 先恢复所有已删书签，确保后续恢复子级关系时父书签已处于存活态
         for (const item of revertMap) {
           if (item.action === 'restore_delete') {
             ds.restoreBookmark(item.id)
-          } else {
+          }
+        }
+        // 2. 恢复移动/嵌套修改项
+        for (const item of revertMap) {
+          if (item.action !== 'restore_delete') {
             ds.updateBookmark(item.id, {
               categoryId: item.prevCatId,
               parentId: item.prevParentId,
             })
           }
         }
-        // 撤销合并：恢复保留项被并入的备注/属性/使用次数/分类，以及组内引用
+        // 3. 恢复子书签归属
+        for (const [cid, prevPid] of revertChildParentMap.entries()) {
+          ds.updateBookmark(cid, { parentId: prevPid })
+        }
+        // 4. 撤销合并：恢复保留项被并入的备注/属性/使用次数/分类，以及组内引用
         for (const [pid, prev] of revertPrimaryMap.entries()) {
           ds.updateBookmark(pid, prev)
         }

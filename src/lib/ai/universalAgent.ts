@@ -24,6 +24,7 @@ import { normalizeUrlForDedup } from './localClustering.js'
 import { pushUndoAction } from './siteUndoStack.js'
 import { askConfirm, buildTrashClearConfirmMessage } from './siteHitl.js'
 import { toastWithUndo } from '../toast.js'
+import { collectDescendantIds, sortBmIdsAncestorsFirst } from '../../lib/collectSubIds.js'
 import { CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../../config/constants.js'
 import type { Bookmark, Category, SiblingGroup, CustomAttribute } from '../../types.js'
 
@@ -692,20 +693,32 @@ export async function executeManageBookmarks(
     }
 
     const title = bm.title
-    ds.deleteBookmark(bm.id)
+    const cm = ds.childrenMap
+    const ids = collectDescendantIds(
+      pid => (cm && Object.keys(cm).length > 0 ? cm[pid] : ds.bookmarks.filter(b => b.parentId === pid && !b.deletedAt)),
+      bm.id,
+    )
+    for (const id of ids) {
+      ds.deleteBookmark(id)
+    }
     app.save?.()
 
+    const sortedRestore = sortBmIdsAncestorsFirst(ids, ds._bmMap)
     pushUndoAction({
       type: 'bookmark_delete',
       description: `删除书签「${title}」`,
       revert: () => {
-        ds.restoreBookmark(bm.id)
+        for (const bid of sortedRestore) {
+          ds.restoreBookmark(bid)
+        }
         app.save?.()
         return `已恢复书签「${title}」`
       },
     })
     toastWithUndo(`书签「${title}」已移入回收站`, () => {
-      ds.restoreBookmark(bm.id)
+      for (const bid of sortedRestore) {
+        ds.restoreBookmark(bid)
+      }
       app.save?.()
     })
     return { success: true, message: `已为您将书签「${title}」移入回收站。` }

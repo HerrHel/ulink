@@ -180,6 +180,7 @@ export const ioActions = {
         this.categories = [...baseCats, ...this.categories]
       }
       this._syncMaps()
+      this._normalizeCategoryOrders()
     }
     // 重置 curCat/focusedGroupId 及批量/详情/搜索上下文（杜绝跨空间状态污染）
     ui.curCat = 'all'

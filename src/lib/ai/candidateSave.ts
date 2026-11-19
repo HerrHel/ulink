@@ -24,6 +24,15 @@ export function candidateToBookmark(
   if (c.suggestedAttrIds?.length) {
     for (const aid of c.suggestedAttrIds) attributes[aid] = true
   }
+  let categoryId = c.categoryId
+  if (categoryId && categoryId !== CAT_UNCATEGORIZED) {
+    const cat = ds?.categoryMap?.[categoryId]
+    if (!cat || cat.deletedAt) {
+      categoryId = CAT_UNCATEGORIZED
+    }
+  } else {
+    categoryId = CAT_UNCATEGORIZED
+  }
   return {
     id: newBookmarkId(),
     title: c.title,
@@ -33,7 +42,7 @@ export function candidateToBookmark(
     notes: c.notes || '',
     icon: icon || c.icon || '',
     iconDark: c.iconDark || '',
-    categoryId: c.categoryId || CAT_UNCATEGORIZED,
+    categoryId,
     parentId: null,
     order:
       typeof ds?.nextBookmarkOrder === 'function'

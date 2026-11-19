@@ -56,7 +56,7 @@ import { useE2EStore } from '../../stores/e2e.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { fixUrl, domain, displayText } from '../../utils.js'
-import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
+import { safeDecodePassword, safeBtoa, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import type { EncryptedPassword } from '../../types.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { toast } from '../../lib/toast.js'
@@ -199,7 +199,7 @@ async function doSave(): Promise<void> {
       if (!unlocked) { toast(t('modal.childBm.saveCancelled'), false); return }
       return await doSave()
     } else {
-      storedPassword = btoa(form.password)
+      storedPassword = safeBtoa(form.password)
     }
   }
 

@@ -60,6 +60,16 @@ const checking = ref(false)
 const progress = ref({ done: 0, total: 0, truncated: 0 })
 const lastFullCheckAt = ref(0)
 
+// ── 定时自动检测（D3）：模块单例状态与定时器，跨组件与单测共享同一实例 ──
+const AUTO_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000 // 每周
+const AUTO_CHECK_KEY = 'lv_autoDeadCheck'
+const AUTO_CHECK_ENABLED_KEY = 'lv_autoDeadCheckEnabled'
+
+const autoCheckEnabled = ref(!!safeGetItem(AUTO_CHECK_ENABLED_KEY))
+const autoCheckAllowed = ref(false)
+const autoScanLimit = ref(500)
+let _autoCheckTimer: ReturnType<typeof setInterval> | null = null
+
 // ── 死链检测历史记录（持久化到 localStorage，便于趋势分析）──
 const HIST_KEY = 'lv_deadLinkHistory'
 const MAX_HIST = 5
@@ -876,24 +886,6 @@ export function useDeadLinkChecker() {
     return count
   })
 
-  // ── 定时自动检测（D3）──
-  const AUTO_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000 // 每周
-  const AUTO_CHECK_KEY = 'lv_autoDeadCheck'
-  const AUTO_CHECK_ENABLED_KEY = 'lv_autoDeadCheckEnabled'
-
-  const autoCheckEnabled = ref(!!safeGetItem(AUTO_CHECK_ENABLED_KEY))
-  /**
-   * 「每周自动全量检测」是成本最高的路径：请求数与书签数成正比（1000 个书签 = 1000 次外呼），
-   * 因此设为 Plus 专属（features 里的 `linkcheck.auto`）。手动检查不受此限。
-   */
-  const autoCheckAllowed = ref(false)
-  /**
-   * 自动扫描的单次规模上限（来自权益 features['linkcheck.auto.max']，默认 500）。
-   * 成本与书签数成正比，不封顶则超大书签库会吃掉整个资源点套餐。
-   */
-  const autoScanLimit = ref(500)
-  let _autoCheckTimer: ReturnType<typeof setInterval> | null = null
-
   /** 权益变化时刷新「是否允许自动全量检测」；已开着但失去权限则立即停掉 */
   async function refreshAutoCheckAllowed(ent?: MyEntitlement): Promise<boolean> {
     if (ent) {
@@ -951,8 +943,15 @@ export function useDeadLinkChecker() {
     if (_autoCheckTimer) { clearInterval(_autoCheckTimer); _autoCheckTimer = null }
   }
 
-  /** 测试钩子：清空跨用例共享的模块级缓存（baseline 30s 缓存、in-flight、histCache、results） */
+  /** 测试钩子：清空跨用例共享的模块级缓存（baseline 30s 缓存、in-flight、histCache、results、定时器） */
   function _resetDeadLinkCache() {
+    if (_autoCheckTimer) {
+      clearInterval(_autoCheckTimer)
+      _autoCheckTimer = null
+    }
+    autoCheckEnabled.value = !!safeGetItem(AUTO_CHECK_ENABLED_KEY)
+    autoCheckAllowed.value = false
+    autoScanLimit.value = 500
     _baselineCache = null
     _baselineInflight = null
     _restrictedNetCache = null

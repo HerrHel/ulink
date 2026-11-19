@@ -69,6 +69,7 @@ export async function mergeDuplicateBookmarks(
   const deletedIds: string[] = []
   const revertPrimaryMap = new Map<string, { notes?: string; attributes?: Record<string, any>; useCount?: number; categoryId?: string }>()
   const revertGroupMap = new Map<string, string[]>()
+  const revertChildParentMap = new Map<string, string | null>()
 
   for (const cluster of dups) {
     const primary = ds.bookmarkMap[cluster.primary.id] || cluster.primary
@@ -122,6 +123,16 @@ export async function mergeDuplicateBookmarks(
           }
         }
 
+        // 4. 避免子书签孤立：若副本下挂有子书签，自动将子书签的 parentId 重新指向主书签
+        for (const b of ds.bookmarks || []) {
+          if (!b.deletedAt && b.parentId === dup.id && b.id !== primary.id) {
+            if (!revertChildParentMap.has(b.id)) {
+              revertChildParentMap.set(b.id, b.parentId)
+            }
+            ds.updateBookmark(b.id, { parentId: primary.id })
+          }
+        }
+
         ds.deleteBookmark(dup.id)
         deletedIds.push(dup.id)
         mergedCount++
@@ -152,6 +163,9 @@ export async function mergeDuplicateBookmarks(
       revert: () => {
         for (const id of deletedIds) {
           ds.restoreBookmark(id)
+        }
+        for (const [cid, origParentId] of revertChildParentMap.entries()) {
+          ds.updateBookmark(cid, { parentId: origParentId })
         }
         for (const [pid, orig] of revertPrimaryMap.entries()) {
           ds.updateBookmark(pid, orig)
