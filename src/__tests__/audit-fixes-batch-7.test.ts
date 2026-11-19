@@ -34,7 +34,7 @@ describe('audit-fixes-batch-7: 6项深层隐患修复验证', () => {
   })
 
   describe('1. 软删父书签未级联时存活子书签解孤儿与视图保活', () => {
-    it('_syncMaps 自动将指向软删父级但自身存活的子书签 parentId 置 null 并标脏', () => {
+    it('_syncMaps 面对软删父级屏蔽子索引保全层级，指向不存在父级时置 null 并标脏', () => {
       const ds = useDataStore()
       ds.categories = [{ id: 'cat-1', name: '默认', icon: '', color: '', order: 0 }]
       const parent = makeBm({
@@ -51,13 +51,23 @@ describe('audit-fixes-batch-7: 6项深层隐患修复验证', () => {
         categoryId: 'cat-1',
         parentId: 'parent-bm',
       })
-      ds.bookmarks = [parent, child]
+      const orphan = makeBm({
+        id: 'orphan-bm',
+        title: '完全不存在父级的书签',
+        url: 'https://orphan.com',
+        categoryId: 'cat-1',
+        parentId: 'totally-missing-parent',
+      })
+      ds.bookmarks = [parent, child, orphan]
       ds._syncMaps()
 
-      const updatedChild = ds.bookmarkMap['child-bm']
-      expect(updatedChild).toBeDefined()
-      expect(updatedChild.parentId).toBeNull()
-      expect(ds._dirtyIds.has('child-bm')).toBe(true)
+      // 软删父级的子节点保持 parentId 供恢复，但不进入 _childrenIdx
+      expect(ds._childrenIdx['parent-bm']).toBeUndefined()
+      // 彻底不存在父级的孤儿书签，_syncMaps 必须清洗其 parentId 为 null 并标脏
+      const updatedOrphan = ds.bookmarkMap['orphan-bm']
+      expect(updatedOrphan).toBeDefined()
+      expect(updatedOrphan.parentId).toBeNull()
+      expect(ds._dirtyIds.has('orphan-bm')).toBe(true)
     })
 
     it('useCombinedList 即使在 _syncMaps 执行前，对父级已软删的孤儿书签也作为顶层卡片呈现，绝不静默丢失', () => {
@@ -90,27 +100,29 @@ describe('audit-fixes-batch-7: 6项深层隐患修复验证', () => {
   })
 
   describe('2. addBookmark / updateBookmark 虚假 parentId 与间接成环修复', () => {
-    it('addBookmark 传入不存在的 parentId 时自动置 null 并正确落库', () => {
+    it('addBookmark 传入已软删的 parentId 时自动置 null 并正确落库', () => {
       const ds = useDataStore()
+      ds.bookmarks = [makeBm({ id: 'parent-deleted', title: '已删父', url: 'https://p.com', deletedAt: Date.now() })]
+      ds._syncMaps()
       ds.addBookmark(makeBm({
         id: 'bm-ghost-parent',
-        title: '挂在不存在父级上的书签',
+        title: '挂在已删父级上的书签',
         url: 'https://ghost.com',
-        parentId: 'non-existent-id-12345',
+        parentId: 'parent-deleted',
       }))
       const saved = ds.bookmarkMap['bm-ghost-parent']
       expect(saved).toBeDefined()
       expect(saved.parentId).toBeNull()
-      expect(ds._childrenIdx['non-existent-id-12345']).toBeUndefined()
+      expect(ds._childrenIdx['parent-deleted']).toBeUndefined()
     })
 
-    it('updateBookmark 传入不存在的 parentId 时自动置 null', () => {
+    it('updateBookmark 传入已软删的 parentId 时自动置 null', () => {
       const ds = useDataStore()
-      ds.addBookmark(makeBm({
-        id: 'bm-target',
-        title: '普通书签',
-        url: 'https://target.com',
-      }))
+      ds.bookmarks = [
+        makeBm({ id: 'bm-target', title: '普通书签', url: 'https://target.com' }),
+        makeBm({ id: 'phantom-id', title: '已删父', url: 'https://p.com', deletedAt: Date.now() }),
+      ]
+      ds._syncMaps()
       ds.updateBookmark('bm-target', { parentId: 'phantom-id' })
       expect(ds.bookmarkMap['bm-target'].parentId).toBeNull()
     })

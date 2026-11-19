@@ -79,7 +79,7 @@ export const bookmarkActions = {
     if (_denyWrite()) return
     const entry = { ...bm }
     const parent = entry.parentId ? this._bmMap[entry.parentId] : null
-    if (entry.parentId && (entry.parentId === entry.id || !parent || parent.deletedAt)) {
+    if (entry.parentId === entry.id || (parent && parent.deletedAt)) {
       entry.parentId = null
     }
     const existingIdx = _indexOfById(this.bookmarks, this._bmMap, entry.id)
