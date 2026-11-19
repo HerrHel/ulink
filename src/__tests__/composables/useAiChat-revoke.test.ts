@@ -10,7 +10,8 @@ const mockState = reactive({
   customAttributes: [] as any[],
   curCat: 'all',
   searchQuery: '',
-  aiAttachedCards: [] as Array<{ type: 'bm' | 'group'; id: string }>,
+  aiAttachedCards: [] as Array<{ type: 'bm' | 'group' | 'cat'; id: string }>,
+  aiAttachedFiles: [] as any[],
   clearAiAttachedCards: vi.fn(),
   batchMode: false,
   batchSelected: [] as string[],
@@ -129,5 +130,29 @@ describe('useAiChat — revokeUserMessage 级联截断与回滚测试', () => {
     expect(ai.aiLoading.value).toBe(false)
     expect(ai.chatTurns.value).toHaveLength(0)
     expect(ai.aiQuery.value).toBe('测试在途中提问')
+  })
+
+  it('撤回带有附加卡片或文件的消息时，应将附件完整还原到输入框待发送状态', () => {
+    mockState.aiAttachedCards = []
+    mockState.aiAttachedFiles = []
+
+    const ai = useAiChat()
+    const now = Date.now()
+    const turnUser: ChatTurn = {
+      id: 'u-media',
+      role: 'user',
+      content: '请分析这张图',
+      attachedCards: [{ type: 'bm', id: 'bm-1', title: '示例书签', url: 'https://example.com' }],
+      attachedFiles: [{ id: 'f-1', name: 'photo.jpg', size: 1024, sizeFormatted: '1KB', mimeType: 'image/jpeg', type: 'image', dataUrl: 'data:image/jpeg;base64,...' }],
+      timestamp: now,
+    }
+
+    ai.chatTurns.value = [turnUser]
+    ai.revokeUserMessage(turnUser)
+
+    expect(ai.aiQuery.value).toBe('请分析这张图')
+    expect(mockState.aiAttachedCards).toEqual([{ type: 'bm', id: 'bm-1' }])
+    expect(mockState.aiAttachedFiles).toHaveLength(1)
+    expect(mockState.aiAttachedFiles[0].id).toBe('f-1')
   })
 })

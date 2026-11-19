@@ -47,17 +47,19 @@ const DEFAULT_EXCLUDE_KEYS = [
 ]
 
 export function diffVersions(
-  oldData: Record<string, unknown>,
-  newData: Record<string, unknown>,
+  oldData: Record<string, unknown> | null | undefined,
+  newData: Record<string, unknown> | null | undefined,
   excludeKeys: string[] = DEFAULT_EXCLUDE_KEYS,
 ): DiffField[] {
+  const safeOld = oldData || {}
+  const safeNew = newData || {}
   const result: DiffField[] = []
-  const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)])
+  const allKeys = new Set([...Object.keys(safeOld), ...Object.keys(safeNew)])
 
   for (const key of allKeys) {
     if (excludeKeys.includes(key)) continue
-    const oldVal = oldData[key]
-    const newVal = newData[key]
+    const oldVal = safeOld[key]
+    const newVal = safeNew[key]
 
     let oldStr: string | undefined
     let newStr: string | undefined

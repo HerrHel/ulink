@@ -5,7 +5,7 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useBatchMoveStore } from '../../stores/overlay.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import { t, tN } from '../../i18n/index.js'
-import { collectDescendantIds } from '../../lib/collectSubIds.js'
+import { collectDescendantIds, sortBmIdsAncestorsFirst } from '../../lib/collectSubIds.js'
 
 /**
  * useBatch — Batch operations
@@ -65,7 +65,9 @@ export async function batchDelete() {
     removedGroupIds.forEach(gid => ds.restoreGroup(gid))
     // restoreBookmark 已用 _deleteBookmark 记录的组关系恢复 bookmarkIds，
     // 不再手动回加 —— 与回收站恢复路径统一。
-    removedBookmarkIds.forEach(bid => ds.restoreBookmark(bid))
+    // 按祖先优先顺序恢复，防止子书签先恢复时因父书签仍处于软删除状态而导致 parentId 被误重置为 null
+    const sortedBmIds = sortBmIdsAncestorsFirst(removedBookmarkIds, ds._bmMap)
+    sortedBmIds.forEach(bid => ds.restoreBookmark(bid))
     debouncedSaveAppData(); toast(t('deadlinks.restored'))
   })
 }

@@ -27,6 +27,17 @@ describe('DataStore', () => {
       expect(store.bookmarks[0]).toStrictEqual(bm)
     })
 
+    it('addBookmark - parentId 指向自身或已软删除的父书签时应自动置 null', () => {
+      // 自身
+      store.addBookmark({ id: 'b-self', title: 'Self', url: 'https://self.com', parentId: 'b-self' } as any)
+      expect(store.bookmarkMap['b-self'].parentId).toBeNull()
+
+      // 已软删父书签
+      store.addBookmark({ id: 'b-parent', title: 'Parent', url: 'https://p.com', deletedAt: Date.now() } as any)
+      store.addBookmark({ id: 'b-child', title: 'Child', url: 'https://c.com', parentId: 'b-parent' } as any)
+      expect(store.bookmarkMap['b-child'].parentId).toBeNull()
+    })
+
     // M25：走真实 action 验证 dirty / newIds / searchVersion 副作用
     it('M25: addBookmark 标记 dirty/new 并 bump searchVersion', () => {
       store.addBookmark({ id: 'b-m25', title: 'M25', url: 'https://m25.example' } as any)

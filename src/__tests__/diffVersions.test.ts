@@ -86,4 +86,12 @@ describe('diffVersions', () => {
       key: 'title', label: '标题', type: 'changed', oldValue: 'a', newValue: 'b',
     }])
   })
+
+  it('null 或 undefined 输入时优雅处理不抛错', () => {
+    expect(() => diffVersions(null as any, { title: 'New' })).not.toThrow()
+    expect(() => diffVersions({ title: 'Old' }, undefined as any)).not.toThrow()
+    expect(diffVersions(null as any, { title: 'New' })).toEqual([
+      { key: 'title', label: '标题', type: 'added', newValue: 'New' },
+    ])
+  })
 })

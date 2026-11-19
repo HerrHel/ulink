@@ -215,13 +215,18 @@ function fetchNoCorsWithTimeout(
       reject(new Error('aborted'))
       return
     }
-    const timer = setTimeout(() => reject(new Error('timeout')), timeoutMs)
+    const ac = new AbortController()
+    const timer = setTimeout(() => {
+      ac.abort()
+      reject(new Error('timeout'))
+    }, timeoutMs)
     const onAbort = () => {
       clearTimeout(timer)
+      ac.abort()
       reject(new Error('aborted'))
     }
     signal?.addEventListener('abort', onAbort, { once: true })
-    fetch(url, { method, mode: 'no-cors', cache: 'no-store', signal })
+    fetch(url, { method, mode: 'no-cors', cache: 'no-store', signal: ac.signal })
       .then((res) => {
         clearTimeout(timer)
         signal?.removeEventListener('abort', onAbort)

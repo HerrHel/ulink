@@ -36,3 +36,26 @@ export function collectDescendantIds(
   }
   return ids
 }
+
+/**
+ * 按祖先优先（深度升序）对书签 ID 排序。
+ * 父书签深度为 0，直接子书签深度为 1，孙书签深度为 2...
+ * 用于批量恢复、撤销删除等场景，确保父级先于子级恢复，防止子书签恢复时因父级仍处于软删除状态而导致 parentId 被误置空降级。
+ */
+export function sortBmIdsAncestorsFirst(
+  ids: string[],
+  bmMap: Record<string, { parentId?: string | null } | undefined>,
+): string[] {
+  const depth = (id: string) => {
+    let d = 0
+    let cur = bmMap[id]
+    const visited = new Set<string>()
+    while (cur?.parentId && !visited.has(cur.parentId)) {
+      visited.add(cur.parentId)
+      d++
+      cur = bmMap[cur.parentId]
+    }
+    return d
+  }
+  return [...ids].sort((a, b) => depth(a) - depth(b))
+}

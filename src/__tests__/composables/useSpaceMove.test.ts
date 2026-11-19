@@ -105,6 +105,18 @@ describe('useSpaceMove', () => {
       expect(vaultData.bookmarks.some((b: any) => b.id === 'b2')).toBe(true)
     })
 
+    it('分类下子书签若父级留在主页（未随迁），移入私密后 parentId 自动置 null 避免孤儿不可见', async () => {
+      dataStore.addCategory({ id: 'cat1', name: '工作', icon: 'work', color: '#fff', order: 1 } as any)
+      dataStore.addBookmark({ id: 'b_parent_main', title: '主页父书签', url: 'pm', categoryId: 'other' } as any)
+      dataStore.addBookmark({ id: 'b_child_cat1', title: '子书签', url: 'cc', categoryId: 'cat1', parentId: 'b_parent_main' } as any)
+      dataStore._syncMaps()
+      await spaceMove.moveCategoryToVault('cat1')
+      const vaultData = JSON.parse(localStorage.getItem(STORAGE_KEY_VAULT)!)
+      const childInVault = vaultData.bookmarks.find((b: any) => b.id === 'b_child_cat1')
+      expect(childInVault).toBeDefined()
+      expect(childInVault.parentId).toBeNull()
+    })
+
     it('不可移入虚拟分类（CAT_ALL/CAT_UNCATEGORIZED）', async () => {
       // 与生产一致：「全部」随默认数据加载进 categories（config/constants.ts 默认分类），
       // 不经 addCategory（后者会拒收虚拟分类 id）。若测试里没有这个条目，守卫失效时后续
@@ -136,6 +148,9 @@ describe('useSpaceMove', () => {
       const vaultData = JSON.parse(localStorage.getItem(STORAGE_KEY_VAULT)!)
       expect(vaultData.siblingGroups.some((g: any) => g.id === 'g1')).toBe(true)
       expect(vaultData.bookmarks.some((b: any) => b.id === 'b1')).toBe(true)
+      // 组若在主页挂在未迁入私密的分类，移入私密后应回落至 uncategorized，避免在私密空间指向幽灵分类
+      const gInVault = vaultData.siblingGroups.find((g: any) => g.id === 'g1')
+      expect(gInVault.categoryId).toBe('uncategorized')
     })
   })
 })

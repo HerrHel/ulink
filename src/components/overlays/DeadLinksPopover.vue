@@ -102,7 +102,7 @@ import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { showConfirm, toast, toastWithUndo } from '../../lib/toast.js'
 import { debouncedSaveAppData, saveAppData } from '../../stores/app.js'
-import { collectDescendantIds } from '../../lib/collectSubIds.js'
+import { collectDescendantIds, sortBmIdsAncestorsFirst } from '../../lib/collectSubIds.js'
 import { t, tN } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -261,7 +261,8 @@ function deleteSelected() {
     exitSelectMode()
     close()
     toastWithUndo(tN('deadlinks.deletedToast', count), () => {
-      allIds.forEach(bid => dataStore.restoreBookmark(bid))
+      const sortedIds = sortBmIdsAncestorsFirst(allIds, dataStore._bmMap)
+      sortedIds.forEach(bid => dataStore.restoreBookmark(bid))
       debouncedSaveAppData()
       toast(t('deadlinks.restored'))
     })

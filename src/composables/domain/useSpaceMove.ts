@@ -170,6 +170,12 @@ export function useSpaceMove() {
     }
 
     const vault = await _loadVault()
+    const vaultCatIds = new Set((vault.categories || []).map(c => c.id))
+    for (const g of groupsFull) {
+      if (!g.categoryId || !vaultCatIds.has(g.categoryId)) {
+        g.categoryId = CAT_UNCATEGORIZED
+      }
+    }
     await _persistIntoVault(vault, bms, groupsFull, [])
 
     // 从主页删除：留在主页的组剔除已被移走的书签引用
@@ -212,15 +218,26 @@ export function useSpaceMove() {
     }
     // 该分类下所有组
     const groupsRaw: SiblingGroup[] = dataStore.siblingGroups.filter(g => g.categoryId === catId && !g.deletedAt)
-    // 组引用的书签若不在该分类（如组跨分类引用）也一并纳入迁入集合
+    // 组引用的书签若不在该分类（如组跨分类引用）也一并纳入迁入集合（含其子书签）
     for (const g of groupsRaw) {
       for (const bid of g.bookmarkIds || []) {
-        const b = dataStore.bookmarkMap[bid]
-        if (b && !allIds.has(bid)) {
-          // 跨分类引用的书签单独迁入私密未分类（不归本分类），并从主页删
-          allIds.add(bid)
-          bms.push({ ..._clean(b), categoryId: CAT_UNCATEGORIZED, parentId: null })
+        if (!allIds.has(bid)) {
+          for (const sid of collectDescendantIds(pid => dataStore.childrenMap[pid], bid)) {
+            if (!allIds.has(sid)) {
+              allIds.add(sid)
+              const b = dataStore.bookmarkMap[sid]
+              if (b) {
+                bms.push({ ..._clean(b), categoryId: CAT_UNCATEGORIZED, parentId: null })
+              }
+            }
+          }
         }
+      }
+    }
+    // 解孤儿：若移入的书签其 parentId 不在迁入集合内（留在主页或已不存在），重置为 null 避免在私密空间不可见
+    for (const b of bms) {
+      if (b.parentId && !allIds.has(b.parentId)) {
+        b.parentId = null
       }
     }
     const groups = groupsRaw.map(_clean)
@@ -281,6 +298,12 @@ export function useSpaceMove() {
     }
 
     const vault = await _loadVault()
+    const vaultCatIds = new Set((vault.categories || []).map(c => c.id))
+    for (const g of groups) {
+      if (!g.categoryId || !vaultCatIds.has(g.categoryId)) {
+        g.categoryId = CAT_UNCATEGORIZED
+      }
+    }
     await _persistIntoVault(vault, bms, groups, [])
 
     // 组及其成员从主页删除：组先删，成员书签删（含子）；非该组成员不删

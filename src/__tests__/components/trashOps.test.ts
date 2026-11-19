@@ -47,6 +47,50 @@ describe('restoreItems', () => {
     expect(spies.category).toHaveBeenCalledExactlyOnceWith('c1')
     expect(spies.attribute).toHaveBeenCalledExactlyOnceWith('a1')
   })
+
+  it('书签按深度升序恢复：父书签先于子书签恢复，防止子书签的 parentId 被误重置为 null', () => {
+    const ds = useDataStore()
+    const callOrder: string[] = []
+    ds.addBookmark({ id: 'p1', title: 'Parent', url: 'https://p.com' } as any)
+    ds.addBookmark({ id: 'c1', title: 'Child', url: 'https://c.com', parentId: 'p1' } as any)
+    ds.deleteBookmark('p1')
+    ds.deleteBookmark('c1')
+    vi.spyOn(ds, 'restoreBookmark').mockImplementation((id: string) => {
+      callOrder.push(id)
+    })
+
+    // 子书签排在数组前面
+    restoreItems(ds, [
+      { type: 'bookmark', id: 'c1' },
+      { type: 'bookmark', id: 'p1' },
+    ])
+
+    expect(callOrder).toEqual(['p1', 'c1'])
+  })
+
+  it('端到端测试：批量恢复时子书签排在父书签前面，恢复后子书签的 parentId 依然保留指向父书签', () => {
+    const ds = useDataStore()
+    ds.addBookmark({ id: 'p1', title: 'Parent', url: 'https://p.com' } as any)
+    ds.addBookmark({ id: 'c1', title: 'Child', url: 'https://c.com', parentId: 'p1' } as any)
+    ds.deleteBookmark('p1')
+    ds.deleteBookmark('c1')
+
+    // 两个都处于回收站
+    expect(ds.bookmarkMap['p1'].deletedAt).toBeTruthy()
+    expect(ds.bookmarkMap['c1'].deletedAt).toBeTruthy()
+    expect(ds.bookmarkMap['c1'].parentId).toBe('p1')
+
+    // 批量恢复（故意把子书签排在前面）
+    restoreItems(ds, [
+      { type: 'bookmark', id: 'c1' },
+      { type: 'bookmark', id: 'p1' },
+    ])
+
+    // 恢复后父子状态均正常，且关系完整保留
+    expect(ds.bookmarkMap['p1'].deletedAt).toBeUndefined()
+    expect(ds.bookmarkMap['c1'].deletedAt).toBeUndefined()
+    expect(ds.bookmarkMap['c1'].parentId).toBe('p1')
+  })
 })
 
 describe('permanentDeleteItems', () => {

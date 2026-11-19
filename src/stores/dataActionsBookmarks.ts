@@ -78,7 +78,8 @@ export const bookmarkActions = {
   addBookmark(this: DataStoreThis, bm: Bookmark) {
     if (_denyWrite()) return
     const entry = { ...bm }
-    if (entry.parentId === entry.id) {
+    const parent = entry.parentId ? this._bmMap[entry.parentId] : null
+    if (entry.parentId === entry.id || (parent && parent.deletedAt)) {
       entry.parentId = null
     }
     this.bookmarks = [...this.bookmarks, entry]

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { collectDescendantIds } from '../lib/collectSubIds.js'
+import { collectDescendantIds, sortBmIdsAncestorsFirst } from '../lib/collectSubIds.js'
 import type { Bookmark } from '../types.js'
 
 /** 构造一个最小可用的 Bookmark（仅 id/parentId 用于本测试） */
@@ -44,5 +44,31 @@ describe('collectDescendantIds', () => {
     const ids = collectDescendantIds(pid => cm[pid], 'a')
     expect(ids.length).toBe(2)
     expect(new Set(ids).size).toBe(2)
+  })
+})
+
+describe('sortBmIdsAncestorsFirst', () => {
+  it('父级优先：子书签排在父书签后，无父级优先排在最前', () => {
+    const bmMap: Record<string, any> = {
+      p1: bm('p1', null),
+      c1: bm('c1', 'p1'),
+      gc1: bm('gc1', 'c1'),
+      standalone: bm('standalone', null),
+    }
+
+    // 乱序传入：gc1, c1, standalone, p1
+    const sorted = sortBmIdsAncestorsFirst(['gc1', 'c1', 'standalone', 'p1'], bmMap)
+    expect(sorted.indexOf('p1')).toBeLessThan(sorted.indexOf('c1'))
+    expect(sorted.indexOf('c1')).toBeLessThan(sorted.indexOf('gc1'))
+    expect(sorted.indexOf('standalone')).toBeLessThan(sorted.indexOf('c1'))
+  })
+
+  it('防环化容错：遇到反向引用的环状数据不会死循环', () => {
+    const bmMap: Record<string, any> = {
+      a: bm('a', 'b'),
+      b: bm('b', 'a'),
+    }
+    const sorted = sortBmIdsAncestorsFirst(['a', 'b'], bmMap)
+    expect(sorted).toHaveLength(2)
   })
 })

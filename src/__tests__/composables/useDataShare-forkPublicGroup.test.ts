@@ -230,6 +230,28 @@ describe('forkPublicGroup — M17 url 去重跳过本地已有', () => {
 
     expect(addBmSpy).not.toHaveBeenCalled() // 去重跳过，无新入库
   })
+
+  it('本地同 URL 已软删除（回收站 deletedAt）时，fork 不应被其误判去重，应正常新增书签', async () => {
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+    const trashedA = await makeBookmark({ id: 'local-trash-A', url: 'https://example.com/item', deletedAt: Date.now() })
+    ds.bookmarks.push(trashedA)
+    ds._bmMap[trashedA.id] = trashedA
+    const addBmSpy = vi.spyOn(ds, 'addBookmark')
+    const group = {
+      id: 'g-src', name: 'g', categoryId: 'uncategorized', icon: '', order: 0, isExpanded: false,
+      attributes: {}, bookmarkIds: ['b-item'], notes: '', useCount: 0, updatedAt: 1, isPublic: true,
+    } as any
+    const bms = [await makeBookmark({ id: 'b-item', url: 'https://example.com/item' })]
+    const forkPublicGroup = await forkCalls()
+
+    await forkPublicGroup(group, bms)
+
+    expect(addBmSpy).toHaveBeenCalledTimes(1)
+    const newGroup = ds.siblingGroups.find((g: any) => g.id === 'g-new-1') as any
+    expect(newGroup).toBeTruthy()
+    expect(newGroup.bookmarkIds).toEqual(['b-new-0'])
+  })
 })
 
 describe('forkPublicGroup — 悬空 id 过滤', () => {

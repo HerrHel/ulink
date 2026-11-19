@@ -58,7 +58,7 @@ vi.mock('../../composables/domain/useBatch.js', () => ({ toggleBatchMode: vi.fn(
 // 故仿 mockUI 模式：hoisted 暴露单例对象，useXxxStore 返回它，测试可写状态、可断言 hide/close 调用次数。
 const mockToast = vi.hoisted(() => ({ resolveConfirm: vi.fn() }))
 vi.mock('../../stores/toast.js', () => ({ useToastStore: () => mockToast }))
-const mockCtx = vi.hoisted(() => ({ hide: vi.fn() }))
+const mockCtx = vi.hoisted(() => ({ hide: vi.fn(), open: false }))
 vi.mock('../../stores/contextMenu.js', () => ({ useContextMenuStore: () => mockCtx }))
 const mockActionSheet = vi.hoisted(() => ({ visible: false, hide: vi.fn() }))
 vi.mock('../../stores/actionSheet.js', () => ({ useActionSheetStore: () => mockActionSheet }))
@@ -1041,11 +1041,20 @@ describe('r9 #12 _onGlobalKeydown：Escape 7 优先级层 + 兜底全家桶', ()
     mockBatchMove.open = false; mockBatchMove.hide.mockClear?.()
     mockMfb.open = false; mockMfb.hide.mockClear?.()
     mockToast.resolveConfirm.mockClear?.()
-    mockCtx.hide.mockClear?.()
+    mockCtx.open = false; mockCtx.hide.mockClear?.()
     closeBmModalMock.mockClear(); closeCatModalMock.mockClear(); closeAttrModalMock.mockClear(); closeGroupEditMock.mockClear()
     restore = setActiveElement(document.body)
   })
   afterEach(() => { restore?.() })
+
+  it('优先层 contextMenu.open=true → hide() 调，下层 store actionSheet/auth 等短路未触', () => {
+    mockCtx.open = true
+    mockActionSheet.visible = true // 验证 contextMenu 优先层短路
+    const e = makeKey('Escape')
+    _onGlobalKeydown(e)
+    expect(mockCtx.hide).toHaveBeenCalledTimes(1)
+    expect(mockActionSheet.hide).not.toHaveBeenCalled()
+  })
 
   it('层1 actionSheet.visible=true → hide() 调，下层 store authModalOpen 仍 false 短路未触', () => {
     mockActionSheet.visible = true

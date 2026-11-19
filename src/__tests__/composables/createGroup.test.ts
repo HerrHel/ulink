@@ -8,11 +8,18 @@ import { setActivePinia, createPinia } from 'pinia'
 const mockData = {
   bookmarks: [] as any[],
   siblingGroups: [] as any[],
+  groupMap: {} as Record<string, any>,
   addGroup: vi.fn(),
 }
 
 const mockUI = {
   curCat: 'all' as string,
+  activeView: 'bookmarks' as string,
+  switchToBookmarksView: vi.fn(),
+  focusedGroupId: null as string | null,
+  _prevLayoutMode: null as any,
+  layoutMode: 'grid',
+  searchQuery: '',
 }
 
 // 用单调递增计数器让 gid() 可断言：每次调用返回序列的第 N 个固定串
@@ -70,7 +77,7 @@ vi.mock('../../utils.js', () => ({
   }),
 }))
 
-import { createGroup } from '../../composables/domain/useGroup.js'
+import { createGroup, createNoteAndFocus } from '../../composables/domain/useGroup.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 import { gid } from '../../utils.js'
@@ -259,5 +266,24 @@ describe('createGroup — 新建组的三路 categoryId 解析 + order 公式 + 
     const added = mockData.addGroup.mock.calls[0][0]
     // parentId=0 是 falsy → b.parentId ? m : ... 走 else 分支，order=999 参与计算 → maxBmOrder=999 → 1000
     expect(added.order).toBe(1000)
+  })
+})
+
+describe('createNoteAndFocus — 新建笔记并直接进入专注编辑', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockData.bookmarks = []
+    mockData.siblingGroups = []
+    mockData.addGroup.mockClear()
+    mockUI.activeView = 'bookmarks'
+    mockUI.switchToBookmarksView.mockClear()
+    mockUI.focusedGroupId = null
+  })
+
+  it('在 AI 视图下调用应自动切回 bookmarks 主视图并进入笔记聚焦', () => {
+    mockUI.activeView = 'ai'
+    const id = createNoteAndFocus('cat-test')
+    expect(mockUI.switchToBookmarksView).toHaveBeenCalledWith('cat-test')
+    expect(mockUI.focusedGroupId).toBe(id)
   })
 })

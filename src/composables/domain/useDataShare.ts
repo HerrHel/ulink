@@ -203,9 +203,10 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   const reverseIdMap = new Map<string, string>()
   for (const [oldId, newId] of idMap) reverseIdMap.set(newId, oldId)
   const oldToLocal = new Map<string, string>()
-  // M17：预建 url→bookmark 索引，fork 时 O(1) 查重，避免每条 some+find 双重全表扫
+  // M17：预建 url→bookmark 索引，fork 时 O(1) 查重，避免每条 some+find 双重全表扫（排除回收站软删项）
   const urlToLocal = new Map<string, Bookmark>()
   for (const e of ds.bookmarks) {
+    if (e.deletedAt) continue
     const key = e.url?.toLowerCase()
     if (key && !urlToLocal.has(key)) urlToLocal.set(key, e)
   }
@@ -316,6 +317,7 @@ export async function forkPublicCategory(data: PublicCategoryData) {
   const oldToLocal = new Map<string, string>()
   const urlToLocal = new Map<string, Bookmark>()
   for (const e of ds.bookmarks) {
+    if (e.deletedAt) continue
     const key = e.url?.toLowerCase()
     if (key && !urlToLocal.has(key)) urlToLocal.set(key, e)
   }

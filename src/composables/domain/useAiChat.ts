@@ -223,6 +223,13 @@ export function useAiChat(options: UseAiChatOptions = {}) {
 
     // 1. 将原输入内容填回输入框
     aiQuery.value = turn.content
+    // 恢复原消息附加的卡片与文件附件
+    if (turn.attachedCards?.length) {
+      ui.aiAttachedCards = turn.attachedCards.map((c) => ({ type: c.type, id: c.id }))
+    }
+    if (turn.attachedFiles?.length) {
+      ui.aiAttachedFiles = [...turn.attachedFiles]
+    }
     onQueryChanged?.()
 
     // 2. 从对话流中截断移除该条消息及其后续所有消息（因果链回滚到该轮发起前，对齐主流 Agent 标准行为）

@@ -1,4 +1,5 @@
 import type { useDataStore } from '../../stores/data.js'
+import { sortBmIdsAncestorsFirst } from '../../lib/collectSubIds.js'
 
 /**
  * 回收站多选辅助：type/id 编码与按类型分发到 data store 的单 id 方法。
@@ -31,9 +32,25 @@ const permanentFns: Record<TrashType, (ds: DataStore, id: string) => void> = {
   attribute: (ds, id) => ds.permanentDeleteAttribute(id),
 }
 
-/** 批量恢复：按 type 分发到对应单 id 方法 */
+/** 批量恢复：分类/组优先，书签按深度升序（父在子前），避免子书签恢复时父仍软删导致 parentId 被误重置为 null */
 export function restoreItems(ds: DataStore, items: Array<{ type: TrashType; id: string }>) {
-  for (const it of items) restoreFns[it.type](ds, it.id)
+  const cats: string[] = []
+  const groups: string[] = []
+  const bmIds: string[] = []
+  const attrs: string[] = []
+
+  for (const it of items) {
+    if (it.type === 'category') cats.push(it.id)
+    else if (it.type === 'group') groups.push(it.id)
+    else if (it.type === 'bookmark') bmIds.push(it.id)
+    else if (it.type === 'attribute') attrs.push(it.id)
+  }
+
+  for (const id of cats) restoreFns.category(ds, id)
+  for (const id of groups) restoreFns.group(ds, id)
+  const sortedBms = sortBmIdsAncestorsFirst(bmIds, ds._bmMap)
+  for (const id of sortedBms) restoreFns.bookmark(ds, id)
+  for (const id of attrs) restoreFns.attribute(ds, id)
 }
 
 /** 批量永久删除：按 type 分发到对应单 id 方法 */

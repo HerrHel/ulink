@@ -222,6 +222,11 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     // 优先层：命中即 return（独占关闭）。顺序即优先级。
     const priority: Array<() => boolean> = [
       () => {
+        const ctx = useContextMenuStore()
+        if (!ctx.open) return false
+        ctx.hide(); return true
+      },
+      () => {
         if (!ui.modals.quickLook) return false
         closeQuickLook(); return true
       },

@@ -123,10 +123,21 @@ export function createGroup(catId?: string): string {
  * 新建弹窗的「新建笔记」与命令面板共用此入口，保证两处行为一致。
  */
 export function createNoteAndFocus(catId?: string): string {
+  const ui = useUIStore();
+  if (ui.activeView !== 'bookmarks') {
+    ui.switchToBookmarksView(catId);
+  }
   const id = createGroup(catId);
   toggleGroupFocus(id);
   void nextTick(() => {
-    document.querySelector<HTMLElement>('.focus-title-input')?.focus();
+    const el = document.querySelector<HTMLElement>('.focus-title-input');
+    if (el) {
+      el.focus();
+    } else {
+      setTimeout(() => {
+        document.querySelector<HTMLElement>('.focus-title-input')?.focus();
+      }, 50);
+    }
   });
   return id;
 }
