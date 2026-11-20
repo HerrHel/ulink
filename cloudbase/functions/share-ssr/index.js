@@ -215,19 +215,26 @@ const server = http.createServer(async (req, res) => {
   const isCategory = pathParts[1] === 'c'
   const id = String(isCategory ? pathParts[2] || '' : pathParts[1] || '').trim()
 
+  const locale = resolveLocale(url, req.headers['accept-language'] || '')
+
   // 2026-11-14 审计 #30：多余尾段必须拒绝。原实现忽略 pathParts 的额外段，
   // 却用完整 url.pathname 做缓存键 → 攻击者用 /s/<gid>/<随机段> 可刷出无限
   // 缓存键挤爆 300 条 LRU，把合法分享缓存淘汰，形成对上游 RPC 的请求放大。
-  if (pathParts.length !== (isCategory ? 3 : 2)) {
-    sendText(res, 400, 'bad request')
+  //
+  // 2026-11-20：畸形 id / 多余尾段统一按「分享不存在」处理（404 + 未找到页），
+  // 不再返回 400 「bad request」纯文本。原实现的 400/11B 与正常 404/63KB 差异
+  // 过大，差异型扫描器会把「加一个引号就让状态码和响应体剧变」判成注入信号
+  // （安全复查报告中的 SQL 注入高危即疑似此误报）。语义上也更准确：格式非法
+  // 与不存在，对访客而言都是「没有这个分享」。此处仍提前 return，不写缓存。
+  if (
+    pathParts.length !== (isCategory ? 3 : 2) ||
+    pathParts[0] !== 's' ||
+    !isValidShareId(id) ||
+    (isCategory && !id)
+  ) {
+    sendHtml(res, 404, renderNotFoundPage(locale), { 'x-share-cache': 'MISS' })
     return
   }
-  if (pathParts[0] !== 's' || !isValidShareId(id) || (isCategory && !id)) {
-    sendText(res, 400, 'bad request')
-    return
-  }
-
-  const locale = resolveLocale(url, req.headers['accept-language'] || '')
 
   // ── 访问密码前置判定（组分享）──────────────────────────────────────
   // 必须先问「这组有没有设密码」，再决定要不要读缓存 / 取内容。
