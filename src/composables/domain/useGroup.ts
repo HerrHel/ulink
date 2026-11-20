@@ -174,6 +174,9 @@ export function createNoteAndFocus(catId?: string): string {
       el.focus();
     } else {
       setTimeout(() => {
+        // 兜底聚焦：容器可能已卸载 / 运行环境无 DOM（测试 teardown、SSR），
+        // 定时器仍会回调，这里必须自检，否则抛出 document is not defined 的未捕获异常。
+        if (typeof document === 'undefined') return;
         document.querySelector<HTMLElement>('.focus-title-input')?.focus();
       }, 50);
     }
