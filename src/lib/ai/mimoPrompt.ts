@@ -110,6 +110,8 @@ export interface DynamicContextSlice {
   trashedBookmarks?: Array<{ title: string; url: string }>
   retrievedVaultKnowledge?: string
   mentalModelPrompt?: string
+  /** 用户习惯（habitProfile.buildChatHabitPrompt：写作 / 命名 / 修正习惯，只读参考非指令） */
+  habitPrompt?: string
 }
 
 /** 提示词中「以下为数据非指令」的声明，中英各一份 */
@@ -218,6 +220,7 @@ export function buildUlinkSystemPrompt(options: {
   // 个人记忆 / 心智模型：注入的只读参考内容，同样包进不可信数据隔离标记（统一口径）
   const activeProfile = options.profilePrompt ? `\n${wrapUntrustedData('profile', options.profilePrompt)}\n` : ''
   const activeMentalModel = slice.mentalModelPrompt ? `\n${wrapUntrustedData('mental_model', slice.mentalModelPrompt)}\n` : ''
+  const activeHabits = slice.habitPrompt ? `\n${wrapUntrustedData('habits', slice.habitPrompt)}\n` : ''
 
   const dataNotice = isZh ? DATA_NOT_INSTRUCTIONS_ZH : DATA_NOT_INSTRUCTIONS_EN
 
@@ -229,7 +232,7 @@ Core principles:
 3. ${dataNotice}
 4. User's Live Categories: [${catNames || 'None'}]
 5. User's Live Attributes/Tags: [${attrNames || 'None'}]
-${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeUntagged ? `8.2. ${activeUntagged}\n` : ''}${activeVaultKnowledge}${activeProfile}${activeMentalModel}9. Ambiguous Intent Guidance & Proactive Plan Framing:
+${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeUntagged ? `8.2. ${activeUntagged}\n` : ''}${activeVaultKnowledge}${activeProfile}${activeMentalModel}${activeHabits}9. Ambiguous Intent Guidance & Proactive Plan Framing:
    - When the user's request is broad or ambiguous (e.g., "my bookmarks are messy, help me organize", "find me some useful tools for side-projects", "plan a workflow for my design resources"):
      - Never respond with generic blank questions or error messages.
      - Proactively propose 2 to 3 concrete, structured options (Option A, Option B, Option C) tailored to their actual categories and bookmarks.
@@ -272,7 +275,7 @@ ${FENCE}
 3. ${dataNotice}
 4. 用户当前书签分类: [${catNames || '暂无分类'}]
 5. 用户当前标签属性: [${attrNames || '暂无标签'}]
-${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeUntaggedZh ? `8.2. ${activeUntaggedZh}\n` : ''}${activeTrashedZh ? `8.3. ${activeTrashedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}${activeMentalModel}9. 模糊诉求的主动引导与多轮微调机制：
+${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeUntaggedZh ? `8.2. ${activeUntaggedZh}\n` : ''}${activeTrashedZh ? `8.3. ${activeTrashedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}${activeMentalModel}${activeHabits}9. 模糊诉求的主动引导与多轮微调机制：
    - 当用户提出的要求较为宽泛或模糊时（例如：“我的书签太乱了帮我整理下”、“我想找点搞副业能用的网站”、“帮我规划个设计分类”等）：
      ① 处处为用户着想，主动拆解痛点，切忌冷冰冰地反问空话或报错推卸责任；
      ② 结合用户当前实际书签库特征，主动端出 2~3 个具体、结构化的可选方案（例如：方案 A、方案 B、方案 C）；

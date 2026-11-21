@@ -11,7 +11,7 @@ import { isThreePartCipher } from '../../crypto.js'
 import { isPrivateUrl } from './urlGuard.js'
 import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
-import { fetchUrlMetadataAsync } from './smartIntake.js'
+import { fetchUrlMetadataAsync, type FetchMetadataOptions } from './smartIntake.js'
 
 /**
  * 4. 存量旧网站主动补齐：生成真实对比 Diff（基于实时网页提炼与大模型分析）
@@ -20,7 +20,7 @@ export async function enrichBookmarkMetadata(
   bookmark: Bookmark,
   categories: Category[] = [],
   attributes: CustomAttribute[] = [],
-  opts: { styleSamples?: string[] } = {},
+  opts: FetchMetadataOptions = {},
 ): Promise<AiEnrichDiff> {
   const rawUrl = bookmark.url ? bookmark.url.trim() : ''
   if (!rawUrl || isThreePartCipher(rawUrl)) {
@@ -57,7 +57,7 @@ export async function enrichBookmarkMetadata(
 
   if (validUrl) {
     try {
-      const res = await fetchUrlMetadataAsync(validUrl, categories, attributes, { styleSamples: opts.styleSamples })
+      const res = await fetchUrlMetadataAsync(validUrl, categories, attributes, opts)
       aiStatus = res.ai
       aiGate = res.aiGate
       if (res.success) {

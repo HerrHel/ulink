@@ -255,6 +255,7 @@ export const aiZh = {
     sendSummaryRagOff: '全库知识检索：未注入',
     sendSummaryMemory: '个人记忆：{n} 条',
     sendSummaryMentalModel: '心智认知画像：已注入领域专注度与审美偏好',
+    sendSummaryHabits: '用户习惯：已注入写作、命名与修正习惯（{chars} 字，可在设置中关闭）',
     sendSummaryHistory: '历史上下文：{n} 轮',
     sendSummaryChars: '提问 {prompt} 字 · 系统提示 {system} 字 · 合计约 {total} 字',
     sendSummaryNote: '发送范围仅限以上数据，均经消毒与截断处理',

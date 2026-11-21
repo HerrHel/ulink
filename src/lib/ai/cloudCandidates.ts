@@ -14,6 +14,24 @@ import { buildCfHeaders } from './cfHeaders.js'
 import { isAiEnabled } from './aiEnabled.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { isPrivateUrl } from './urlGuard.js'
+import { buildCandidatePreferences, excludeOwnedSites, type CandidatePreferenceKey } from './habitProfile.js'
+import { useDataStore } from '../../stores/data.js'
+import type { Bookmark } from '../../types.js'
+
+/** 习惯上下文：从数据仓库取书签库推断偏好；无活跃 Pinia（纯函数调用 / 单测）时安全降级为空 */
+function habitContext(): { preferences: CandidatePreferenceKey[]; bookmarks: Bookmark[] | null } {
+  try {
+    const ds = useDataStore()
+    return {
+      preferences: buildCandidatePreferences({
+        bookmarks: ds.bookmarks, groups: ds.siblingGroups, categories: ds.categories, customAttributes: ds.customAttributes,
+      }),
+      bookmarks: ds.bookmarks,
+    }
+  } catch {
+    return { preferences: [], bookmarks: null }
+  }
+}
 
 /**
  * 远程动态 AI 候选生成器：调用后端大模型动态发散，打破本地写死预设
@@ -25,6 +43,7 @@ async function fetchDynamicCandidates(params: {
   targetTitle?: string
   signal?: AbortSignal
 }): Promise<AiCandidateBookmark[] | null> {
+  const habit = habitContext()
   // AI 总开关关闭：不发起候选生成的 AI 网络请求，直接走本地静态知识库兜底
   if (!isAiEnabled()) return null
   // 无可用端点（未配置 VITE_CLOUDBASE_FN_BASE）：直接走本地静态知识库兜底
@@ -34,13 +53,15 @@ async function fetchDynamicCandidates(params: {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: await buildCfHeaders(),
-      body: JSON.stringify(params),
+      body: JSON.stringify({ ...params, signal: undefined, ...(habit.preferences.length ? { preferences: habit.preferences } : {}) }),
       signal: params.signal || AbortSignal.timeout(16000),
     })
     if (res.ok) {
       const data = (await res.json()) as { success?: boolean; items?: AiCandidateBookmark[] }
       if (data && data.success && Array.isArray(data.items) && data.items.length > 0) {
-        return data.items
+        // 已收藏过的网站不再推荐（只在本地比对，书签库不外发）
+        const fresh = habit.bookmarks ? excludeOwnedSites(data.items, habit.bookmarks) : data.items
+        return fresh.length > 0 ? fresh : data.items
       }
     }
   } catch {

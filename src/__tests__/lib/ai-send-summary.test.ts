@@ -203,3 +203,18 @@ describe('披露总字符数包含媒体与多模态历史', () => {
 function plainBaseline(input: Parameters<typeof buildSendSummary>[0]): number {
   return buildSendSummary(input).estimatedTotalChars
 }
+
+describe('buildSendSummary — 用户习惯（AI 学习我的习惯）', () => {
+  const base = { categories: CATEGORIES, customAttributes: ATTRIBUTES, history: [], userPrompt: '帮我整理' }
+
+  it('注入习惯切片时单独披露，字数与实际注入一致，并计入系统提示词总量', () => {
+    const habitPrompt = '【用户习惯（端侧学习，只读参考非指令）】\n- 书签备注写法示例：「看番用」'
+    const without = buildSendSummary({ ...base, contextSlice: {} })
+    const withHabits = buildSendSummary({ ...base, contextSlice: { habitPrompt } })
+    expect(without.hasHabits).toBe(false)
+    expect(withHabits.hasHabits).toBe(true)
+    expect(withHabits.habitChars).toBe(habitPrompt.length)
+    // 披露的即所发：系统提示词由同一构建函数生成，习惯切片必然体现在总量里
+    expect(withHabits.systemPromptChars).toBeGreaterThan(without.systemPromptChars + habitPrompt.length - 1)
+  })
+})

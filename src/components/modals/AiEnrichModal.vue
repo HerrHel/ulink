@@ -150,7 +150,8 @@ import type { AiEnrichDiff } from '../../types/ai.js'
 import { enrichBookmarkMetadata } from '../../lib/ai/cloudAiClient.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
-import { collectStyleSamples, rememberAiSuggestion } from '../../lib/ai/styleSamples.js'
+import { rememberAiSuggestion } from '../../lib/ai/styleSamples.js'
+import { buildIntakeHabits } from '../../lib/ai/habitProfile.js'
 import { displayText } from '../../utils.js'
 
 const ui = useUIStore()
@@ -188,7 +189,7 @@ async function fetchEnrich() {
       targetBookmark.value,
       ds.categories,
       ds.customAttributes,
-      { styleSamples: collectStyleSamples(ds.bookmarks.filter((b) => b.id !== targetForSamples)) },
+      buildIntakeHabits(ds.bookmarks.filter((b) => b.id !== targetForSamples), ds.categories),
     )
     // 已关闭/已切换目标/已有更新的请求 → 丢弃结果，避免写到另一本书签
     if (gen !== enrichGen || !ui.modals.aiEnrich || ui.aiEnrichTargetBmId !== targetId) return

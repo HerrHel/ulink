@@ -35,6 +35,12 @@ export interface SmartIntakeResult {
 export interface FetchMetadataOptions {
   /** 用户自己写过的备注（风格样本），让 AI 备注模仿用户的写法 */
   styleSamples?: string[]
+  /** 用户改写过的标题示例（AI 原标题 → 用户版本），学习命名习惯 */
+  titleExamples?: Array<{ ai: string; user: string }>
+  /** 用户纠正过的分类（网站根域名 → 用户选择的分类名） */
+  categoryHints?: Array<{ site: string; category: string }>
+  /** 归纳出的标题规则 */
+  titleRule?: 'shorter'
 }
 
 /**
@@ -160,6 +166,9 @@ export async function fetchUrlMetadataAsync(
         availableAttributes: activeAttrs.slice(0, MAX_ATTR_NAMES).map(a => ({ id: a.id, name: a.name })),
         availableCategories: activeCats.slice(0, MAX_CATEGORY_NAMES).map(c => ({ id: c.id, name: c.name })),
         ...(opts.styleSamples && opts.styleSamples.length > 0 ? { styleSamples: opts.styleSamples } : {}),
+        ...((opts.titleExamples?.length || opts.categoryHints?.length || opts.titleRule)
+          ? { habits: { titleExamples: opts.titleExamples ?? [], categoryHints: opts.categoryHints ?? [], titleRule: opts.titleRule } }
+          : {}),
       }),
       signal: AbortSignal.timeout(18000),
     })

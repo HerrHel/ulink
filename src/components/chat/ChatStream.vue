@@ -680,6 +680,9 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   if (summary.hasMentalModel) {
     lines.push(t('ai.sendSummaryMentalModel', { chars: summary.mentalModelChars }))
   }
+  if (summary.hasHabits) {
+    lines.push(t('ai.sendSummaryHabits', { chars: summary.habitChars ?? 0 }))
+  }
   // 每轮必发的 tools schema 与媒体块：旧版 estimatedTotalChars 完全没算，这里补上
   if (typeof summary.toolsSchemaChars === 'number') {
     lines.push(

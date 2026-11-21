@@ -59,7 +59,7 @@ function seedNotes(): Map<string, Set<string>> {
       m.get(b.id)!.add(norm(b.notes || ''))
     }
   }
-  add(DEFAULTS.bookmarks)
+  try { add(DEFAULTS.bookmarks) } catch { /* 常量不可用（如被测试整体 mock）时不排除示例 */ }
   try { add(buildSeedDefaults('zh-CN').bookmarks) } catch { /* 种子构建失败时仅用静态默认 */ }
   try { add(buildSeedDefaults('en-US').bookmarks) } catch { /* 同上 */ }
   _seedNotes = m
@@ -86,4 +86,9 @@ export function collectStyleSamples(bookmarks: Bookmark[], max = MAX_STYLE_SAMPL
     if (picked.length >= max) break
   }
   return picked
+}
+
+/** 清空「AI 原样建议」记忆（「AI 学到了什么 → 清空」时一并清掉） */
+export function clearAiSuggestions(): void {
+  safeSetItem(AI_SUGGESTION_KEY, '[]')
 }

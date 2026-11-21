@@ -21,3 +21,16 @@
 
 - `src/lib/ai/styleSamples.ts`（选样规则与开关）、`functions/api/extract-metadata.ts`（`sanitizeStyleSamples` / `buildIntakePrompt`）
 - `cloudbase/migrations/20261121000002_ai_trial_lifetime.sql`（`ai_trial_usage` 计次表）
+
+## 追加修订（同日，第二批）：「AI 学习我的习惯」
+
+「AI 预填模仿我的写法」扩展为「AI 学习我的习惯」，覆盖全部调用大模型的入口，相应修订：
+
+| # | 文档 / 章节 | 旧 | 新 |
+|---|---|---|---|
+| 5 | 隐私政策 §3.3「关于自动读取网页与添加书签的建议」 | 仅披露预填附带最多 8 条本人备注，且「不附带网址、标题」 | 按入口逐项披露：预填 / 补齐附带备注样本、标题改写示例、「网站根域名 → 分类名」纠正（**含根域名**，故删去「不附带网址」表述）；发现好站仅附带两项倾向，已收藏网站本机过滤；AI 对话附带 ≤420 字习惯说明并在发送摘要中单列 |
+| 6 | 隐私政策 §3.3「会发送」清单 | — | 新增一行「AI 学习我的习惯」归纳的习惯 |
+
+均为书签片段的使用说明扩展，属已披露的「书签片段（标题、网址、备注、分类名称）」范围内，**未新增个人信息种类**；提供单独关闭、逐条查看删除与一键清空。
+
+对应代码：`src/lib/ai/habitProfile.ts`（采集 / 归纳 / 切片）、`functions/api/extract-metadata.ts`（`sanitizeIntakeHabits`）、`functions/api/ai-candidates.ts`（偏好键白名单）、`src/lib/ai/sendSummary.ts`（摘要单列）。

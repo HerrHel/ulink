@@ -55,9 +55,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       query?: string
       targetUrl?: string
       targetTitle?: string
+      preferences?: unknown
     }
 
     const { type, query, targetUrl, targetTitle } = body
+    // 用户习惯（端侧从书签库归纳）：只认白名单键，映射成固定文案，绝不拼接客户端自由文本
+    const PREF_TEXT: Record<string, string> = {
+      free: '用户偏好免费或开源的工具，付费产品放后面或注明',
+      no_proxy: '用户偏好国内网络可直接访问的网站，需要翻墙的放后面或注明',
+    }
+    const prefLines = Array.isArray(body.preferences)
+      ? [...new Set(body.preferences.filter((k): k is string => typeof k === 'string' && k in PREF_TEXT))].map(k => PREF_TEXT[k])
+      : []
+    const prefClause = prefLines.length > 0 ? `\n用户习惯（端侧学习）：${prefLines.join('；')}。` : ''
 
     // type 显式白名单：非 similar / intent 一律 400，避免绕过字段校验或落进默认分支
     if (type !== 'similar' && type !== 'intent') {
@@ -76,7 +86,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const safeUrl = sanitizeForPrompt(targetUrl)
       const site = safeTitle ? `${safeTitle} (${safeUrl || ''})` : safeUrl || '该网站'
       prompt = `你是一个资深互联网工具与高价值软件挖掘专家。
-用户正在寻找与网站【${site}】功能相近、定位相似的优秀同类平台、优质竞品或开源平替工具。
+用户正在寻找与网站【${site}】功能相近、定位相似的优秀同类平台、优质竞品或开源平替工具。${prefClause}
 
 请推荐 3-5 个真实存在、当前知名且正常运行的顶级公网网站。
 要求：
@@ -102,7 +112,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
       prompt = `你是一个资深互联网工具与高价值软件挖掘专家。
 用户正在寻找满足特定需求的真实优质网站或在线工具。
-用户需求/意图："${q}"
+用户需求/意图："${q}"${prefClause}
 
 请推荐 3-5 个真实存在、当前知名且正常运行的顶级公网网站。
 要求：

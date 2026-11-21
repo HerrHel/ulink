@@ -13,7 +13,8 @@ import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
 import { getSmartPrefill } from '../../lib/ai/smartPrefill.js'
-import { collectStyleSamples, rememberAiSuggestion } from '../../lib/ai/styleSamples.js'
+import { rememberAiSuggestion } from '../../lib/ai/styleSamples.js'
+import { buildIntakeHabits, recordAiOutcome, correctedCategoryFor } from '../../lib/ai/habitProfile.js'
 import { fetchUrlMetadataAsync } from '../../lib/ai/smartIntake.js'
 import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
 import { isAiEnabled } from '../../lib/ai/aiEnabled.js'
@@ -99,6 +100,8 @@ interface BmFormState {
   _autoAttrIds: string[]
   _autoCategoryId: string
   _autoParentId: string | null
+  /** AI（服务端 ai=used）实际填入表单的原值：保存时与最终值对比，学习用户的修正习惯 */
+  _aiOrigin: { title?: string; notes?: string; category?: string } | null
   _userEditedTitle: boolean
   _userEditedNotes: boolean
   _userEditedAttrs: boolean
@@ -145,6 +148,7 @@ export const bmForm = reactive<BmFormState>({
   _autoAttrIds: [],
   _autoCategoryId: '',
   _autoParentId: null,
+  _aiOrigin: null,
   _userEditedTitle: false,
   _userEditedNotes: false,
   _userEditedAttrs: false,
@@ -249,6 +253,7 @@ export async function openBmModal(editId?: string) {
     bmForm._autoAttrIds = []
     bmForm._autoCategoryId = ''
     bmForm._autoParentId = null
+    bmForm._aiOrigin = null
     bmForm._userEditedTitle = !!editId
     bmForm._userEditedNotes = !!editId
     bmForm._userEditedAttrs = !!editId
@@ -418,6 +423,15 @@ export async function saveBm() {
       toast(t('msg.bookmarkAdded'))
     }
     if (bmForm.id) saveAppData()
+    // 学习用户对 AI 结果的修正（标题 / 备注 / 分类）：只对比 AI 实际填入过的字段
+    if (bmForm._aiOrigin) {
+      recordAiOutcome({
+        url,
+        ai: bmForm._aiOrigin,
+        saved: { title: data.title, notes: data.notes, category: data.categoryId },
+      })
+      bmForm._aiOrigin = null
+    }
     closeBmModal()
   } finally {
     _bmSaving = false
@@ -494,6 +508,7 @@ export function autoFetchFromUrl() {
     if (!bmForm._userEditedParent && bmForm.parentId === bmForm._autoParentId) {
       bmForm.parentId = null
       bmForm._autoParentId = null
+      bmForm._aiOrigin = null
     }
     bmForm.aiSuggestCatId = null
     bmForm.aiSuggestAttrIds = []
@@ -572,6 +587,7 @@ export function autoFetchFromUrl() {
       } else if (bmForm.parentId === bmForm._autoParentId) {
         bmForm.parentId = null
         bmForm._autoParentId = null
+        bmForm._aiOrigin = null
       }
     }
 
@@ -674,8 +690,8 @@ export async function triggerAiFetch(targetUrl?: string, isManual = false) {
 
   try {
     // 风格样本：用户自己写过的备注（排除正在编辑的这条，它的备注正要被重填）
-    const styleSamples = collectStyleSamples(ds.bookmarks.filter((b) => b.id !== bmForm.id))
-    const res = await fetchUrlMetadataAsync(url, ds.categories, ds.customAttributes, { styleSamples })
+    const habits = buildIntakeHabits(ds.bookmarks.filter((b) => b.id !== bmForm.id), ds.categories)
+    const res = await fetchUrlMetadataAsync(url, ds.categories, ds.customAttributes, habits)
     if (curSeq !== _aiFetchSeq || !bmForm.isOpen || fixUrl(bmForm.url.trim()) !== url) {
       return
     }
@@ -689,29 +705,38 @@ export async function triggerAiFetch(targetUrl?: string, isManual = false) {
         // 记下 AI 给的备注：用户若原样保存，之后不会被当成「用户自己的写法」反过来教 AI
         rememberAiSuggestion(res.notes)
       }
+      const aiOrigin: NonNullable<typeof bmForm._aiOrigin> = {}
       bmForm.aiFetchedSuccess = true
       // 真实标题：仅在用户未手动修改过标题时平滑填入
       if (res.title && (!bmForm._userEditedTitle || !bmForm.title.trim() || bmForm.title === bmForm._autoTitle)) {
         bmForm.title = res.title
         bmForm._autoTitle = res.title
+        if (aiUsed) aiOrigin.title = res.title
       }
       // 真实简介：仅在用户未手动修改过备注时平滑填入真实网页 Description / 摘要
       if (res.notes && (!bmForm._userEditedNotes || !bmForm.notes.trim() || bmForm.notes === bmForm._autoNotes)) {
         bmForm.notes = res.notes
         bmForm._autoNotes = res.notes
+        if (aiUsed) aiOrigin.notes = res.notes
       }
 
+      // 分类在下方填入后也写进同一对象（保存时读取，无需响应式）
+      bmForm._aiOrigin = aiOrigin
+      // 用户上次把同一网站改到的分类优先于 AI 建议（学到的习惯，本地直用）
+      const learnedCat = correctedCategoryFor(url, ds.categories)
+      const suggestedCat = learnedCat || res.categoryId
       if (!bmForm.isEdit && !bmForm.aiApplied) {
-        if (res.categoryId) {
+        if (suggestedCat) {
           const canAutoSelectCat = !bmForm._userEditedCategory && (
             !bmForm.categoryId ||
             bmForm.categoryId === CAT_UNCATEGORIZED ||
             bmForm.categoryId === bmForm._autoCategoryId
           )
           if (canAutoSelectCat) {
-            bmForm.categoryId = res.categoryId
-            bmForm._autoCategoryId = res.categoryId
-            bmForm.aiSuggestCatId = res.categoryId
+            bmForm.categoryId = suggestedCat
+            bmForm._autoCategoryId = suggestedCat
+            bmForm.aiSuggestCatId = suggestedCat
+            if (aiUsed || learnedCat) aiOrigin.category = suggestedCat
           }
         }
         if (res.suggestedAttrIds && res.suggestedAttrIds.length > 0) {

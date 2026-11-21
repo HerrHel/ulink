@@ -37,6 +37,10 @@ export interface AiSendSummary {
   hasMentalModel?: boolean
   /** 心智模型画像注入字符数 */
   mentalModelChars: number
+  /** 是否注入用户习惯（AI 学习我的习惯） */
+  hasHabits?: boolean
+  /** 用户习惯注入字符数 */
+  habitChars?: number
   /** 按提问关键词触发的未打标书签注入条数（0 = 未注入） */
   untaggedInjected: number
   /** 按提问关键词触发的回收站书签注入条数（0 = 未注入） */
@@ -137,6 +141,8 @@ export function buildSendSummary(input: AiSendSummaryInput): AiSendSummary {
     profileEntries: (input.profilePrompt || '').split('\n').filter((l) => l.startsWith('- ')).length,
     hasMentalModel: !!slice.mentalModelPrompt,
     mentalModelChars,
+    hasHabits: !!slice.habitPrompt,
+    habitChars: slice.habitPrompt?.length || 0,
     untaggedInjected: slice.untaggedBookmarks?.length || 0,
     trashedInjected: slice.trashedBookmarks?.length || 0,
     toolsSchemaChars,

@@ -261,6 +261,7 @@ export const aiEn = {
     sendSummaryRagOff: 'Vault knowledge retrieval: not injected',
     sendSummaryMemory: 'Personal memory: {n} entries',
     sendSummaryMentalModel: 'User Mental Model: Domain focus & style persona injected',
+    sendSummaryHabits: 'User habits: writing, naming and correction habits injected ({chars} chars; can be turned off in Settings)',
     sendSummaryHistory: 'History context: {n} messages',
     sendSummaryChars: 'Prompt {prompt} chars · system {system} chars · ~{total} total',
     sendSummaryNote: 'Only the data above is sent; all entries are sanitized and truncated',

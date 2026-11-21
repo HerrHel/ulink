@@ -548,6 +548,32 @@ describe('useBookmark', () => {
       expect(newBm.useCount).toBe(0)
     })
 
+    it('AI 学习习惯：AI 实际填入的标题 / 备注被用户改掉 → 记录修正；未改动的字段不记', async () => {
+      localStorage.removeItem('lv_ai_habits')
+      const { listCorrections } = await import('../../lib/ai/habitProfile.js')
+      bmForm.id = ''
+      bmForm.url = 'https://github.com/'
+      bmForm.title = 'GitHub'
+      bmForm.notes = '代码托管平台'
+      bmForm._aiOrigin = { title: 'GitHub 全球最大代码托管平台', notes: '代码托管平台' }
+      await saveBm()
+      const cs = listCorrections()
+      expect(cs).toHaveLength(1)
+      expect(cs[0]).toMatchObject({ kind: 'title', site: 'github.com', ai: 'GitHub 全球最大代码托管平台', user: 'GitHub' })
+      expect(bmForm._aiOrigin).toBeNull()
+    })
+
+    it('AI 学习习惯：没有 AI 原值（纯手填 / 本地规则预填）时不记录任何修正', async () => {
+      localStorage.removeItem('lv_ai_habits')
+      const { listCorrections } = await import('../../lib/ai/habitProfile.js')
+      bmForm.id = ''
+      bmForm.url = 'https://example.org/'
+      bmForm.title = '手填标题'
+      bmForm._aiOrigin = null
+      await saveBm()
+      expect(listCorrections()).toHaveLength(0)
+    })
+
     it('edit existing bookmark updates properties', () => {
       mockData.bookmarkMap['b1'] = {
         id: 'b1', title: 'Old', url: 'https://old.com', notes: '', username: '', attributes: {}, order: 0
@@ -2276,6 +2302,42 @@ describe('saveFromExtension 扩展端一键静默保存书签编排', () => {
     expect(res).toBe(false)
     expect(toast).toHaveBeenCalledWith('数据尚未就绪，请稍后重试', false)
     expect(toast).not.toHaveBeenCalledWith('无法保存该链接', false)
+  })
+
+  describe('AI 学习习惯：AI 原值快照只记实际填入的字段', () => {
+    async function runFetch(res: Record<string, unknown>) {
+      const smartIntake = await import('../../lib/ai/smartIntake.js')
+      const spy = vi.spyOn(smartIntake, 'fetchUrlMetadataAsync').mockResolvedValueOnce(res as never)
+      const { useUIStore } = await import('../../stores/ui.js')
+      useUIStore().smartFillEnabled = true
+      bmForm.isOpen = true
+      bmForm.isEdit = false
+      bmForm.url = 'https://github.com/'
+      await triggerAiFetch('https://github.com/', false)
+      spy.mockRestore()
+    }
+
+    it('用户先手改了标题：AI 标题不覆盖也不进快照；AI 备注填入并进快照', async () => {
+      bmForm.title = '我自己起的名字'
+      bmForm._userEditedTitle = true
+      bmForm._autoTitle = ''
+      bmForm.notes = ''
+      bmForm._userEditedNotes = false
+      await runFetch({ success: true, title: 'AI 标题', notes: 'AI 备注', ai: 'used' })
+      expect(bmForm.title).toBe('我自己起的名字')
+      expect(bmForm.notes).toBe('AI 备注')
+      expect(bmForm._aiOrigin).toEqual({ notes: 'AI 备注' })
+    })
+
+    it('服务端未用 AI（ai=skipped，只回网页原标题）：快照为空，不当作 AI 结果学习', async () => {
+      bmForm.title = ''
+      bmForm._userEditedTitle = false
+      bmForm.notes = ''
+      bmForm._userEditedNotes = false
+      await runFetch({ success: true, title: '网页原标题', notes: '网页描述', ai: 'skipped' })
+      expect(bmForm.title).toBe('网页原标题')
+      expect(bmForm._aiOrigin).toEqual({})
+    })
   })
 
   describe('smartFillEnabled 智能填充开关控制', () => {

@@ -31,6 +31,7 @@ import { vaultRAG } from '../../lib/ai/localRAG.js'
 import { expandQueryTerms } from '../../lib/ai/queryExpand.js'
 import { remember, buildProfilePrompt } from '../../lib/ai/aiProfile.js'
 import { buildUserMentalModel, formatMentalModelPrompt } from '../../lib/ai/mentalModel.js'
+import { buildChatHabitPrompt } from '../../lib/ai/habitProfile.js'
 import { buildSendSummary } from '../../lib/ai/sendSummary.js'
 import { isAiEnabled } from '../../lib/ai/aiEnabled.js'
 import {
@@ -566,6 +567,19 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               console.warn('[ulink AI] mentalModel synthesis failed:', mmErr)
             }
 
+            // 用户习惯（AI 学习我的习惯）：写作 / 命名 / 修正习惯，与发送摘要共用同一 contextSlice
+            let habitPrompt: string | undefined
+            try {
+              habitPrompt = buildChatHabitPrompt({
+                bookmarks: ds.bookmarks,
+                groups: ds.siblingGroups,
+                categories: ds.categories,
+                isZh: isZh.value,
+              }) || undefined
+            } catch (hErr) {
+              console.warn('[ulink AI] habit profile failed:', hErr)
+            }
+
             // 动态感知：若用户意图涉及标签补全或书签扫描，抓取库内未打标签的书签明细注入情境切片
             // 严格区分顶级独立书签与从属子书签，避免子书签占满截断配额或造成全盲
             let untaggedBookmarks: Array<{ id: string; title: string; url: string; category?: string }> | undefined
@@ -640,6 +654,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               trashedBookmarks,
               retrievedVaultKnowledge,
               mentalModelPrompt,
+              habitPrompt,
               attachedCards: resolvedCards.map((c) => ({
                 type: c.type,
                 title: c.title,
