@@ -13,6 +13,7 @@ import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
 import { getSmartPrefill } from '../../lib/ai/smartPrefill.js'
+import { collectStyleSamples, rememberAiSuggestion } from '../../lib/ai/styleSamples.js'
 import { fetchUrlMetadataAsync } from '../../lib/ai/smartIntake.js'
 import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
 import { isAiEnabled } from '../../lib/ai/aiEnabled.js'
@@ -621,6 +622,26 @@ export function autoFetchFromUrl() {
 }
 
 let _aiFetchSeq = 0
+/** 自动预填遇到试用用完时只提示一次（每次会话），避免每收藏一次就弹一次 */
+let _trialExhaustedNotified = false
+
+/** 服务端未放行 AI 时的统一处理：同步本地试用镜像，并按触发方式给出提示 */
+function _handleAiGate(gate: string | null | undefined, isManual: boolean): void {
+  if (!gate) return
+  const ent = useEntitlement()
+  if (gate === 'ai_trial_exhausted') {
+    ent.markAiTrialExhausted()
+    if (isManual || !_trialExhaustedNotified) {
+      _trialExhaustedNotified = true
+      toast(t('modal.bookmark.aiTrialExhausted'), false)
+      if (isManual) useUIStore().openPurchase()
+    }
+  } else if (gate === 'login_required' && isManual) {
+    toast(t('modal.bookmark.aiLoginRequired'), false)
+  } else if (gate === 'daily_exhausted' && isManual) {
+    toast(t('modal.bookmark.aiDailyExhausted'), false)
+  }
+}
 export async function triggerAiFetch(targetUrl?: string, isManual = false) {
   const raw = targetUrl || bmForm.url.trim()
   if (!raw || raw.length < 4) return
@@ -643,28 +664,31 @@ export async function triggerAiFetch(targetUrl?: string, isManual = false) {
     return
   }
 
+  // 2026-11-21：不再在前端按次数拦截——网页原标题 / 描述的读取是免费能力，AI 提炼是否放行
+  // 由服务端 consume_ai_access 裁决（PRO 不限次 / 免费终身试用）；结果里的 ai / aiGate 告诉我们实际情况。
   const ent = useEntitlement()
-  const quota = ent.checkAiEnrichQuota()
-  if (!quota.allowed) {
-    if (isManual) {
-      toast(t('settings.aiEnrichDailyLimitReached', { used: quota.total, limit: quota.total }), false)
-      ui.openPurchase()
-    }
-    return
-  }
 
   const curSeq = ++_aiFetchSeq
   bmForm.isAiFetching = true
   bmForm.aiFetchedSuccess = false
 
   try {
-    const res = await fetchUrlMetadataAsync(url, ds.categories, ds.customAttributes)
+    // 风格样本：用户自己写过的备注（排除正在编辑的这条，它的备注正要被重填）
+    const styleSamples = collectStyleSamples(ds.bookmarks.filter((b) => b.id !== bmForm.id))
+    const res = await fetchUrlMetadataAsync(url, ds.categories, ds.customAttributes, { styleSamples })
     if (curSeq !== _aiFetchSeq || !bmForm.isOpen || fixUrl(bmForm.url.trim()) !== url) {
       return
     }
 
+    _handleAiGate(res.aiGate, isManual)
+
     if (res.success) {
-      ent.consumeAiEnrichQuota()
+      const aiUsed = res.ai === 'used'
+      if (aiUsed) {
+        ent.consumeAiEnrichQuota()
+        // 记下 AI 给的备注：用户若原样保存，之后不会被当成「用户自己的写法」反过来教 AI
+        rememberAiSuggestion(res.notes)
+      }
       bmForm.aiFetchedSuccess = true
       // 真实标题：仅在用户未手动修改过标题时平滑填入
       if (res.title && (!bmForm._userEditedTitle || !bmForm.title.trim() || bmForm.title === bmForm._autoTitle)) {

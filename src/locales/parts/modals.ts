@@ -40,6 +40,9 @@ export const modalsZh = {
       aiFetchSuccess: '已成功提取网页信息',
       aiFetchFail: '未能获取网页信息，可直接手动填写',
       smartFillDisabledHint: '智能提取与信息补齐已在设置中关闭',
+      aiTrialExhausted: 'AI 试用次数已用完，已为你填入网页原标题；升级 PRO 可继续使用 AI 预填',
+      aiLoginRequired: '登录后可使用 AI 预填（新用户赠送试用次数）',
+      aiDailyExhausted: '今日 AI 次数已用完，已为你填入网页原标题',
       multiAccounts: '历史账号',
       parentSearchPlaceholder: '搜索名称、拼音或网址…',
     }, // BookmarkModal

@@ -43,6 +43,9 @@ export const modalsEn = {
       aiFetchSuccess: 'Page info extracted successfully',
       aiFetchFail: 'Failed to extract page info, you can enter manually',
       smartFillDisabledHint: 'AI extraction & auto-completion is disabled in Settings',
+      aiTrialExhausted: 'AI trial used up; filled in the page title instead. Upgrade to PRO to keep using AI prefill',
+      aiLoginRequired: 'Sign in to use AI prefill (new users get free trial uses)',
+      aiDailyExhausted: "Today's AI limit is reached; filled in the page title instead",
       multiAccounts: 'History Accounts',
       parentSearchPlaceholder: 'Search by name or URL…',
     }, // BookmarkModal

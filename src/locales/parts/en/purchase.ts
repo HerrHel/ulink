@@ -30,6 +30,7 @@ export const purchaseEn = {
     features: {
       'history.days': 'Cloud version history retention',
       'storage.bytes': 'Cloud storage quota (display only)',
+      'ai.trial.total': 'AI trial uses (lifetime)',
       'linkcheck.daily': 'Daily manual link checks',
       'linkcheck.auto': 'Weekly autonomous background patrol',
       'linkcheck.auto.max': 'Max links per patrol run',
@@ -86,8 +87,8 @@ export const purchaseEn = {
       freeB1Sub: 'Only account fields are encrypted locally; titles, URLs and notes are stored in plain text',
       freeB2: 'Unlimited nested categories & group notes',
       freeB2Sub: 'Unlimited nesting tree and TipTap rich-text cards',
-      freeB3: 'AI smart prefilling',
-      freeB3Sub: 'Auto-extract title and summary from URLs (20/day)',
+      freeB3: '{n} AI trial uses',
+      freeB3Sub: 'Shared by prefill, enrich and chat; {n} uses in total, never reset. Page titles and icons are always read for free',
       freeB4: 'Light platform parsing',
       freeB4Sub: 'Parse public video titles, descriptions and captions into summaries (1/day)',
       freeB5: 'Local fuzzy & pinyin search',

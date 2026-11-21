@@ -571,7 +571,8 @@ const displayCards = computed<TierCardView[]>(() => {
         // 合规修订：加密范围改为仅账号字段，其余明文；已下线能力改为轻量平台解析
         { text: t('purchase.card.freeB1'), sub: t('purchase.card.freeB1Sub') },
         { text: t('purchase.card.freeB2'), sub: t('purchase.card.freeB2Sub') },
-        { text: t('purchase.card.freeB3'), sub: t('purchase.card.freeB3Sub') },
+        // AI 为 PRO 专属，免费为终身试用次数（plans.features['ai.trial.total']）
+        { text: t('purchase.card.freeB3', { n: free.features?.['ai.trial.total'] ?? 30 }), sub: t('purchase.card.freeB3Sub', { n: free.features?.['ai.trial.total'] ?? 30 }) },
         { text: t('purchase.card.freeB4'), sub: t('purchase.card.freeB4Sub') },
         { text: t('purchase.card.freeB5'), sub: t('purchase.card.freeB5Sub') },
         // 天数取自 plans.features（单一真源），避免文案与云端清理口径漂移

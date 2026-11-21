@@ -37,6 +37,10 @@ export interface AiEnrichDiff {
   suggestedCategoryId?: string
   suggestedAttrIds: string[]
   reason?: string
+  /** 服务端本次是否真正用到了 AI（见 SmartIntakeResult.ai） */
+  ai?: 'used' | 'skipped' | 'failed'
+  /** 服务端未放行 AI 的原因（见 SmartIntakeResult.aiGate） */
+  aiGate?: string | null
 }
 
 /** 视频链接解析提炼结果 */

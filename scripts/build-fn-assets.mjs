@@ -106,6 +106,11 @@ const JOBS = [
     from: 'functions/api/extract-metadata.ts',
     to: 'cloudbase/functions/ai-api/extract-metadata.js',
   },
+  // 2026-11-21：ai-api 按套餐放行大模型能力（AI 为 PRO 专属 + 免费终身试用），需要验签取 uid
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/ai-api/cb-auth.js',
+  },
 ]
 
 // 纯数据文件复制（无类型剥离）：视频平台域名清单的单一真源 = src/config/videoPlatforms.json

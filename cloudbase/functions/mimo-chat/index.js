@@ -381,6 +381,8 @@ const server = http.createServer(async (req, res) => {
   let settled = false
   let reserved = false          // 两段式预扣是否已完成（决定断连时是否需结算）
   let dailyConsumed = false     // 每日请求数是否已消费（失败出口需退回）
+  let trialConsumed = false     // 免费用户终身试用次数是否已消费（失败出口需退回）
+  let isTrial = false           // 本次请求按免费试用计（跳过每日次数与 token 预扣）
   let connectionClosed = false  // 客户端连接是否已关闭（长 await 后据此尽早收口）
   let inChars = 0
   let outBytes = 0
@@ -424,6 +426,19 @@ const server = http.createServer(async (req, res) => {
     // 失败请求退回每日次数：上游 5xx/超时、音频物化失败等由服务端原因导致的失败
     // 不应消耗用户当天额度（客户端主动断连不在此列）。
     const effectiveStatus = typeof e.status === 'number' ? e.status : res.statusCode
+    // 试用次数同口径退还：服务端原因导致的失败不消耗用户的终身试用
+    if (trialConsumed && effectiveStatus >= 400 && uid && db) {
+      trialConsumed = false
+      try {
+        const refund = await db.rpc('refund_ai_trial', { p_uid: uid })
+        logEvent(refund.error ? 'warn' : 'info', 'trial_refund', {
+          status: effectiveStatus,
+          errorKind: refund.error ? 'refund_failed' : null,
+        })
+      } catch (err) {
+        logEvent('warn', 'trial_refund_exception', { error: String((err && err.message) || err) })
+      }
+    }
     if (dailyConsumed && effectiveStatus >= 400 && uid && db) {
       dailyConsumed = false
       try {
@@ -647,11 +662,51 @@ const server = http.createServer(async (req, res) => {
     // 原 ai_quota_check 已移除：它只查不扣，与 reserve_quota 混用会双算额度。
     // enforce 下 token 额度拦截统一由下方 reserve_quota 承担（内部已查 resolve_entitlement）。
 
+    // ── AI 访问权（enforce，2026-11-21）：AI 为 PRO 专属，免费用户按终身试用次数 ──
+    // consume_ai_access：PRO 直接放行（继续走下方每日次数 + token 预扣）；免费用户原子扣 1 次
+    // ai.trial.total，用完返回 402 ai_trial_exhausted。试用请求跳过每日次数与 token 预扣
+    //（免费档已无这两个键；单次输出由 guard 限长，30 次成本有界）。
+    // 必须登录：试用次数记在账号上，匿名无法计次。RPC 故障 fail-closed。
+    if (BILLING_MODE === 'enforce') {
+      if (!uid) {
+        logEvent('warn', 'login_required', { status: 401, errorKind: 'login_required' })
+        sendJson(res, 401, { error: 'login_required', message: '登录后可使用 AI 功能（新用户赠送试用次数）' }, cors)
+        return
+      }
+      try {
+        const access = await db.rpc('consume_ai_access', { p_uid: uid })
+        if (access.error) {
+          logEvent('error', 'ai_access_rpc_failed', { status: 503, errorKind: 'ai_access_rpc_failed' })
+          sendJson(res, 503, { error: 'quota_unavailable', message: '额度服务暂时不可用，请稍后重试' }, cors)
+          return
+        }
+        const a = access.data || {}
+        if (a.ok !== true) {
+          logEvent('warn', 'ai_trial_exhausted', { status: 402, errorKind: 'ai_trial_exhausted' })
+          sendJson(res, 402, {
+            error: 'ai_trial_exhausted',
+            limit: a.limit,
+            message: 'AI 试用次数已用完，升级 PRO 即可继续使用全部 AI 功能。',
+          }, cors)
+          return
+        }
+        if (a.tier === 'trial') {
+          isTrial = true
+          trialConsumed = true
+        }
+      } catch (e) {
+        logEvent('error', 'ai_access_rpc_failed', { status: 503, errorKind: 'ai_access_exception', error: String((e && e.message) || e) })
+        sendJson(res, 503, { error: 'quota_unavailable', message: '额度服务暂时不可用，请稍后重试' }, cors)
+        return
+      }
+    }
+    if (await bailIfDisconnected()) return
+
     // ── 每日请求数拦截（enforce）：plans.features['ai.requests.daily'] ──
     // 与 token 月度额度互补：防止单日高频刷（token 总量尚未耗尽时也能拦住）。
     // 统一走 consume_daily_feature_quota：内部处理 expired/refunded 回落 free、UTC+8 自然日。
     // RPC 失败 fail-open，避免配额系统故障误伤用户。
-    if (BILLING_MODE === 'enforce' && uid) {
+    if (BILLING_MODE === 'enforce' && uid && !isTrial) {
       try {
         const daily = await db.rpc('consume_daily_feature_quota', {
           p_uid: uid,
@@ -666,7 +721,7 @@ const server = http.createServer(async (req, res) => {
             error: 'quota_exceeded',
             quota: 'ai.requests.daily',
             limit: daily.data.limit,
-            message: '今日 AI 请求次数已用完（免费版 20 次/日、PRO 100 次/日），请明天再试或升级。',
+            message: '今日 AI 请求次数已用完（PRO 每日 100 次），请明天再试。',
           }, cors)
           return
         } else {
@@ -702,7 +757,7 @@ const server = http.createServer(async (req, res) => {
     // ⚠️ p_metric 必须与 plans.features 的键名一致（ai.tokens.monthly）；
     // 写成 'ai.tokens' 会让 v_limit=0 → 所有登录用户在 enforce 下被 429。
     // 预扣只是并发占位，请求结束时由 finalize() 按实际输出结算冲正。
-    if (BILLING_MODE === 'enforce' && uid) {
+    if (BILLING_MODE === 'enforce' && uid && !isTrial) {
       const reserveAmount = Math.ceil((Math.min(inChars, 60000) + 4096) / 2)
       try {
         const r = await db.rpc('reserve_quota', {

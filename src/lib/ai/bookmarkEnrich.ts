@@ -19,7 +19,8 @@ import { fetchUrlMetadataAsync } from './smartIntake.js'
 export async function enrichBookmarkMetadata(
   bookmark: Bookmark,
   categories: Category[] = [],
-  attributes: CustomAttribute[] = []
+  attributes: CustomAttribute[] = [],
+  opts: { styleSamples?: string[] } = {},
 ): Promise<AiEnrichDiff> {
   const rawUrl = bookmark.url ? bookmark.url.trim() : ''
   if (!rawUrl || isThreePartCipher(rawUrl)) {
@@ -51,10 +52,14 @@ export async function enrichBookmarkMetadata(
   let realCategoryId: string | undefined = undefined
   let realAttrIds: string[] = []
   let isRealtime = false
+  let aiStatus: AiEnrichDiff['ai']
+  let aiGate: string | null | undefined
 
   if (validUrl) {
     try {
-      const res = await fetchUrlMetadataAsync(validUrl, categories, attributes)
+      const res = await fetchUrlMetadataAsync(validUrl, categories, attributes, { styleSamples: opts.styleSamples })
+      aiStatus = res.ai
+      aiGate = res.aiGate
       if (res.success) {
         if (res.title) realTitle = res.title
         if (res.notes) realDescription = res.notes
@@ -110,5 +115,7 @@ export async function enrichBookmarkMetadata(
     suggestedCategoryId,
     suggestedAttrIds,
     reason: isRealtime ? t('ai.enrichReasonRealtime') : t('ai.enrichReasonSuggest'),
+    ai: aiStatus,
+    aiGate,
   }
 }

@@ -6,13 +6,19 @@
 >
 > 2026-11-21：`history.days` 改为 **免费 7 天 / PRO 365 天**（原两档同为 90 天，无差异）；`storage.bytes` 从未有执行点，
 > 从所有套餐撤下（迁移 `20261121000001_history_days_tiering.sql`）。
+>
+> 2026-11-21（二）：**AI 改为 PRO 专属**，免费档改为 `ai.trial.total = 30` 终身试用（预填 / 补齐 / 对话共用、不重置），
+> 撤下免费档的 `ai.requests.daily` / `ai.tokens.monthly`。执行点：`consume_ai_access`（`mimo-chat` 与 `ai-api` 共用，
+> 计数表 `ai_trial_usage`，失败经 `refund_ai_trial` 退还）；`ai-api` 预填此前**完全不看套餐**，本次补上。
+> 读取网页公开标题 / 图标 / 描述不属于 AI，不计次。迁移 `20261121000002_ai_trial_lifetime.sql`。
 
 ## 一、总览
 
 | 额度键 | 是否强制 | 强制点 | 备注 |
 |---|---|---|---|
 | `ai.tokens.monthly` | ✅ | `mimo-chat` → `ai_quota_check`（`BILLING_MODE=enforce`） | 月度 token 总量 |
-| `ai.requests.daily` | ✅ **2026-10-31 补** | `mimo-chat` → `resolve_entitlement` + `consume_rate_limit('ai:req:{uid}:{date}')` | free 20/日、PRO 100/日（迁移 `20261031000004`） |
+| `ai.requests.daily` | ✅ **2026-10-31 补** | `mimo-chat` / `ai-api`（2026-11-21 起）→ `consume_daily_feature_quota` | 仅 PRO：100/日（免费档已撤下，改用 `ai.trial.total`） |
+| `ai.trial.total` | ✅ **2026-11-21** | `consume_ai_access`（`mimo-chat`、`ai-api` 的 extract / candidates）→ `ai_trial_usage` 原子 +1 | 仅免费档：累计 30 次不重置；上游失败退还；必须登录 |
 | `video.extract.daily` | ✅ | `extract-video`（`consume_rate_limit`） | 轻量解析 |
 | `video.deep.daily` | ✅ | `extract-video` deep 提交 / 状态查询（失败退额度） | 2026-10-31 正式生效 |
 | `linkcheck.daily` | ✅ **2026-10-31 补** | `check-link` → 可选鉴权（`cb-auth`）+ `resolve_entitlement` + `consume_rate_limit('link-check:uid:{uid}:{date}')` | 只计**手动**检查（`mode=manual`）；自动巡检按 `linkcheck.auto.max` 另行限制 |

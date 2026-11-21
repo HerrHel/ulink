@@ -14,6 +14,7 @@
 
 const http = require('http')
 const crypto = require('crypto')
+const { verifyCbToken } = require('./cb-auth.js')
 
 // 2026-11-14 审计 #8：ai-api 直耗 MIMO_API_KEY，原先没有任何全局配额，
 // 且 cf-guard 的限流键取的是客户端可伪造的 CF-Connecting-IP（换头即绕过）。
@@ -66,6 +67,9 @@ async function checkGlobalQuota(req, action) {
     return { ok: false, status: 503, error: 'quota_unavailable' }
   }
 }
+
+// AI 访问权判断与退还：见 ./ai-access.js（独立成模块以便单测）
+const { checkAiAccess, refundAiAccess } = require('./ai-access.js')
 
 // 派生产物（esbuild 从 functions/api/*.ts 生成，请勿手改）
 const candidates = require('./ai-candidates.js')
@@ -171,11 +175,26 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    // 验签取 uid（handler 内的 cf-guard 也会再验一次 token 是否有效）
+    const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID }).catch(() => null)
+    const uid = auth && auth.ok ? auth.uid : null
+    const db = getDb()
+    const access = await checkAiAccess(db, uid)
+
+    // candidates 是纯 AI 能力：无访问权直接拒绝（402 = 需付费 / 试用用完；401 = 需登录）
+    if (action === 'candidates' && !access.allowed) {
+      const status = access.reason === 'login_required' ? 401
+        : access.reason === 'quota_unavailable' ? 503
+          : access.reason === 'daily_exhausted' ? 429 : 402
+      sendJson(res, status, { success: false, error: access.reason })
+      return
+    }
+
     const bodyBuffer = req.method === 'POST' ? await readBody(req) : undefined
     const webReq = toWebRequest(req, bodyBuffer)
     const context = {
       request: webReq,
-      env: { MIMO_API_KEY: process.env.MIMO_API_KEY },
+      env: { MIMO_API_KEY: process.env.MIMO_API_KEY, AI_ALLOWED: access.allowed },
     }
 
     const webRes =
@@ -184,9 +203,30 @@ const server = http.createServer(async (req, res) => {
         : await extract.onRequest(context)
 
     if (!webRes) {
+      if (access.consumed) await refundAiAccess(db, uid, access.consumed)
       sendJson(res, 500, { success: false, error: 'internal_error' })
       return
     }
+
+    if (action === 'extract') {
+      // 读出 handler 的 JSON：按 ai 字段判断是否真正用到了 AI，并把访问权状态告诉前端
+      const text = await webRes.text()
+      let data = null
+      try { data = JSON.parse(text) } catch { /* 非 JSON 原样透传 */ }
+      if (access.consumed && (!data || data.ai !== 'used')) await refundAiAccess(db, uid, access.consumed)
+      if (data && typeof data === 'object') {
+        data.aiGate = access.allowed ? null : access.reason
+        const headers = {}
+        webRes.headers.forEach((v, k) => { if (k.toLowerCase() !== 'content-length') headers[k] = v })
+        res.writeHead(webRes.status, headers)
+        res.end(JSON.stringify(data))
+        return
+      }
+      await writeWebResponse(new Response(text, { status: webRes.status, headers: webRes.headers }), res)
+      return
+    }
+
+    if (access.consumed && webRes.status >= 400) await refundAiAccess(db, uid, access.consumed)
     await writeWebResponse(webRes, res)
   } catch (err) {
     const message = String((err && err.message) || err)

@@ -29,6 +29,32 @@ const FREE_PLAN: MyEntitlement = {
 }
 
 /** 读取当前登录用户的权益；未登录或出错时回退到免费版 */
+/** AI 访问状态（服务端 my_ai_access）：PRO 不限次；免费为终身试用剩余次数；未登录不可用 */
+export interface MyAiAccess {
+  tier: 'pro' | 'trial' | 'anonymous' | 'unknown'
+  used: number
+  limit: number
+  remaining: number
+}
+
+export const UNKNOWN_AI_ACCESS: MyAiAccess = { tier: 'unknown', used: 0, limit: 0, remaining: 0 }
+
+/** 读取**自己**的 AI 访问状态；失败返回 unknown（由服务端在实际调用时最终裁决） */
+export async function fetchMyAiAccess(): Promise<MyAiAccess> {
+  try {
+    const { data, error } = await dbRpc('my_ai_access')
+    if (error || !data) return UNKNOWN_AI_ACCESS
+    const raw = data as { tier?: string; used?: number; limit?: number; remaining?: number }
+    const tier = raw.tier === 'pro' || raw.tier === 'trial' || raw.tier === 'anonymous' ? raw.tier : 'unknown'
+    const limit = Number(raw.limit) || 0
+    const used = Number(raw.used) || 0
+    const remaining = typeof raw.remaining === 'number' ? Math.max(0, raw.remaining) : Math.max(0, limit - used)
+    return { tier, used, limit, remaining }
+  } catch {
+    return UNKNOWN_AI_ACCESS
+  }
+}
+
 export async function fetchMyEntitlement(): Promise<MyEntitlement> {
   try {
     const { data, error } = await dbRpc('my_entitlement')

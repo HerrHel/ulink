@@ -37,6 +37,7 @@ export const purchaseZh = {
     features: {
       'history.days': '云端版本历史保留',
       'storage.bytes': '云端空间配额（展示值，暂未强制限额）',
+      'ai.trial.total': 'AI 试用次数（累计）',
       'linkcheck.daily': '每日手动死链排查',
       'linkcheck.auto': '每周后台全库自动巡检',
       'linkcheck.auto.max': '单次自动巡检链接上限',
@@ -93,8 +94,8 @@ export const purchaseZh = {
       freeB1Sub: '仅账号字段本机加密，标题、网址、笔记明文存储',
       freeB2: '无限层级分类与 Group 笔记',
       freeB2Sub: '支持无限嵌套树与 TipTap 富文本卡片排版',
-      freeB3: 'AI 智能预填体验',
-      freeB3Sub: '存入 URL 自动提取标题与摘要（日限 20 次）',
+      freeB3: 'AI 试用 {n} 次',
+      freeB3Sub: '预填、补齐、对话共用，累计 {n} 次不重置；网页原标题与图标始终免费自动读取',
       freeB4: '轻量平台解析体验',
       freeB4Sub: '解析视频公开标题、简介与字幕并生成摘要（日限 1 次）',
       freeB5: '本地秒级模糊与拼音检索',

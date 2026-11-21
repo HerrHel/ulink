@@ -41,6 +41,17 @@
           </div>
         </div>
       </div>
+      <div class="sp-card-row" @click="onToggleAiStyleAdapt" style="cursor: pointer;" data-testid="lv-ai-style-adapt-toggle">
+        <div class="sp-row-meta">
+          <span class="sp-row-title">{{ t('settings.aiStyleAdapt') }}</span>
+          <span class="sp-row-desc">{{ t('settings.aiStyleAdaptHint') }}</span>
+        </div>
+        <div class="sp-row-ctrl">
+          <div class="sp-toggle-pill" :class="{ active: uiStore.aiStyleAdapt }">
+            <span class="sp-switch"></span>
+          </div>
+        </div>
+      </div>
       <div class="sp-card-row" @click="onToggleSemanticSearch" style="cursor: pointer;">
         <div class="sp-row-meta">
           <span class="sp-row-title">
@@ -112,6 +123,12 @@ function onToggleAiEnabled() {
   }
   uiStore.saveUIState()
   toast(uiStore.aiEnabled ? t('settings.aiEnabledOnToast') : t('settings.aiEnabledOffToast'), true)
+}
+
+function onToggleAiStyleAdapt() {
+  uiStore.aiStyleAdapt = !uiStore.aiStyleAdapt
+  uiStore.saveUIState()
+  toast(uiStore.aiStyleAdapt ? t('settings.aiStyleAdaptOnToast') : t('settings.aiStyleAdaptOffToast'), true)
 }
 
 function onToggleAiRail() {

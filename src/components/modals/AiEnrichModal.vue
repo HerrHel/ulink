@@ -11,7 +11,7 @@
       <div class="modal-head">
         <div class="modal-title">
           <span class="ai-title-badge" :class="{ 'badge-pro': quota.isPro }">
-            {{ quota.isPro ? 'PRO' : t('settings.aiEnrichFreeTrialBadge', { remaining: quota.remaining, total: quota.total }) }}
+            {{ quota.isPro ? 'PRO' : (quota.total > 0 ? t('settings.aiEnrichFreeTrialBadge', { remaining: quota.remaining, total: quota.total }) : t('settings.aiEnrichFreeTrialBadgeUnknown')) }}
           </span>
           <span>{{ t('ai.enrichModalTitle') }}</span>
         </div>
@@ -25,7 +25,7 @@
             {{ t('settings.aiEnrichExhaustedTitle') }}
           </p>
           <p class="ai-quota-desc" style="color: var(--text-secondary); font-size: var(--fs-sm); line-height: 1.5; max-width: 380px; margin: 0 auto;">
-            {{ t('settings.aiEnrichExhaustedDesc') }}
+            {{ t('settings.aiEnrichExhaustedDesc', { n: quota.total }) }}
           </p>
           <button type="button" class="btn btn-primary btn-sm" style="margin-top: 14px;" @click="openUpgrade">
             {{ t('settings.aiEnrichUpgradeNow') }}
@@ -150,6 +150,7 @@ import type { AiEnrichDiff } from '../../types/ai.js'
 import { enrichBookmarkMetadata } from '../../lib/ai/cloudAiClient.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
+import { collectStyleSamples, rememberAiSuggestion } from '../../lib/ai/styleSamples.js'
 import { displayText } from '../../utils.js'
 
 const ui = useUIStore()
@@ -182,15 +183,22 @@ async function fetchEnrich() {
   loading.value = true
   diff.value = null
   try {
+    const targetForSamples = targetBookmark.value.id
     const result = await enrichBookmarkMetadata(
       targetBookmark.value,
       ds.categories,
-      ds.customAttributes
+      ds.customAttributes,
+      { styleSamples: collectStyleSamples(ds.bookmarks.filter((b) => b.id !== targetForSamples)) },
     )
     // 已关闭/已切换目标/已有更新的请求 → 丢弃结果，避免写到另一本书签
     if (gen !== enrichGen || !ui.modals.aiEnrich || ui.aiEnrichTargetBmId !== targetId) return
     diff.value = result
-    ent.consumeAiEnrichQuota()
+    // 只有服务端真正用到了 AI 才同步本地试用镜像；试用用完则立即切到升级提示
+    if (result.aiGate === 'ai_trial_exhausted') ent.markAiTrialExhausted()
+    if (result.ai === 'used') {
+      ent.consumeAiEnrichQuota()
+      rememberAiSuggestion(result.suggestedNotes)
+    }
     applyTitle.value = !!result.suggestedTitle
     applyNotes.value = !!(result.suggestedNotes && result.suggestedNotes !== result.currentNotes)
     applyCategory.value = !!result.suggestedCategoryId
@@ -224,6 +232,8 @@ watch(
   [() => ui.modals.aiEnrich, () => ui.aiEnrichTargetBmId],
   ([open, bmId]) => {
     if (open && bmId) {
+      // 同步刷新服务端试用剩余次数（只影响徽章展示，是否放行由服务端在本次请求里裁决）
+      void ent.refreshAiAccess().catch(() => {})
       void fetchEnrich()
     } else if (!open) {
       enrichGen++

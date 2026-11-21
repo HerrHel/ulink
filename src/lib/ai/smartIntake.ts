@@ -26,6 +26,15 @@ export interface SmartIntakeResult {
   categoryId?: string
   suggestedAttrIds?: string[]
   reason?: string
+  /** 服务端本次是否真正用到了 AI（used / skipped / failed）；未经服务端（降级链）时为 undefined */
+  ai?: 'used' | 'skipped' | 'failed'
+  /** 服务端未放行 AI 的原因：ai_trial_exhausted / login_required / daily_exhausted / quota_unavailable */
+  aiGate?: string | null
+}
+
+export interface FetchMetadataOptions {
+  /** 用户自己写过的备注（风格样本），让 AI 备注模仿用户的写法 */
+  styleSamples?: string[]
 }
 
 /**
@@ -109,7 +118,8 @@ export function cleanWebDescription(rawDesc: string, maxLen = 240): string {
 export async function fetchUrlMetadataAsync(
   targetUrl: string,
   categories: Category[] = [],
-  attributes: CustomAttribute[] = []
+  attributes: CustomAttribute[] = [],
+  opts: FetchMetadataOptions = {},
 ): Promise<SmartIntakeResult> {
   const url = targetUrl.trim()
   if (!url || !/^https?:\/\//i.test(url)) {
@@ -131,6 +141,8 @@ export async function fetchUrlMetadataAsync(
   let rawDesc = ''
   let serverCategoryId: string | undefined = undefined
   let serverSuggestedAttrIds: string[] = []
+  let aiStatus: SmartIntakeResult['ai']
+  let aiGate: string | null | undefined
 
   // 1. 优先尝试边缘/服务端元数据端点 /api/extract-metadata（支持 Cloudflare Pages Edge 及 Vite Dev）
   try {
@@ -147,11 +159,16 @@ export async function fetchUrlMetadataAsync(
         // 发送侧同样限量，避免把整库分类/标签塞进请求体（大库会顶成 413）
         availableAttributes: activeAttrs.slice(0, MAX_ATTR_NAMES).map(a => ({ id: a.id, name: a.name })),
         availableCategories: activeCats.slice(0, MAX_CATEGORY_NAMES).map(c => ({ id: c.id, name: c.name })),
+        ...(opts.styleSamples && opts.styleSamples.length > 0 ? { styleSamples: opts.styleSamples } : {}),
       }),
       signal: AbortSignal.timeout(18000),
     })
     if (apiRes.ok) {
-      const data = (await apiRes.json()) as { success?: boolean; title?: string; description?: string; categoryId?: string; suggestedAttrIds?: string[] }
+      const data = (await apiRes.json()) as { success?: boolean; title?: string; description?: string; categoryId?: string; suggestedAttrIds?: string[]; ai?: SmartIntakeResult['ai']; aiGate?: string | null }
+      if (data) {
+        aiStatus = data.ai
+        aiGate = data.aiGate
+      }
       if (data && data.success) {
         rawTitle = data.title || ''
         rawDesc = data.description || ''
@@ -184,7 +201,7 @@ export async function fetchUrlMetadataAsync(
   const notes = cleanWebDescription(rawDesc)
 
   if (!title && !notes) {
-    return { success: false, reason: 'empty_extracted_content' }
+    return { success: false, reason: 'empty_extracted_content', ai: aiStatus, aiGate }
   }
 
   // 结合真实抓取到的标题与描述做二次分类与属性匹配（优先使用服务端大模型推荐，若无则本地多级分类匹配）
@@ -218,5 +235,7 @@ export async function fetchUrlMetadataAsync(
     categoryId: matchedCatId,
     suggestedAttrIds,
     reason: 'realtime_page_extract',
+    ai: aiStatus,
+    aiGate,
   }
 }

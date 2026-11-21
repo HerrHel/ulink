@@ -133,6 +133,8 @@ MiMo-V2.6-Flash 国内价（元 / 百万 tokens）：
 > **2026-10-31 口径（额度执行已收口）**：`free` 实际落库为 storage 200MB / ai 50,000 token / ai.requests 20 次/日 / history 90 天 / linkcheck 3 次/日 / video.extract 1 次/日；`sync.devices` 因无设备体系**已从 plans 撤下**。**服务端已强制**：`ai.tokens.monthly`、`ai.requests.daily`、`video.extract.daily`、`video.deep.daily`、`linkcheck.daily`（手动检查，需登录 token）、`linkcheck.auto(.max)`、`history.days`（cleanup 保留期）。**仅展示未强制**：`storage.bytes`（购买页已标注"展示值，暂未限额"）。详见 `docs/QUOTA_ENFORCEMENT.md`。
 
 > **2026-11-21 口径**：`history.days` 改为 free **7 天** / PRO **365 天**（此前两档同为 90 天，对比表无差异，PRO 缺少可感知的独有价值）；仅指云端 `data_history`，本机历史按条数保留不受影响。`storage.bytes` 从未强制执行，已从所有套餐撤下。迁移 `20261121000001_history_days_tiering.sql`。下表为 2026-10 决策期建议，保留作记录。
+>
+> **2026-11-21 口径（二）**：AI 改为 PRO 专属；免费档 AI 改为 `ai.trial.total` = 30 次终身试用（不按日/月重置），撤下免费档 `ai.requests.daily` / `ai.tokens.monthly`。迁移 `20261121000002_ai_trial_lifetime.sql`。
 
 > **2026-10-31 口径**：`video.deep`（口播 ASR + 画面 OCR）定位为**实验性实验室功能**（需浏览器扩展、仅桌面端，B站正式支持、抖音/小红书实验性），只给 PRO 2 次/日体验，不写入免费/PRO 的固定权益承诺，也不作为涨价依据。
 

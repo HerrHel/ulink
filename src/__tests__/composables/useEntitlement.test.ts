@@ -3,15 +3,19 @@ import { useEntitlement, isProUser, ENTITLEMENT_CACHE_KEY } from '../../composab
 import type { MyEntitlement } from '../../composables/domain/useRedeem.js'
 
 const mockFetchMyEntitlement = vi.hoisted(() => vi.fn())
+const mockFetchMyAiAccess = vi.hoisted(() => vi.fn())
 vi.mock('../../composables/domain/useRedeem.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../composables/domain/useRedeem.js')>()
-  return { ...actual, fetchMyEntitlement: mockFetchMyEntitlement }
+  return { ...actual, fetchMyEntitlement: mockFetchMyEntitlement, fetchMyAiAccess: mockFetchMyAiAccess }
 })
+const TRIAL = (remaining: number, limit = 30) => ({ tier: 'trial' as const, used: limit - remaining, limit, remaining })
 
 describe('useEntitlement (会员权益与功能分层门控)', () => {
   beforeEach(() => {
     localStorage.clear()
     mockFetchMyEntitlement.mockReset()
+    mockFetchMyAiAccess.mockReset()
+    mockFetchMyAiAccess.mockResolvedValue({ tier: 'unknown', used: 0, limit: 0, remaining: 0 })
     const { clear } = useEntitlement()
     clear()
   })
@@ -23,31 +27,33 @@ describe('useEntitlement (会员权益与功能分层门控)', () => {
     expect(planId.value).toBe('free')
   })
 
-  it('2. 免费版用户每日享有 3 次 AI 智能提取体验额度，用完后阻断', () => {
-    const { isPro, checkAiEnrichQuota, consumeAiEnrichQuota } = useEntitlement()
-    expect(isPro.value).toBe(false)
+  it('2. 免费用户：门禁镜像服务端终身试用剩余次数，逐次扣减，用完即阻断', async () => {
+    mockFetchMyAiAccess.mockResolvedValueOnce(TRIAL(2))
+    const { refreshAiAccess, checkAiEnrichQuota, consumeAiEnrichQuota } = useEntitlement()
+    await refreshAiAccess()
 
-    // 初始状态：允许使用，剩余 3 次
-    const q1 = checkAiEnrichQuota()
-    expect(q1.allowed).toBe(true)
-    expect(q1.remaining).toBe(3)
-    expect(q1.total).toBe(3)
-
-    // 消耗第 1 次
-    expect(consumeAiEnrichQuota()).toBe(true)
-    expect(checkAiEnrichQuota().remaining).toBe(2)
-
-    // 消耗第 2 次
+    expect(checkAiEnrichQuota()).toEqual({ allowed: true, remaining: 2, total: 30, isPro: false })
     expect(consumeAiEnrichQuota()).toBe(true)
     expect(checkAiEnrichQuota().remaining).toBe(1)
-
-    // 消耗第 3 次
     expect(consumeAiEnrichQuota()).toBe(true)
-    expect(checkAiEnrichQuota().remaining).toBe(0)
-    expect(checkAiEnrichQuota().allowed).toBe(false)
-
-    // 尝试消耗第 4 次：失败阻断
+    expect(checkAiEnrichQuota()).toMatchObject({ allowed: false, remaining: 0 })
     expect(consumeAiEnrichQuota()).toBe(false)
+  })
+
+  it('2b. 未登录不可用；服务端状态未知时放行（由服务端在实际调用时裁决）', async () => {
+    const { refreshAiAccess, checkAiEnrichQuota } = useEntitlement()
+    expect(checkAiEnrichQuota()).toMatchObject({ allowed: true, isPro: false }) // unknown
+    mockFetchMyAiAccess.mockResolvedValueOnce({ tier: 'anonymous', used: 0, limit: 0, remaining: 0 })
+    await refreshAiAccess()
+    expect(checkAiEnrichQuota()).toMatchObject({ allowed: false, isPro: false })
+  })
+
+  it('2c. 服务端回报试用用完（aiGate）→ markAiTrialExhausted 立即归零，即使本地镜像还有余量', async () => {
+    mockFetchMyAiAccess.mockResolvedValueOnce(TRIAL(5))
+    const { refreshAiAccess, checkAiEnrichQuota, markAiTrialExhausted } = useEntitlement()
+    await refreshAiAccess()
+    markAiTrialExhausted()
+    expect(checkAiEnrichQuota()).toMatchObject({ allowed: false, remaining: 0, total: 30 })
   })
 
   it('3. PRO 会员（经服务端 refresh 确认）享有无限次 AI 智能提取额度', async () => {
@@ -100,25 +106,16 @@ describe('useEntitlement (会员权益与功能分层门控)', () => {
     expect(checkAiEnrichQuota().isPro).toBe(false)
   })
 
-  it('5. 自动清理过往日期的 lv_ai_enrich_* 键，避免 localStorage 无限累积', () => {
-    // 注入过往历史 key
+  it('5. 刷新 AI 状态时清理已废弃的按天计数键 lv_ai_enrich_*（含今天的）', async () => {
     localStorage.setItem('lv_ai_enrich_2026-10-01', '3')
     localStorage.setItem('lv_ai_enrich_2026-10-02', '1')
-    localStorage.setItem('lv_ai_enrich_2026-10-03', '2')
-
-    const { checkAiEnrichQuota, consumeAiEnrichQuota } = useEntitlement()
-    const quota = checkAiEnrichQuota()
-    expect(quota.allowed).toBe(true)
-    expect(quota.remaining).toBe(3)
-
-    // 历史 key 应被自动清理
+    localStorage.setItem('lv_ai_enrich_2099-12-31', '2')
+    localStorage.setItem('lv_other_key', 'keep')
+    await useEntitlement().refreshAiAccess()
     expect(localStorage.getItem('lv_ai_enrich_2026-10-01')).toBeNull()
     expect(localStorage.getItem('lv_ai_enrich_2026-10-02')).toBeNull()
-    expect(localStorage.getItem('lv_ai_enrich_2026-10-03')).toBeNull()
-
-    // 消耗今天 1 次
-    expect(consumeAiEnrichQuota()).toBe(true)
-    expect(checkAiEnrichQuota().remaining).toBe(2)
+    expect(localStorage.getItem('lv_ai_enrich_2099-12-31')).toBeNull()
+    expect(localStorage.getItem('lv_other_key')).toBe('keep')
   })
 
   it('6. clear() 后在途 refresh() 不写回缓存（退出登录竞态回归）', async () => {
@@ -178,21 +175,22 @@ describe('useEntitlement (会员权益与功能分层门控)', () => {
     expect(isPaid.value).toBe(true) // 展示态仍可显示 PRO（离线体验不破坏）
     const q = checkAiEnrichQuota()
     expect(q.isPro).toBe(false) // 门禁绝不认展示态/缓存
-    expect(q.remaining).toBe(3) // 按免费档
-    expect(consumeAiEnrichQuota()).toBe(true)
-    expect(checkAiEnrichQuota().remaining).toBe(2)
+    expect(q.remaining).toBe(0) // 未经服务端确认：不展示虚假的剩余次数
+    expect(consumeAiEnrichQuota()).toBe(true) // 状态未知不在前端拦截，交给服务端裁决
   })
 
   it('#36 refresh 失败（服务端不可达）→ 门禁回落免费档 fail-closed，展示态保留', async () => {
     mockFetchMyEntitlement.mockResolvedValueOnce(proEntitlement)
-    const { refresh, checkAiEnrichQuota, isPaid } = useEntitlement()
+    // AI 访问镜像同样被服务端确认为 pro：刷新失败后它也必须失效，不能单独把门禁撑开
+    mockFetchMyAiAccess.mockResolvedValue({ tier: 'pro', used: 0, limit: 0, remaining: 0 })
+    const { refresh, checkAiEnrichQuota, isPaid, aiAccess } = useEntitlement()
     await refresh()
+    await vi.waitFor(() => expect(aiAccess.value.tier).toBe('pro'))
     expect(checkAiEnrichQuota().isPro).toBe(true) // 先经服务端确认 PRO
 
     mockFetchMyEntitlement.mockRejectedValueOnce(new Error('offline'))
     await expect(refresh()).rejects.toThrow('offline')
     expect(checkAiEnrichQuota().isPro).toBe(false) // fail-closed，绝不沿用上次 PRO
-    expect(checkAiEnrichQuota().remaining).toBeLessThanOrEqual(3)
     expect(isPaid.value).toBe(true) // 展示态保留上次服务端结果，不破坏离线展示
   })
 
