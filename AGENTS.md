@@ -173,7 +173,7 @@ composables 按职责分三组：
   - 视频/媒体/网页：unifiedMedia（媒体统一分流：图片多模态直传、视频抽帧秒级对齐、音频 16kHz 客户端压缩物化直传）、videoExtract、videoHarvest、deepVideoExtract、videoPlatforms、jinaReader、deepLinkExtract、universalUrlInference
   - 安全：secretFilter、urlGuard、aiProfile
 - 云端：`cloudbase/functions/mimo-chat/`（按 uid 限流 + 额度；线上 `BILLING_MODE=enforce`）；`ai-api`（AI 候选与元数据提取）；模型密钥只在云函数环境变量，**绝不进前端**
-- 额度口径见 `docs/PRICING.md` 与 `docs/QUOTA_ENFORCEMENT.md`；改额度先改 `plans.features`，再同步文档。已服务端强制：`ai.tokens.monthly`、`ai.requests.daily`（2026-10-31 补，free 20/PRO 100）、`video.extract.daily`、`video.deep.daily`、`linkcheck.daily`、`linkcheck.auto(.max)`、`history.days`；`storage.bytes` 仅展示（购买页已标注），`sync.devices` 已撤下
+- 额度口径见 `docs/PRICING.md` 与 `docs/QUOTA_ENFORCEMENT.md`；改额度先改 `plans.features`，再同步文档。已服务端强制：`ai.tokens.monthly`、`ai.requests.daily`（2026-10-31 补，free 20/PRO 100）、`video.extract.daily`、`video.deep.daily`、`linkcheck.daily`、`linkcheck.auto(.max)`、`history.days`（2026-11-21 起 free 7 天 / PRO 365 天，仅云端 `data_history`）；`storage.bytes`（2026-11-21）与 `sync.devices` 已撤下
 
 ### 计费与会员（2026-10 上线）
 

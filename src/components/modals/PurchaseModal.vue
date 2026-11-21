@@ -574,7 +574,8 @@ const displayCards = computed<TierCardView[]>(() => {
         { text: t('purchase.card.freeB3'), sub: t('purchase.card.freeB3Sub') },
         { text: t('purchase.card.freeB4'), sub: t('purchase.card.freeB4Sub') },
         { text: t('purchase.card.freeB5'), sub: t('purchase.card.freeB5Sub') },
-        { text: t('purchase.card.freeB6'), sub: t('purchase.card.freeB6Sub') },
+        // 天数取自 plans.features（单一真源），避免文案与云端清理口径漂移
+        { text: t('purchase.card.freeB6', { n: free.features?.['history.days'] ?? 7 }), sub: t('purchase.card.freeB6Sub') },
       ],
     })
   }
@@ -689,6 +690,12 @@ const displayCards = computed<TierCardView[]>(() => {
         sub: t('purchase.card.b4Sub'),
         highlight: true,
       },
+      // 云端历史保留期：PRO 相对免费版的真实差异点，天数取自 plans.features
+      ...(f['history.days'] ? [{
+        text: t('purchase.card.b7', { n: f['history.days'] }),
+        sub: t('purchase.card.b7Sub'),
+        highlight: true,
+      }] : []),
       {
         // 合规修订：加密范围如实说明为仅账号字段，其余内容明文存储
         text: t('purchase.card.b5'),

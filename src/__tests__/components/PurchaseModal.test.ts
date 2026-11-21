@@ -9,10 +9,11 @@ import PurchaseModal from '../../components/modals/PurchaseModal.vue'
 const { mockPlans, mockCreate } = vi.hoisted(() => {
   return {
     mockPlans: [
-      { planId: 'free', name: '免费版', priceCents: 0, currency: 'CNY', periodDays: 0 },
-      { planId: 'plus_monthly', name: 'PRO 月付', priceCents: 1500, currency: 'CNY', periodDays: 30 },
-      { planId: 'pro_quarterly', name: 'PRO 季付', priceCents: 3200, currency: 'CNY', periodDays: 90 },
-      { planId: 'plus_yearly', name: 'PRO 年付', priceCents: 10800, currency: 'CNY', periodDays: 365 },
+      // features 取迁移 20261121000001 之后的线上口径（历史保留 free 7 / PRO 365，storage.bytes 已撤下）
+      { planId: 'free', name: '免费版', priceCents: 0, currency: 'CNY', periodDays: 0, features: { 'history.days': 7, 'ai.requests.daily': 20 } },
+      { planId: 'plus_monthly', name: 'PRO 月付', priceCents: 1500, currency: 'CNY', periodDays: 30, features: { 'history.days': 365, 'ai.requests.daily': 100 } },
+      { planId: 'pro_quarterly', name: 'PRO 季付', priceCents: 3200, currency: 'CNY', periodDays: 90, features: { 'history.days': 365, 'ai.requests.daily': 100 } },
+      { planId: 'plus_yearly', name: 'PRO 年付', priceCents: 10800, currency: 'CNY', periodDays: 365, features: { 'history.days': 365, 'ai.requests.daily': 100 } },
     ],
     mockCreate: vi.fn().mockResolvedValue({
       orderId: 'ord_123',
@@ -251,5 +252,46 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     expect(monthlyCard.text()).not.toContain('5 GB')
 
     wrapper.unmount()
+  })
+
+  it('8. 云端历史保留期按 plans.features 展示：免费 7 天、PRO 365 天；对比表不再出现存储配额', async () => {
+    const wrapper = mount(PurchaseModal, {
+      props: { visible: true, currentPlanId: 'free' },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    // 天数来自数据而非写死文案：旧文案曾写死「90 天」，与云端清理口径脱节
+    const freeCard = wrapper.find('[data-testid="plan-free"]')
+    expect(freeCard.text()).toContain('7 天云端历史版本回溯')
+    expect(freeCard.text()).not.toContain('90 天')
+    const yearlyCard = wrapper.find('[data-testid="plan-plus_yearly"]')
+    expect(yearlyCard.text()).toContain('365 天云端历史版本回溯')
+
+    await wrapper.find('.pur-toggle-btn').trigger('click')
+    await nextTick()
+    const compare = wrapper.find('[data-testid="purchase-compare"]')
+    expect(compare.text()).toContain('云端版本历史保留')
+    expect(compare.text()).toContain('7 天')
+    expect(compare.text()).toContain('365 天')
+    expect(compare.text()).not.toContain('云端空间配额')
+
+    wrapper.unmount()
+  })
+
+  it('9. PRO 档缺 history.days 时不渲染历史要点（不凭空承诺）', async () => {
+    const saved = mockPlans.map((p) => ({ ...p, features: { ...p.features } }))
+    for (const p of mockPlans) if (p.planId !== 'free') delete (p.features as Record<string, number>)['history.days']
+    try {
+      const wrapper = mount(PurchaseModal, {
+        props: { visible: true, currentPlanId: 'free' },
+        attachTo: document.body,
+      })
+      await nextTick()
+      expect(wrapper.find('[data-testid="plan-plus_yearly"]').text()).not.toContain('云端历史版本回溯')
+      wrapper.unmount()
+    } finally {
+      saved.forEach((p, i) => { mockPlans[i].features = p.features })
+    }
   })
 })
