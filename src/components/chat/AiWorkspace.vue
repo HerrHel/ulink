@@ -417,7 +417,7 @@ import { useAiChat, type ChatTurn } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
 import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
 import { useChatPanelShell } from '../../composables/ui/useChatPanelShell.js'
-import { processFileForAi } from '../../lib/ai/attachmentHelper.js'
+import { attachFilesToAi } from '../../lib/ai/attachFiles.js'
 import { toast } from '../../lib/toast.js'
 import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
 import { PAYLOAD_KEY } from '../../config/constants.js'
@@ -900,17 +900,9 @@ function triggerFileInput() {
 
 async function handleFileInputChange(e: Event) {
   const target = e.target as HTMLInputElement
-  const files = target.files
-  if (!files || files.length === 0) return
-  for (let i = 0; i < files.length; i++) {
-    try {
-      const parsed = await processFileForAi(files[i])
-      ui.attachFileToAi(parsed)
-    } catch (err: unknown) {
-      toast((err as Error).message || '文件解析失败', false)
-    }
-  }
+  const files = target.files ? Array.from(target.files) : []
   target.value = ''
+  await attachFilesToAi(files)
 }
 
 let dragEnterCount = 0
@@ -943,6 +935,11 @@ function onWorkspaceDrop(e: DragEvent) {
   e.preventDefault()
   e.stopPropagation()
   if (!e.dataTransfer) return
+  // 从系统拖入的文件：与「+」按钮一致，作为附件引用到对话
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    void attachFilesToAi(e.dataTransfer.files)
+    return
+  }
   let payload: { type?: string; id?: string; srcGid?: string } | null = null
   try {
     const raw = e.dataTransfer.getData(PAYLOAD_KEY)

@@ -268,8 +268,8 @@ import { ref, computed, type Ref } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
-import { processFileForAi, type AttachedMediaFile } from '../../lib/ai/attachmentHelper.js'
-import { toast } from '../../lib/toast.js'
+import type { AttachedMediaFile } from '../../lib/ai/attachmentHelper.js'
+import { attachFilesToAi } from '../../lib/ai/attachFiles.js'
 import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
 import { displayText } from '../../utils.js'
 
@@ -366,32 +366,7 @@ function triggerFileInput() {
 }
 
 async function handleFiles(files: FileList | File[]) {
-  if (!files || files.length === 0) return
-  let addedCount = 0
-  let lastAddedName = '' // 记录实际成功附加的文件名
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i]
-    if (f.size > 200 * 1024 * 1024) {
-      toast(t('ai.fileTooLarge'))
-      continue
-    }
-    try {
-      const processed = await processFileForAi(f)
-      ui.attachFileToAi(processed)
-      addedCount++
-      lastAddedName = f.name
-    } catch (err: unknown) {
-      toast((err as Error).message || t('ai.fileTooLarge'), false)
-    }
-  }
-  if (addedCount > 0) {
-    if (addedCount === 1) {
-      // 根因：files[0] 可能是被 200MB 上限跳过或处理失败的文件，应显示真正成功的文件名
-      toast(t('ai.fileAttachedToast', { name: lastAddedName }))
-    } else {
-      toast(t('ai.attachedFilesCount', { n: addedCount }))
-    }
-  }
+  await attachFilesToAi(files)
 }
 
 async function handleFileInputChange(e: Event) {
@@ -445,12 +420,12 @@ function onDockDragLeave() {
   isDockDragOver.value = false
 }
 
-async function onDockDrop(e: DragEvent) {
+/**
+ * 只复位高亮，不在这里解析文件：输入框位于右侧 AI 栏（DetailPanel）内，drop 事件会冒泡到
+ * 面板的 onPanelDrop 统一处理；两处都解析会让同一文件被添加两次（附件 id 随机，去重拦不住）。
+ */
+function onDockDrop() {
   isDockDragOver.value = false
-  const files = e.dataTransfer?.files
-  if (files && files.length > 0) {
-    await handleFiles(files)
-  }
 }
 
 /** 函数 ref：把 textarea 元素写回父组件共享的 ref（useChatPanelDom / useChatInputInteraction 依赖它） */

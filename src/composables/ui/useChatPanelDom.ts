@@ -8,9 +8,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { isMobile } from '../../utils.js'
-import { processFileForAi } from '../../lib/ai/attachmentHelper.js'
-import { toast } from '../../lib/toast.js'
-import { t } from '../../i18n/index.js'
+import { attachFilesToAi } from '../../lib/ai/attachFiles.js'
 
 export interface ChatPanelDomDeps {
   panelRef: Ref<HTMLElement | null>
@@ -44,24 +42,8 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
 
   async function onPanelDrop(e?: DragEvent) {
     isDragOverPanel.value = false
-    if (e && e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      const files = e.dataTransfer.files
-      let added = 0
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i]
-        if (f.size > 50 * 1024 * 1024) continue
-        try {
-          const processed = await processFileForAi(f)
-          ui.attachFileToAi(processed)
-          added++
-        } catch (err: unknown) {
-          toast((err as Error).message || '文件处理失败', false)
-        }
-      }
-      if (added > 0) {
-        toast(t('ai.fileAttachedToast', { name: files[0].name }))
-      }
-    }
+    const files = e?.dataTransfer?.files
+    if (files && files.length > 0) await attachFilesToAi(files)
   }
 
   watch(

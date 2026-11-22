@@ -99,6 +99,7 @@
 <div class="overlay" id="railOverlay" :class="{ show: store.panels.rail }" @click="closeRail"></div>
 </ErrorBoundary>
 <!-- 全局覆盖层：分享态与主布局共用 -->
+<FileDropOverlay />
 <ConfirmModal />
 <ChoiceModal />
 <AuthModal />
@@ -111,6 +112,8 @@ import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
 import { useApp } from './composables/useApp.js'
+// 文件拖放分流需在首屏即挂监听（否则拖入文件会被浏览器直接打开），故同步引入；分享页也挂（拒收文件）
+import FileDropOverlay from './components/overlays/FileDropOverlay.vue'
 import { useAppHandlers } from './composables/useAppHandlers.js'
 import { useAppLifecycle, onShareRoute, whenDataReady } from './composables/useAppLifecycle.js'
 import { useE2E } from './composables/domain/useE2E.js'
