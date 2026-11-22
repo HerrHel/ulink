@@ -757,7 +757,7 @@ describe('useBookmark', () => {
       encryptMock.mockRejectedValueOnce(new Error('boom'))
       await saveBm()
       expect(mockData.addBookmark).not.toHaveBeenCalled()
-      expect(toast).toHaveBeenCalledWith('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+      expect(toast).toHaveBeenCalledWith('密码加密失败，请先解锁端到端加密后再保存', false)
     })
 
     it('P1: 引导解锁被取消 toast 保存已取消且不保存不递归', async () => {

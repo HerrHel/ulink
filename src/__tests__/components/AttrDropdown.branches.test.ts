@@ -102,7 +102,7 @@ describe('AttrDropdown onAddAttr 三分流', () => {
     w.unmount()
   })
 
-  it('成功：addAttrQuick 返 truthy → 清 query + toast("属性已添加")', async () => {
+  it('成功：addAttrQuick 返 truthy → 清 query + toast("标签已添加")', async () => {
     const ds = useDataStore()
     seedAttr(ds, 'a1', '前端')
     addAttrQuickMock.mockReturnValue(true)
@@ -118,11 +118,11 @@ describe('AttrDropdown onAddAttr 三分流', () => {
     expect(addAttrQuickMock).toHaveBeenCalledWith('后端')
     expect(s.query).toBe('')
     expect(origQuery).toBe('后端')
-    expect(toastMock).toHaveBeenCalledWith('属性已添加')
+    expect(toastMock).toHaveBeenCalledWith('标签已添加')
     w.unmount()
   })
 
-  it('已存在失败：addAttrQuick 返 falsy → 保留 query + toast("属性已存在", false)', async () => {
+  it('已存在失败：addAttrQuick 返 falsy → 保留 query + toast("标签已存在", false)', async () => {
     const ds = useDataStore()
     seedAttr(ds, 'a1', '前端')
     addAttrQuickMock.mockReturnValue(false)
@@ -136,7 +136,7 @@ describe('AttrDropdown onAddAttr 三分流', () => {
     expect(addAttrQuickMock).toHaveBeenCalledWith('前端')
     // 失败分支 query 保留不空
     expect(s.query).toBe('前端')
-    expect(toastMock).toHaveBeenCalledWith('属性已存在', false)
+    expect(toastMock).toHaveBeenCalledWith('标签已存在', false)
     w.unmount()
   })
 })
@@ -249,7 +249,7 @@ describe('AttrDropdown touch 长按时序三函数', () => {
     await nextTick()
     const sheet = useActionSheetStore()
     expect(sheet.visible).toBe(true)
-    expect(sheet.items.map((i: any) => i.label)).toEqual(['重命名', '删除属性'])
+    expect(sheet.items.map((i: any) => i.label)).toEqual(['重命名', '删除标签'])
     w.unmount()
   })
 

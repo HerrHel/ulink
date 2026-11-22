@@ -25,7 +25,7 @@ export const modalsZh = {
       currentDarkIcon: '当前深色模式图标',
       category: '分类',
       parent: '父级（子网站）',
-      attributes: '属性标记',
+      attributes: '标签',
       childCount: '子书签 ({n})',
       applyAi: '采纳',
       dismissAi: '忽略',
@@ -49,7 +49,7 @@ export const modalsZh = {
     childBm: {
       needUrl: '请填写网址',
       encryptFail: '密码加密失败：输出格式异常，已取消保存',
-      encryptFailHint: '密码加密失败，请重试或稍后解锁 E2E 后再保存',
+      encryptFailHint: '密码加密失败，请先解锁端到端加密后再保存',
       saveCancelled: '保存已取消',
       encryptedBlocked: '该书签含加密字段，请先解锁主密码后再编辑',
       updated: '子书签已更新',
@@ -74,11 +74,11 @@ export const modalsZh = {
       orderUpdated: '分类顺序已更新',
     }, // CategoryModal
     attribute: {
-      ariaLabel: '属性管理',
-      manage: '管理属性',
-      name: '属性名称',
-      confirmDelete: '确认删除属性「{name}」？已打标的书签/笔记将暂时去掉该标记；从回收站恢复属性时可还原关联。',
-      deleted: '属性已删除',
+      ariaLabel: '标签管理',
+      manage: '管理标签',
+      name: '标签名称',
+      confirmDelete: '确认删除标签「{name}」？已打标的书签/笔记将暂时去掉该标记；从回收站恢复标签时可还原关联。',
+      deleted: '标签已删除',
     }, // AttributeModal
     auth: {
       ariaLabel: '登录',
@@ -148,7 +148,7 @@ export const modalsZh = {
       bmCount: '书签 ({n})',
       groupCount: '笔记 ({n})',
       catCount: '分类 ({n})',
-      attrCount: '属性 ({n})',
+      attrCount: '标签 ({n})',
       selectItem: '选中 {name}',
       restore: '恢复',
       batchRestore: '批量恢复',

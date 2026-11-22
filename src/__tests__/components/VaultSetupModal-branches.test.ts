@@ -159,14 +159,14 @@ describe('VaultSetupModal onNext 校验与 step 流转', () => {
     w.unmount()
   })
 
-  it('generateRecoveryKey 抛 Error → catch 设「生成 Recovery Key 失败」拼接 message 不推 step', async () => {
+  it('generateRecoveryKey 抛 Error → catch 设「生成恢复密钥失败」拼接 message 不推 step', async () => {
     generateRecoveryKeyMock.mockImplementation(() => { throw new Error('rng broken') })
     const w = mountComp(true)
     w.vm.masterPw = 'master-pw-12345'
     w.vm.masterPw2 = 'master-pw-12345'
     await nextTick()
     await w.vm.onNext()
-    expect(w.vm.error).toBe('生成 Recovery Key 失败：rng broken')
+    expect(w.vm.error).toBe('生成恢复密钥失败：rng broken')
     expect(w.vm.step).toBe(1) // 抛错不推 step
     w.unmount()
   })
@@ -178,7 +178,7 @@ describe('VaultSetupModal onNext 校验与 step 流转', () => {
     w.vm.masterPw2 = 'master-pw-12345'
     await nextTick()
     await w.vm.onNext()
-    expect(w.vm.error).toBe('生成 Recovery Key 失败：string err')
+    expect(w.vm.error).toBe('生成恢复密钥失败：string err')
     w.unmount()
   })
 
@@ -347,7 +347,7 @@ describe('VaultSetupModal downloadPDF', () => {
 })
 
 describe('VaultSetupModal copyKey', () => {
-  it('clipboard 成功 → toast(ok=true) 「Recovery Key 已复制」', async () => {
+  it('clipboard 成功 → toast(ok=true) 「恢复密钥已复制」', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -358,7 +358,7 @@ describe('VaultSetupModal copyKey', () => {
     await w.vm.copyKey()
     await flush()
     expect(writeText).toHaveBeenCalledWith('RK-1234-5678-ABCD')
-    expect(toastMock).toHaveBeenCalledWith('Recovery Key 已复制，请妥善保存', true)
+    expect(toastMock).toHaveBeenCalledWith('恢复密钥已复制，请妥善保存', true)
     w.unmount()
   })
 
@@ -372,7 +372,7 @@ describe('VaultSetupModal copyKey', () => {
     await gotoStep2(w)
     await w.vm.copyKey()
     await flush()
-    expect(toastMock).toHaveBeenCalledWith('复制失败，请手动选中上方 Recovery Key 复制', false)
+    expect(toastMock).toHaveBeenCalledWith('复制失败，请手动选中上方恢复密钥复制', false)
     w.unmount()
   })
 })

@@ -15,21 +15,25 @@ import { isAiEnabled } from './aiEnabled.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { isPrivateUrl } from './urlGuard.js'
 import { buildCandidatePreferences, excludeOwnedSites, type CandidatePreferenceKey } from './habitProfile.js'
+import { buildProfileRules } from './aiProfile.js'
 import { useDataStore } from '../../stores/data.js'
 import type { Bookmark } from '../../types.js'
 
 /** 习惯上下文：从数据仓库取书签库推断偏好；无活跃 Pinia（纯函数调用 / 单测）时安全降级为空 */
-function habitContext(): { preferences: CandidatePreferenceKey[]; bookmarks: Bookmark[] | null } {
+function habitContext(): { preferences: CandidatePreferenceKey[]; bookmarks: Bookmark[] | null; userRules: string[] } {
+  // 「你告诉 AI 的」不依赖数据仓库，也不受学习开关控制
+  const userRules = (() => { try { return buildProfileRules() } catch { return [] } })()
   try {
     const ds = useDataStore()
     return {
+      userRules,
       preferences: buildCandidatePreferences({
         bookmarks: ds.bookmarks, groups: ds.siblingGroups, categories: ds.categories, customAttributes: ds.customAttributes,
       }),
       bookmarks: ds.bookmarks,
     }
   } catch {
-    return { preferences: [], bookmarks: null }
+    return { preferences: [], bookmarks: null, userRules }
   }
 }
 
@@ -53,7 +57,12 @@ async function fetchDynamicCandidates(params: {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: await buildCfHeaders(),
-      body: JSON.stringify({ ...params, signal: undefined, ...(habit.preferences.length ? { preferences: habit.preferences } : {}) }),
+      body: JSON.stringify({
+        ...params,
+        signal: undefined,
+        ...(habit.preferences.length ? { preferences: habit.preferences } : {}),
+        ...(habit.userRules.length ? { userRules: habit.userRules } : {}),
+      }),
       signal: params.signal || AbortSignal.timeout(16000),
     })
     if (res.ok) {

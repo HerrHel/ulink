@@ -110,7 +110,7 @@ describe('generateRecoveryKeyPDF（D1-10 护栏）', () => {
   it('结构不变：HTML 含 <title>、key-box、warning 必要块', () => {
     generateRecoveryKeyPDF('STRUCT-CHECK')
     const html = downloadFileMock.mock.calls[0][1] as string
-    expect(html).toContain('<title>与链 Recovery Key</title>')
+    expect(html).toContain('<title>与链恢复密钥</title>')
     expect(html).toContain('class="key-box"')
     expect(html).toContain('class="key-value"')
     expect(html).toContain('class="warning"')
@@ -122,7 +122,7 @@ describe('generateRecoveryKeyPDF（D1-10 护栏）', () => {
     const html = downloadFileMock.mock.calls[0][1] as string
     expect(html).toContain('@media print')
     // footer 区有生成时间：非空且含中横线时间分隔
-    expect(html).toMatch(/生成时间：[^<]+与链 E2E Recovery Key/)
+    expect(html).toMatch(/生成时间：[^<]+与链 端到端加密恢复密钥/)
   })
 
   it('空 key 边界：不抛，key-value 区为空串（向后兼容，不强行拒空）', () => {

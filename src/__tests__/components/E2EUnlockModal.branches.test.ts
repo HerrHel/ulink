@@ -178,11 +178,11 @@ describe('E2EUnlockModal 动态「还需 N 位」提示与 error 互斥', () => 
     const w = mountComp('reset', true)
     await flush()
     w.vm.newPw = '123'
-    w.vm.error = 'Recovery Key 错误或重置失败'
+    w.vm.error = '恢复密钥错误或重置失败'
     await nextTick()
     // error 块渲染（带 error 内容）
     const errs = w.findAll('.e2e-error')
-    const hasErr = errs.some((e) => /Recovery Key 错误/.test(e.text()))
+    const hasErr = errs.some((e) => /恢复密钥错误/.test(e.text()))
     expect(hasErr).toBe(true)
     // error 与「还需 N 位」互斥：不应同时有「还需 5 位」
     const hasHint = errs.some((e) => /还需 5 位/.test(e.text()))
@@ -207,7 +207,7 @@ describe('E2EUnlockModal enterReset/enterUnlock mode 切换清 error', () => {
   it('enterUnlock 切 unlock 模式并清空 error', async () => {
     const w = mountComp('reset', true)
     await flush()
-    w.vm.error = 'Recovery Key 错误或重置失败'
+    w.vm.error = '恢复密钥错误或重置失败'
     await nextTick()
     expect(w.vm.mode).toBe('reset')
     w.vm.enterUnlock()
@@ -240,7 +240,7 @@ describe('E2EUnlockModal onReset 成功/失败路径', () => {
     w.unmount()
   })
 
-  it('reset 失败 → 设 error「Recovery Key 错误或重置失败」+ 不 emit', async () => {
+  it('reset 失败 → 设 error「恢复密钥错误或重置失败」+ 不 emit', async () => {
     const w = mountComp('reset', true)
     await flush()
     w.vm.recoveryKey = 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX'
@@ -251,7 +251,7 @@ describe('E2EUnlockModal onReset 成功/失败路径', () => {
     const resetBtn = w.findAll('button').find((b) => /重置主密码/.test(b.text()))!
     await resetBtn.trigger('click')
     await flush()
-    expect(w.vm.error).toBe('Recovery Key 错误或重置失败')
+    expect(w.vm.error).toBe('恢复密钥错误或重置失败')
     expect(w.emitted('unlocked')).toBeFalsy()
     w.unmount()
   })

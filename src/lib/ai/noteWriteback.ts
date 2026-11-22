@@ -42,7 +42,7 @@ export function convertAiContentToNoteHtml(aiContent: string): string {
           const title = item.title || item.url || '参考网站'
           const url = item.url || '#'
           const notes = item.notes ? ` — ${item.notes}` : ''
-          return `- 🔗 **[${title}](${url})**${notes}`
+          return `- **[${title}](${url})**${notes}`
         })
         .filter(Boolean)
       return lines.length ? `\n${lines.join('\n')}\n` : ''

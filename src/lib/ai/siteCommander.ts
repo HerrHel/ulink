@@ -186,7 +186,7 @@ export async function dispatchSiteCommand(
         success: true,
         reply: lines.join('\n'),
         steps: [{ text: `甄选「${target}」同类与平替工具`, done: true }],
-        suggestedReplies: ['📥 全部一键加入收藏', '🇨🇳 只要国内免翻直连的', '💡 还有其他同类吗？'],
+        suggestedReplies: ['全部一键加入收藏', '🇨🇳 只要国内免翻直连的', '还有其他同类吗？'],
       }
     }
   }

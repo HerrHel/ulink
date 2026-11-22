@@ -196,7 +196,7 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     expect(proWrapper.find('.pur-title').text()).toBe('续费 与链 PRO')
     const yearlyBtn = proWrapper.find('[data-testid="plan-plus_yearly"] .pur-card-btn')
     expect(yearlyBtn.text()).toBe('续费')
-    expect(proWrapper.find('[data-testid="plan-plus_yearly"] .pur-features-heading').text()).toContain('尊享全部 PRO 特权')
+    expect(proWrapper.find('[data-testid="plan-plus_yearly"] .pur-features-heading').text()).toContain('以及全部 PRO 功能')
 
     const tabs = proWrapper.findAll('.pur-cycle-tab')
     await tabs[0].trigger('click')

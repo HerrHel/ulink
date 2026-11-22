@@ -173,7 +173,7 @@ composables 按职责分三组：
   - 视频/媒体/网页：unifiedMedia（媒体统一分流：图片多模态直传、视频抽帧秒级对齐、音频 16kHz 客户端压缩物化直传）、videoExtract、videoHarvest、deepVideoExtract、videoPlatforms、jinaReader、deepLinkExtract、universalUrlInference
   - 安全：secretFilter、urlGuard、aiProfile
 - 云端：`cloudbase/functions/mimo-chat/`（按 uid 限流 + 额度；线上 `BILLING_MODE=enforce`）；`ai-api`（AI 候选与元数据提取）；模型密钥只在云函数环境变量，**绝不进前端**
-- 额度口径见 `docs/PRICING.md` 与 `docs/QUOTA_ENFORCEMENT.md`；改额度先改 `plans.features`，再同步文档。**AI 为 PRO 专属**（2026-11-21）：免费档为终身试用 `ai.trial.total`=30，`mimo-chat` 与 `ai-api` 统一经 `consume_ai_access` 判定（`ai-api` 的判定逻辑在 `cloudbase/functions/ai-api/ai-access.js`），预填提示词与风格样本见 `functions/api/extract-metadata.ts` 的 `buildIntakePrompt` 与 `src/lib/ai/styleSamples.ts`。「AI 学习我的习惯」见 `src/lib/ai/habitProfile.ts`：书签弹窗保存时用 `bmForm._aiOrigin`（只记服务端 `ai=used` 且实际填入的字段）对比最终值，记录标题 / 备注 / 分类修正；切片 `buildIntakeHabits`（→ extract-metadata `habits`，服务端 `sanitizeIntakeHabits`）、`buildCandidatePreferences`（→ ai-candidates 白名单键，已收藏站点本地 `excludeOwnedSites`）、`buildChatHabitPrompt`（→ `contextSlice.habitPrompt`，发送摘要 `hasHabits` 单列）；设置「AI 学到了什么」可删可清空。已服务端强制：`ai.tokens.monthly`、`ai.requests.daily`（2026-10-31 补，free 20/PRO 100）、`video.extract.daily`、`video.deep.daily`、`linkcheck.daily`、`linkcheck.auto(.max)`、`history.days`（2026-11-21 起 free 7 天 / PRO 365 天，仅云端 `data_history`）；`storage.bytes`（2026-11-21）与 `sync.devices` 已撤下
+- 额度口径见 `docs/PRICING.md` 与 `docs/QUOTA_ENFORCEMENT.md`；改额度先改 `plans.features`，再同步文档。**AI 为 PRO 专属**（2026-11-21）：免费档为终身试用 `ai.trial.total`=30，`mimo-chat` 与 `ai-api` 统一经 `consume_ai_access` 判定（`ai-api` 的判定逻辑在 `cloudbase/functions/ai-api/ai-access.js`），预填提示词与风格样本见 `functions/api/extract-metadata.ts` 的 `buildIntakePrompt` 与 `src/lib/ai/styleSamples.ts`。「个性化」（原「AI 学习我的习惯」）见 `src/lib/ai/habitProfile.ts`：书签弹窗保存时用 `bmForm._aiOrigin`（只记服务端 `ai=used` 且实际填入的字段）对比最终值，记录标题 / 备注 / 分类修正；切片 `buildIntakeHabits`（→ extract-metadata `habits`，服务端 `sanitizeIntakeHabits`）、`buildCandidatePreferences`（→ ai-candidates 白名单键，已收藏站点本地 `excludeOwnedSites`）、`buildChatHabitPrompt`（→ `contextSlice.habitPrompt`，发送摘要 `hasHabits` 单列）；设置「偏好设置」分三段：「自定义偏好」＝个人记忆 `aiProfile.ts`（手动 `addManualEntry` / 编辑 / 删除，对话「记住…」同源；`buildProfileRules` 作为 `userRules` 随预填、补齐、发现好站发送，不受学习开关控制，服务端消毒限量 10×60 字）+「自动学习」修正（可删）与归纳（只读）。已服务端强制：`ai.tokens.monthly`、`ai.requests.daily`（2026-10-31 补，free 20/PRO 100）、`video.extract.daily`、`video.deep.daily`、`linkcheck.daily`、`linkcheck.auto(.max)`、`history.days`（2026-11-21 起 free 7 天 / PRO 365 天，仅云端 `data_history`）；`storage.bytes`（2026-11-21）与 `sync.devices` 已撤下
 
 ### 计费与会员（2026-10 上线）
 
@@ -186,6 +186,7 @@ composables 按职责分三组：
 ### 国际化（i18n）
 
 - `src/i18n/index.ts`：`t(key, params)` / `tN(key, n)`（复数）、`detect()`（localStorage `lv_locale` → 浏览器语言 → 中国时区 → 英文）、`setLocale`；缺 key 运行时回落中文
+- **界面术语表（2026-11-22 统一）**：私密空间 / 私密空间密码（不再叫「保险柜」）、主密码（仅指端到端加密）、恢复密钥（首次出现括注 Recovery Key）、标签（不再叫「属性」）、笔记（不再叫「笔记组 / 组 / Group」）、主题笔记（不再叫「主题工作台」）、AI 助手（不再叫「AI 工作台 / 管家 / Agent」）、书签库（英文 Library，不再用 Vault 指代书签库）。文案规范：界面统一用「你」（法律文本保留「您」）；AI 标签页内的条目名不重复「AI」；名称用名词短语；不用营销腔（尊享 / 畅享 / 专属特权 / 极致 / 极客 等）、感叹号与 Emoji；功能宣传必须与 `plans.features` 实际执行一致。
 - 语言包：`src/locales/zh.ts`（键全集基准）/ `en.ts`，按域拆到 `src/locales/parts/`（aiCommander、aiPro、purchase、shareApp、modals、e2eVault、editorOverlay、programmatic）；`src/__tests__/i18n.test.ts` 保障键对齐
 - 落地页是独立静态脚本 `public/landing.js`，自带词典、**不引用 src**；改落地页双语文案要两边同步
 - 规则：新增 UI 文案必须 zh/en 同时加 key，禁止在模板里硬编码中文

@@ -130,11 +130,11 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     const res1 = await dispatchSiteCommand('/help', { ds: mockDs, ui: mockUi, app: mockApp })
     expect(res1.handled).toBe(true)
     expect(res1.action).toBe('help')
-    expect(res1.reply).toContain('站内操控指令')
+    expect(res1.reply).toContain('与链站内指令')
 
     const res2 = await dispatchSiteCommand('帮助', { ds: mockDs, ui: mockUi, app: mockApp })
     expect(res2.handled).toBe(true)
-    expect(res2.reply).toContain('站内操控指令')
+    expect(res2.reply).toContain('与链站内指令')
   })
 
   // ── 2. 主题 ──
@@ -541,7 +541,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
     expect(res.handled).toBe(true)
     expect(res.action).toBe('pack_workspace')
-    expect(res.reply).toContain('主题工作台一键生成器')
+    expect(res.reply).toContain('生成主题笔记')
     expect(res.reply).toContain('/pack <主题名称>')
   })
 
@@ -554,10 +554,10 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
     expect(resSlash.handled).toBe(true)
     expect(resSlash.action).toBe('pack_workspace')
-    expect(resSlash.reply).toContain('已为您规划「前端开发」主题工作台')
+    expect(resSlash.reply).toContain('已为你规划「前端开发」主题笔记')
     expect(resSlash.actionCard).toBeDefined()
     expect(resSlash.actionCard?.actionName).toBe('create_topic_workspace')
-    expect(resSlash.actionCard?.payload?.topic).toBe('前端开发 工作台')
+    expect(resSlash.actionCard?.payload?.topic).toBe('前端开发笔记')
 
     // 自然语言的「帮我搭建 XX 工作台」已交大模型；同等能力经显式指令仍可用
     const resNl = await dispatchSiteCommand('帮我搭建一套独立开发者工具箱', {
@@ -606,7 +606,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
         ui: mockUi,
         app: mockApp,
       })
-      expect(resEn.actionCard?.payload?.topic).toBe('frontend Workspace')
+      expect(resEn.actionCard?.payload?.topic).toBe('frontend Note')
 
       // 已带后缀则原样返回，不得追加第二段后缀
       const resDup = await dispatchSiteCommand('/pack frontend Workspace', {
@@ -650,7 +650,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
       app: mockApp,
     })
     expect(resUndo.handled).toBe(true)
-    expect(resUndo.reply).toContain('已撤销创建主题工作台')
+    expect(resUndo.reply).toContain('已撤销创建主题笔记')
     expect(mockDs.deleteGroup).toHaveBeenCalledWith(res.group!.id)
     expect(mockUi.focusedGroupId).toBeNull()
   })
@@ -849,7 +849,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(res.handled).toBe(true)
     expect(res.action).toBe('find_similar')
     expect(res.reply).toContain('类似「Excalidraw」的平替与精选同类工具')
-    expect(res.suggestedReplies).toContain('📥 全部一键加入收藏')
+    expect(res.suggestedReplies).toContain('全部一键加入收藏')
     expect(res.suggestedReplies).toContain('🇨🇳 只要国内免翻直连的')
   })
 
@@ -946,5 +946,27 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
     expect(res.handled).toBe(false)
     expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+  })
+})
+
+describe('normalizeWorkspaceTopic — 主题笔记名称后缀', () => {
+  it('中文主题追加「笔记」且不加空格；已以「笔记 / 工作台」结尾时不重复追加', async () => {
+    const { normalizeWorkspaceTopic } = await import('../lib/ai/siteActions.js')
+    setLocale('zh-CN')
+    expect(normalizeWorkspaceTopic('前端开发')).toBe('前端开发笔记')
+    expect(normalizeWorkspaceTopic('前端笔记')).toBe('前端笔记')
+    expect(normalizeWorkspaceTopic('旧的前端工作台')).toBe('旧的前端工作台')
+  })
+
+  it('英文主题保留空格；已以 Note / Workspace 结尾时不重复追加', async () => {
+    const { normalizeWorkspaceTopic } = await import('../lib/ai/siteActions.js')
+    setLocale('en-US')
+    try {
+      expect(normalizeWorkspaceTopic('frontend')).toBe('frontend Note')
+      expect(normalizeWorkspaceTopic('frontend note')).toBe('frontend note')
+      expect(normalizeWorkspaceTopic('frontend Workspace')).toBe('frontend Workspace')
+    } finally {
+      setLocale('zh-CN')
+    }
   })
 })

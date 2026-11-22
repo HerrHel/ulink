@@ -39,7 +39,7 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
   <p class="subtitle">${esc(t('recoveryKey.subtitle'))}</p>
 
   <div class="key-box">
-    <div class="key-label">Recovery Key</div>
+    <div class="key-label">${esc(t('e2e.recoveryKeyLabel'))}</div>
     <div class="key-value">${safeKey}</div>
   </div>
 

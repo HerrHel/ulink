@@ -14,7 +14,7 @@ export const editorOverlayZh = {
     groupList: '列表模式（桌面）',
     macTip: 'Mac 用户将 Ctrl 替换为 ⌘ Cmd',
     cmdPanel: '命令面板 / 全局搜索书签与笔记',
-    aiSidebar: '打开 / 关闭 AI 工作台',
+    aiSidebar: '打开 / 关闭 AI 助手',
     panelShortcut: '快捷键速查（本面板）',
     esc: '关闭弹窗 / 退出聚焦 / 退出批量模式',
     cycleFocus: '弹窗内字段间循环切换焦点',

@@ -90,7 +90,7 @@ describe('VaultSetupModal onComplete setup 路径跨取消 await 窗口竞态（
     expect(w.vm.step).toBe(2)
     expect(generateRecoveryKeyMock).toHaveBeenCalled()
 
-    // 3. 勾选「我已保存 Recovery Key」→ 确认按钮可点
+    // 3. 勾选「我已保存恢复密钥」→ 确认按钮可点
     w.vm.saved = true
     await nextTick()
 

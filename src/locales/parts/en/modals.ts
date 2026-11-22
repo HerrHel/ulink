@@ -28,7 +28,7 @@ export const modalsEn = {
       currentDarkIcon: 'Current dark mode icon',
       category: 'Category',
       parent: 'Parent (sub-site)',
-      attributes: 'Attributes',
+      attributes: 'Tags',
       childCount: 'Sub-bookmarks ({n})',
       applyAi: 'Apply',
       dismissAi: 'Dismiss',
@@ -52,7 +52,7 @@ export const modalsEn = {
     childBm: {
       needUrl: 'Please enter a URL',
       encryptFail: 'Password encryption failed — output format invalid, save cancelled',
-      encryptFailHint: 'Password encryption failed — try again or unlock E2E before saving',
+      encryptFailHint: 'Password encryption failed. Unlock end-to-end encryption first, then save',
       saveCancelled: 'Save cancelled',
       encryptedBlocked: 'This bookmark contains encrypted fields — unlock the master password before editing',
       updated: 'Sub-bookmark updated',
@@ -77,11 +77,11 @@ export const modalsEn = {
       orderUpdated: 'Category order updated',
     }, // CategoryModal
     attribute: {
-      ariaLabel: 'Manage attributes',
-      manage: 'Manage attributes',
-      name: 'Attribute name',
-      confirmDelete: 'Delete attribute "{name}"? Tagged bookmarks/notes will temporarily lose this tag; restoring the attribute from trash will restore the links.',
-      deleted: 'Attribute deleted',
+      ariaLabel: 'Manage tags',
+      manage: 'Manage tags',
+      name: 'Tag name',
+      confirmDelete: 'Delete tag "{name}"? Tagged bookmarks/notes will temporarily lose this tag; restoring the tag from trash will restore the links.',
+      deleted: 'Tag deleted',
     }, // AttributeModal
     auth: {
       ariaLabel: 'Sign in',
@@ -151,7 +151,7 @@ export const modalsEn = {
       bmCount: 'Bookmarks ({n})',
       groupCount: 'Notes ({n})',
       catCount: 'Categories ({n})',
-      attrCount: 'Attributes ({n})',
+      attrCount: 'Tags ({n})',
       selectItem: 'Select {name}',
       restore: 'Restore',
       batchRestore: 'Restore selected',

@@ -19,6 +19,7 @@ import { DEFAULTS } from '../../config/constants.js'
 import { registrableDomain } from '../registrableDomain.js'
 import { collectStyleSamples, isAiStyleAdaptEnabled, clearAiSuggestions, MAX_STYLE_SAMPLES } from './styleSamples.js'
 import { buildUserMentalModel } from './mentalModel.js'
+import { buildProfileRules } from './aiProfile.js'
 import type { Bookmark, Category, SiblingGroup, CustomAttribute } from '../../types.js'
 
 export const K_AI_HABITS = 'lv_ai_habits'
@@ -166,6 +167,8 @@ export function deriveNoteStyle(groups: SiblingGroup[]): { avgLen: number; prefe
 // ── 切片：各入口按需取用 ─────────────────────────────────────
 
 export interface IntakeHabits {
+  /** 「你告诉 AI 的」：用户亲自写下 / 在对话里要求记住的要求（不受学习开关控制，优先级最高） */
+  userRules: string[]
   styleSamples: string[]
   titleExamples: Array<{ ai: string; user: string }>
   categoryHints: Array<{ site: string; category: string }>
@@ -177,7 +180,8 @@ export interface IntakeHabits {
  * 开关关闭时全部为空。
  */
 export function buildIntakeHabits(bookmarks: Bookmark[], categories: Category[]): IntakeHabits {
-  const empty: IntakeHabits = { styleSamples: [], titleExamples: [], categoryHints: [] }
+  const userRules = buildProfileRules()
+  const empty: IntakeHabits = { userRules, styleSamples: [], titleExamples: [], categoryHints: [] }
   if (!isAiStyleAdaptEnabled()) return empty
   const corrections = listCorrections()
   const corrected = corrections.filter((c) => c.kind === 'notes').map((c) => c.user)
@@ -189,7 +193,7 @@ export function buildIntakeHabits(bookmarks: Bookmark[], categories: Category[])
     .slice(0, 8)
     .map((c) => ({ site: c.site, category: norm(catName.get(c.user)).slice(0, 20) }))
   const titleRule = deriveTitleRule(corrections) ?? undefined
-  return { styleSamples, titleExamples, categoryHints, ...(titleRule ? { titleRule } : {}) }
+  return { userRules, styleSamples, titleExamples, categoryHints, ...(titleRule ? { titleRule } : {}) }
 }
 
 /** 分类纠正的本地直用：某站点用户上次改到的分类（现存才返回），预填时可直接采用，不必问 AI */

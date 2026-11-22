@@ -6,7 +6,7 @@ export const shareAppEn = {
   shareView: {
     defaultGroupName: 'Untitled',
     forking: 'Copying…',
-    forkToMyLibrary: 'Copy to my library',
+    forkToMyLibrary: 'Copy to library',
     loginThenCopy: 'Sign in to copy',
     loginRequiredToast: 'Please sign in first to copy',
     copyFailed: 'Copy failed: {msg}',
@@ -40,11 +40,11 @@ export const shareAppEn = {
     readonly: 'Read-only',
     readonlyTitle: 'Read-only content shared by someone else',
     denied: 'This is shared read-only content and cannot be modified',
-    saveToLibrary: 'Save to my library',
+    saveToLibrary: 'Save to library',
     saving: 'Saving…',
     loginThenSave: 'Sign in to save',
     loading: 'Loading shared content…',
-    backToMine: 'Back to my library',
+    backToMine: 'Back to library',
     bookmarksInGroup: 'Bookmarks in this note',
   },
   appShell: {

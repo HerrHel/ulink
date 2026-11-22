@@ -19,7 +19,7 @@ export const programmaticZh = {
     importedBookmarks: '{n} 个书签',
     importedCategories: '{n} 个分类',
     importedGroups: '{n} 个笔记',
-    importedAttributes: '{n} 个属性',
+    importedAttributes: '{n} 个标签',
     importSummary: '从 {source} 导入：{list}',
     listSeparator: '、',
     dataResetToDefault: '数据已重置为默认',

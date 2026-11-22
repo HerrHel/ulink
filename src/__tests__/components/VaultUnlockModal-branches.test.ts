@@ -9,11 +9,11 @@
  * 锁定真实行为契约（非刷行数）：
  *  - enterReset：mode 'unlock'→'reset' + 清 error ｜ enterUnlock：反向
  *  - onCancel：emit('close')
- *  - onUnlock 成功 → emit('unlocked')+emit('close') ｜ 失败 → error='保险柜主密码错误'
+ *  - onUnlock 成功 → emit('unlocked')+emit('close') ｜ 失败 → error='私密空间密码错误'
  *  - onReset 三校验早退（recoveryKey 空 / newPw<8 / 不一致）+ 成功 emit('unlocked')+emit('close')
- *    + 失败 error='Recovery Key 错误或重置失败' + loading 守门重入
+ *    + 失败 error='恢复密钥错误或重置失败' + loading 守门重入
  *  - onBiometricUnlock pw=null 静默取消（不设 error + bioLoading 复位）｜ unlockVault true emit
- *    ｜ unlockVault false error='指纹解锁失败，请手动输入保险柜主密码'
+ *    ｜ unlockVault false error='指纹解锁失败，请手动输入私密空间密码'
  *  - canReset computed：rk 空 / newPw<8 / 不一致 三 false 分支 + 全满足 true
  *  - watch 正向：open 真设 bioAvailable = isBiometricAvailable()；enrolled+available 自动弹指纹
  *    ｜ 负向：reset 全 ref + 推进 _bioGen/_pwGen
@@ -140,11 +140,11 @@ describe('VaultUnlockModal mode 切换 + onCancel', () => {
     w.unmount()
   })
 
-  it('模板：unlock 模式渲染「忘记保险柜主密码」链接 点击 enterReset', async () => {
+  it('模板：unlock 模式渲染「忘记私密空间密码」链接 点击 enterReset', async () => {
     const w = mountComp(true)
     await nextTick()
-    expect(w.html()).toContain('忘记保险柜主密码')
-    const link = w.findAll('.e2e-link').find((el) => /忘记保险柜主密码/.test(el.text()))
+    expect(w.html()).toContain('忘记私密空间密码')
+    const link = w.findAll('.e2e-link').find((el) => /忘记私密空间密码/.test(el.text()))
     expect(link).toBeTruthy()
     await link!.trigger('click')
     await nextTick()
@@ -189,14 +189,14 @@ describe('VaultUnlockModal onUnlock 成功/失败两端', () => {
     w.unmount()
   })
 
-  it('unlockVault 失败 → error="保险柜主密码错误" + 不 emit unlocked', async () => {
+  it('unlockVault 失败 → error="私密空间密码错误" + 不 emit unlocked', async () => {
     unlockVaultMock.mockResolvedValue(false)
     const w = mountComp(true)
     w.vm.masterPw = 'vault-master-pw-123'
     await nextTick()
     await w.vm.onUnlock()
     await flush()
-    expect(w.vm.error).toBe('保险柜主密码错误')
+    expect(w.vm.error).toBe('私密空间密码错误')
     expect(w.emitted('unlocked')).toBeFalsy()
     w.unmount()
   })
@@ -268,7 +268,7 @@ describe('VaultUnlockModal onReset 三校验早退 + 成功/失败两端', () =>
     w.unmount()
   })
 
-  it('resetVaultWithRecoveryKey 失败 → error="Recovery Key 错误或重置失败" + 不 emit unlocked', async () => {
+  it('resetVaultWithRecoveryKey 失败 → error="恢复密钥错误或重置失败" + 不 emit unlocked', async () => {
     resetVaultWithRecoveryKeyMock.mockResolvedValue(false)
     const w = mountComp(true)
     w.vm.recoveryKey = 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX'
@@ -278,7 +278,7 @@ describe('VaultUnlockModal onReset 三校验早退 + 成功/失败两端', () =>
     await nextTick()
     await w.vm.onReset()
     await flush()
-    expect(w.vm.error).toBe('Recovery Key 错误或重置失败')
+    expect(w.vm.error).toBe('恢复密钥错误或重置失败')
     expect(w.emitted('unlocked')).toBeFalsy()
     w.unmount()
   })
@@ -371,14 +371,14 @@ describe('VaultUnlockModal onBiometricUnlock 底层 pw/unlock 分支', () => {
     w.unmount()
   })
 
-  it('pwGot + unlockVault 失败 → error="指纹解锁失败，请手动输入保险柜主密码"', async () => {
+  it('pwGot + unlockVault 失败 → error="指纹解锁失败，请手动输入私密空间密码"', async () => {
     unlockWithBiometricMock.mockResolvedValue('bio-derived-pw')
     unlockVaultMock.mockResolvedValue(false)
     const w = mountComp(true)
     await w.vm.onBiometricUnlock()
     await flush()
     expect(unlockVaultMock).toHaveBeenCalledWith('bio-derived-pw')
-    expect(w.vm.error).toBe('指纹解锁失败，请手动输入保险柜主密码')
+    expect(w.vm.error).toBe('指纹解锁失败，请手动输入私密空间密码')
     expect(w.emitted('unlocked')).toBeFalsy()
     w.unmount()
   })

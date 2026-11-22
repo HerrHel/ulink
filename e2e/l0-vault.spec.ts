@@ -56,7 +56,7 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
   expect(state0?.isVaultEnabled).toBe(false)
   expect(state0?.isVaultUnlocked).toBe(false)
 
-  // ── Step 2：设置保险柜主密码 ──
+  // ── Step 2：设置私密空间密码 ──
   // btnVaultEntry 已移至管理分类弹窗内，需先打开弹窗
   await page.locator('#btnManageCats').click()
   await page.getByTestId('btnVaultEntry').click()
@@ -73,7 +73,7 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
 
   // Step 2b：勾选"已保存 Recovery Key" → 确认开启（触发 PBKDF2 600K）
   // checkbox input 被 CSS 隐藏（appearance:none;width:0），点击 label 容器触发
-  await page.locator('.check-chip').filter({ hasText: '我已保存 Recovery Key' }).click()
+  await page.locator('.check-chip').filter({ hasText: '我已保存恢复密钥' }).click()
   await page.getByTestId('lv-vault-setup-confirm').click()
 
   // Step 2c：完成页可见
@@ -116,7 +116,7 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
   await page.getByTestId('lv-vault-unlock-submit').click()
 
   // 错误提示可见（PBKDF2 验证后返回 false）
-  await expect(page.locator('.e2e-error').filter({ hasText: /主密码错误/ })).toBeVisible({ timeout: 10000 })
+  await expect(page.locator('.e2e-error').filter({ hasText: /私密空间密码错误/ })).toBeVisible({ timeout: 10000 })
 
   const state2 = await getStoreState(page)
   expect(state2?.isVaultUnlocked).toBe(false)

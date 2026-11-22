@@ -17,7 +17,7 @@ export const editorOverlayEn = {
     groupList: 'List mode (desktop)',
     macTip: 'On Mac, replace Ctrl with ⌘ Cmd',
     cmdPanel: 'Command palette / search bookmarks and notes',
-    aiSidebar: 'Toggle AI Workspace',
+    aiSidebar: 'Toggle AI Assistant',
     panelShortcut: 'Keyboard shortcuts (this panel)',
     esc: 'Close dialog / exit focus / exit batch mode',
     cycleFocus: 'Cycle focus between fields in a dialog',

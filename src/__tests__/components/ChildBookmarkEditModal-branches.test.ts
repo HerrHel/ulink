@@ -356,7 +356,7 @@ describe('ChildBookmarkEditModal 正文分支契约', () => {
       w.vm.$.setupState.form.url = 'https://x.example.com'
       w.vm.$.setupState.form.password = '明文'
       await w.vm.$.setupState.onSave()
-      expect(toastMock).toHaveBeenCalledWith('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+      expect(toastMock).toHaveBeenCalledWith('密码加密失败，请先解锁端到端加密后再保存', false)
       expect(updateSpy).not.toHaveBeenCalled()
       updateSpy.mockRestore()
       w.unmount()

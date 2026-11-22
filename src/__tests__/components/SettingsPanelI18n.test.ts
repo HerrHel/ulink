@@ -50,7 +50,7 @@ describe('SettingsPanel.vue — 英文模式下设置界面国际化', () => {
     expect(tabLabels).toHaveLength(5)
     expect(tabLabels).toContain('Account & Membership')
     expect(tabLabels).toContain('Appearance')
-    expect(tabLabels).toContain('AI & Smart')
+    expect(tabLabels).toContain('AI')
     expect(tabLabels).toContain('Data & Maintenance')
     expect(tabLabels).toContain('About & Help')
 

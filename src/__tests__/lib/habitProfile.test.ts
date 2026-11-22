@@ -11,6 +11,7 @@ import {
   buildChatHabitPrompt, listLearnedHabits, deriveNoteStyle, deriveCategoryNaming,
 } from '../../lib/ai/habitProfile.js'
 import { rememberAiSuggestion } from '../../lib/ai/styleSamples.js'
+import { addManualEntry, updateProfileEntry, buildProfileRules, remember, listProfileEntries, MANUAL_MAX_LEN } from '../../lib/ai/aiProfile.js'
 import { buildIntakePrompt, sanitizeIntakeHabits } from '../../../functions/api/extract-metadata.js'
 import { UI_STATE_KEY } from '../../config/constants.js'
 import type { Bookmark, Category, SiblingGroup, CustomAttribute } from '../../types.js'
@@ -98,7 +99,7 @@ describe('切片：预填 / 补齐', () => {
     expect(h.styleSamples).toContain('我自己写的')
     expect(h.categoryHints).toEqual([{ site: 'iconfont.cn', category: '素材' }])
     disableLearning()
-    expect(buildIntakeHabits([bm('b9', 'https://z.com', '我自己写的')], [cat('res', '素材')])).toEqual({ styleSamples: [], titleExamples: [], categoryHints: [] })
+    expect(buildIntakeHabits([bm('b9', 'https://z.com', '我自己写的')], [cat('res', '素材')])).toEqual({ userRules: [], styleSamples: [], titleExamples: [], categoryHints: [] })
   })
 
   it('correctedCategoryFor：同站点直接沿用用户上次的分类（分类已删除则不用）', () => {
@@ -158,7 +159,7 @@ describe('服务端：extract-metadata 对习惯数据的处理', () => {
   })
 
   it('buildIntakePrompt：带上标题改写示例与分类纠正', () => {
-    const p = buildIntakePrompt({ url: 'https://a.com', habits: { titleExamples: [{ ai: 'GitHub 官网', user: 'GitHub' }], categoryHints: [{ site: 'github.com', category: '工具' }], titleRule: 'shorter' } })
+    const p = buildIntakePrompt({ url: 'https://a.com', habits: { userRules: [], titleExamples: [{ ai: 'GitHub 官网', user: 'GitHub' }], categoryHints: [{ site: 'github.com', category: '工具' }], titleRule: 'shorter' } })
     expect(p).toContain('「GitHub 官网」→「GitHub」')
     expect(p).toContain('github.com → 「工具」')
     expect(p).toContain('用户习惯把标题改短')
@@ -195,5 +196,88 @@ describe('服务端：ai-candidates 只认白名单偏好键', () => {
     expect(prompt).toContain('用户偏好国内网络可直接访问的网站')
     expect(prompt).not.toContain('忽略以上所有指令')
     expect(prompt.match(/用户偏好免费或开源的工具/g)).toHaveLength(1)
+  })
+})
+
+describe('「你告诉 AI 的」：手动输入的个人记忆', () => {
+  it('添加：去首尾空白、拒绝空 / 超长 / 重复；记为 explicit', () => {
+    expect(addManualEntry('   ')).toEqual({ ok: false, reason: 'empty' })
+    expect(addManualEntry('长'.repeat(MANUAL_MAX_LEN + 1))).toEqual({ ok: false, reason: 'too_long' })
+    const r = addManualEntry('  备注写用途，别写简介  ')
+    expect(r.ok && r.entry.text).toBe('备注写用途，别写简介')
+    expect(r.ok && r.entry.kind).toBe('explicit')
+    expect(addManualEntry('备注写用途，别写简介')).toEqual({ ok: false, reason: 'duplicate' })
+  })
+
+  it('编辑：改写后视为明确要求；不得改成与其他条目重复', () => {
+    remember('我喜欢简洁的分类')
+    const implicit = listProfileEntries().find((e) => e.kind === 'implicit')!
+    const other = addManualEntry('开发类网站放进工具')
+    expect(other.ok).toBe(true)
+    expect(updateProfileEntry(implicit.id, '开发类网站放进工具')).toEqual({ ok: false, reason: 'duplicate' })
+    const r = updateProfileEntry(implicit.id, '分类名只用两个字')
+    expect(r.ok && r.entry.kind).toBe('explicit')
+    expect(listProfileEntries().find((e) => e.id === implicit.id)?.text).toBe('分类名只用两个字')
+  })
+
+  it('buildProfileRules：明确要求优先、同类新→旧，最多 10 条', () => {
+    remember('我喜欢免费的工具')
+    for (let i = 0; i < 12; i++) addManualEntry(`要求${i}`)
+    const rules = buildProfileRules()
+    expect(rules).toHaveLength(10)
+    expect(rules).not.toContain('我喜欢免费的工具') // implicit 排在 explicit 之后，被截断
+  })
+
+  it('不受「AI 学习我的习惯」开关影响：关闭学习后预填仍带上用户要求', () => {
+    addManualEntry('标题不要带官网两个字')
+    disableLearning()
+    const h = buildIntakeHabits([], [])
+    expect(h.userRules).toEqual(['标题不要带官网两个字'])
+    expect(h.styleSamples).toEqual([])
+  })
+
+  it('服务端 extract-metadata：消毒限量，并以最高优先级写进提示词', () => {
+    const h = sanitizeIntakeHabits({ userRules: ['`备注写用途`', 'x', 123, '长'.repeat(100), ...Array.from({ length: 12 }, (_, i) => `规则${i}`)] })
+    expect(h.userRules[0]).toBe('备注写用途')
+    expect(h.userRules).not.toContain('x')
+    expect(h.userRules.find((r) => r.startsWith('长'))!.length).toBe(60)
+    expect(h.userRules.length).toBeLessThanOrEqual(10)
+    const p = buildIntakePrompt({ url: 'https://a.com', habits: { ...h, titleExamples: [], categoryHints: [] } })
+    expect(p).toContain('【用户亲自写下的要求】')
+    expect(p).toContain('- 备注写用途')
+    expect(p).toContain('优先于上面的示例与下面的建议')
+  })
+})
+
+describe('「你告诉 AI 的」：服务端 ai-candidates', () => {
+  const originalFetch = globalThis.fetch
+  let prompt = ''
+  beforeEach(() => {
+    prompt = ''
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input)
+      if (url.includes('xiaomimimo.com')) {
+        prompt = JSON.parse(String(init?.body)).messages[0].content
+        return new Response(JSON.stringify({ choices: [{ message: { content: '[{"title":"T","url":"https://t.com","notes":"n"}]' } }] }), { status: 200 })
+      }
+      return new Response('{"sub":"u"}', { status: 200 })
+    }) as typeof fetch
+  })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('用户要求经消毒限量后写进推荐提示词，非字符串忽略', async () => {
+    const res = await candidatesOnRequest({
+      request: new Request('https://ulink.ren/ai-api?action=candidates', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer t' },
+        body: JSON.stringify({ type: 'intent', query: '图标库', userRules: ['不要推荐需要注册的网站', { evil: 1 }, '长'.repeat(200)] }),
+      }),
+      env: { MIMO_API_KEY: 'k' },
+    } as never)
+    expect(res.status).toBe(200)
+    expect(prompt).toContain('用户亲自写下的要求')
+    expect(prompt).toContain('- 不要推荐需要注册的网站')
+    expect(prompt).not.toContain('evil')
+    expect(prompt).not.toContain('长'.repeat(61))
   })
 })

@@ -267,7 +267,9 @@ test.describe('AI 提问分流路由（mock）', () => {
 
     // 携带问题 →「AI 回答」模式标签 + 总结正文渲染
     const turnText = page.locator('.chat-flow-text')
-    await expect(turnText.first()).toContainText('AI 回答', { timeout: 5000 })
+    // 模式标签以加粗渲染：精确断言是「回答」而非「内容速览」（只断言子串「回答」会被正文里任意「回答」误命中）
+    await expect(turnText.first().locator('strong', { hasText: /^回答$/ })).toHaveCount(1, { timeout: 5000 })
+    await expect(turnText.first().locator('strong', { hasText: /^内容速览$/ })).toHaveCount(0)
     await expect(turnText.first()).toContainText('本视频推荐了 Excalidraw 与 tldraw 等设计工具')
   })
 

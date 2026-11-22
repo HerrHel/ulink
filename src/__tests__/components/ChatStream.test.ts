@@ -71,12 +71,12 @@ describe('ChatStream — 预判建议按钮与写回笔记图标', () => {
   it('预判按钮仅在最新且无后续用户回复的助手轮次渲染，用户输入后隐藏', () => {
     const turns: ChatTurn[] = [
       { id: 'u1', role: 'user', content: '第一问', timestamp: 1000 },
-      { id: 'a1', role: 'assistant', content: '第一答', suggestedReplies: ['✨ 好的，执行', '🔄 换个方案'], timestamp: 2000 },
+      { id: 'a1', role: 'assistant', content: '第一答', suggestedReplies: ['好的，执行', '换个方案'], timestamp: 2000 },
     ]
     const wrapper = mountStream(turns)
     const pillsBefore = wrapper.findAll('.suggested-reply-pill')
     expect(pillsBefore.length).toBe(2)
-    expect(pillsBefore[0].text()).toBe('✨ 好的，执行')
+    expect(pillsBefore[0].text()).toBe('好的，执行')
 
     // 随后用户输入并提交了新消息 u2
     turns.push({ id: 'u2', role: 'user', content: '第二问', timestamp: 3000 })

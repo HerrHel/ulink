@@ -39,7 +39,7 @@ test.describe('L0 E2E 真加密路径', () => {
 
     // step 2：Recovery Key + 确认已保存（原生 checkbox 可能被样式藏出视口，点文案 label）
     await expect(page.getByTestId('lv-e2e-setup-confirm')).toBeVisible({ timeout: 10000 })
-    await page.getByText('我已保存 Recovery Key').click()
+    await page.getByText('我已保存恢复密钥').click()
     await page.getByTestId('lv-e2e-setup-confirm').click()
 
     // step 3：完成

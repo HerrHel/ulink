@@ -26,13 +26,13 @@ export const aiCmdZh = {
     inboxNestDone: '已将 {n} 个同站子页归入其主页面下。',
     undoInboxNestRevert: '已撤销子页嵌套，{n} 个子页已退出其主页面。',
 
-    // ── 主题工作台（createTopicWorkspace）──
+    // ── 主题笔记（createTopicWorkspace）──
     wsNoCandidates:
-      '未能为「{name}」找到可用的候选工具，已取消创建工作台（不会创建占位空组）。请换个关键词重试，或先手动添加书签。',
+      '没有为「{name}」找到可用的工具，已取消创建主题笔记。请换个关键词重试，或先手动添加书签。',
     wsNotesIntro: '<strong>{name}</strong> 专属主题导航与精选工具：',
-    undoWsDesc: '创建主题工作台「{name}」',
-    undoWsRevert: '已撤销创建主题工作台「{name}」，新建笔记组与 {n} 个书签已清理。',
-    wsDone: '已为您成功装配「{name}」主题工作台（共收纳 {n} 个工具），并已切换至该工作台。可在下方随时撤销。',
+    undoWsDesc: '创建主题笔记「{name}」',
+    undoWsRevert: '已撤销创建主题笔记「{name}」，新建笔记与 {n} 个书签已清理。',
+    wsDone: '已创建主题笔记「{name}」（共 {n} 个工具），并已切换到该笔记。可在下方撤销。',
 
     // ── 死链平替自愈（healDeadlink）──
     healNotFound: '未找到指定失效书签或已被删除。',
@@ -45,13 +45,13 @@ export const aiCmdZh = {
 
     // ── 帮助说明 (/help) ──
     helpStep: '获取支持的站内指令集',
-    helpTitle: '与链 站内操控指令 (In-App Agent)',
+    helpTitle: '与链站内指令',
     helpHealth: '- 资产体检：',
     helpHealthUsage: '  /health 或“资产体检”',
     helpInbox: '- 收件箱清零：',
     helpInboxUsage: '  /inbox 或“智能归类”、“整理未分类”',
-    helpPack: '- 主题工作台：',
-    helpPackUsage: '  /pack <主题名> 或“帮我搭建一套 前端开发 工作台”',
+    helpPack: '- 主题笔记：',
+    helpPackUsage: '  /pack <主题名> 或“帮我整理一套前端开发工具”',
     helpTheme: '- 主题模式：',
     helpThemeUsage: '  /theme dark | light | auto',
     helpThemeHint: '  （亦可说：“切换深色模式”、“切浅色”）',
@@ -81,7 +81,7 @@ export const aiCmdZh = {
     helpCleanUsage: '  /clean 或“清理孤立数据”',
     helpSettings: '- 设置面板：',
     helpSettingsUsage: '  /settings 或“打开设置”',
-    helpTip: '提示：输入网址或自然语言需求时，将自动为您检索全网发现与平替。',
+    helpTip: '提示：输入网址或自然语言需求时，将自动为你检索全网发现与平替。',
 
     // ── 主题外观 ──
     stepToDark: '切换至深色模式',
@@ -121,19 +121,19 @@ export const aiCmdZh = {
     stepCheckTrash: '检查回收站状态',
     trashEmpty: '回收站当前为空，无需清理。',
     trashClearConfirm:
-      '危险操作确认：即将彻底清空回收站，永久删除 {total} 项数据（书签: {bm}，笔记组: {grp}，分类: {cat}）。\n此操作不可撤销，是否确认执行？',
+      '危险操作确认：即将彻底清空回收站，永久删除 {total} 项数据（书签: {bm}，笔记: {grp}，分类: {cat}）。\n此操作不可撤销，是否确认执行？',
     stepUserCancelTrash: '用户取消清空回收站',
     trashClearCancelled: '已取消清空回收站，所有数据均安全保留。',
     stepVerifyTrash: '核验待清理数据 ({n} 项)',
     stepHitlPassed: '通过人机安全确认',
     stepDoEmptyTrash: '彻底清空回收站',
-    trashCleared: '已彻底清空回收站，共永久清理 {total} 项数据（书签: {bm}，笔记组: {grp}，分类: {cat}）。',
+    trashCleared: '已彻底清空回收站，共永久清理 {total} 项数据（书签: {bm}，笔记: {grp}，分类: {cat}）。',
     stepOpenTrash: '打开回收站面板',
     trashCardTitle: '清空回收站',
-    trashCardDesc: '当前积压 {total} 项待清理数据（书签: {bm}，组: {grp}）',
+    trashCardDesc: '当前有 {total} 项待清理（书签 {bm}，笔记 {grp}）',
     trashCardButton: '彻底清空',
-    trashOpened: '已为您打开回收站面板（当前共有 {n} 项待清理）。',
-    trashOpenedEmpty: '已为您打开回收站面板（当前为空）。',
+    trashOpened: '已为你打开回收站面板（当前共有 {n} 项待清理）。',
+    trashOpenedEmpty: '已为你打开回收站面板（当前为空）。',
 
     // ── 查重巡检 ──
     stepScanUrls: '扫描书签库全部链接',
@@ -149,32 +149,32 @@ export const aiCmdZh = {
     dedupCardDesc: '检测到 {groups} 组重复链接，共 {count} 个多余副本',
     dedupCardButton: '一键合并重复项',
 
-    // ── 主题工作台生成 (/pack) ──
-    stepPackHint: '提示主题工作台指令用法',
-    packHelpTitle: '主题工作台一键生成器 (Topic Workspace Builder)',
+    // ── 主题笔记生成 (/pack) ──
+    stepPackHint: '提示主题笔记指令用法',
+    packHelpTitle: '生成主题笔记',
     packHelpUsage: '用法：/pack <主题名称>',
     packHelpExamplesLabel: '示例：',
     packHelpExample1: '- /pack 前端开发',
     packHelpExample2: '- /pack 设计灵感',
-    packHelpExample3: '- 亦可直接对我说：“帮我搭建一套独立开发工作台”',
-    packHelpDesc: 'AI 将为您甄选全套核心工具，并出具一键装配行动卡片，自动建组并写入内嵌卡片导航笔记。',
-    packPlan: '已为您规划「{topic}」主题工作台，甄选到以下 {n} 个核心工具：',
-    packPlanFromCat: '已为您规划「{topic}」主题工作台，从「{cat}」分类现有收藏中甄选到以下 {n} 个核心书签：',
-    packPlanFromVault: '已为您规划「{topic}」主题工作台，从知识库现有收藏中甄选到以下 {n} 个核心书签：',
+    packHelpExample3: '- 也可以直接说：“帮我整理一套独立开发工具”',
+    packHelpDesc: 'AI 会挑选该主题的常用工具，生成一张确认卡片；确认后存入书签并创建对应的主题笔记。',
+    packPlan: '已为你规划「{topic}」主题笔记，甄选到以下 {n} 个核心工具：',
+    packPlanFromCat: '已为你规划「{topic}」主题笔记，从「{cat}」分类现有收藏中甄选到以下 {n} 个核心书签：',
+    packPlanFromVault: '已为你规划「{topic}」主题笔记，从知识库现有收藏中甄选到以下 {n} 个核心书签：',
     packItem: '{i}. {title} — {desc}',
     packMore: '...其余 {n} 个已省略。',
-    packCta: '点击下方行动卡片批准执行，即可一键自动入库、创建笔记组并挂载内嵌卡片进入工作台（随时支持 /undo 撤销）。',
+    packCta: '点击下方卡片确认后，会存入书签并创建主题笔记（可用 /undo 撤销）。',
     stepPackSelect: '全网甄选「{topic}」核心工具 ({n} 个)',
-    stepPackSelectFromCat: '从「{cat}」分类甄选 {n} 个书签装配「{topic}」工作台',
-    stepPackSelectFromVault: '从知识库甄选 {n} 个书签装配「{topic}」工作台',
-    stepPackPlan: '生成主题工作台装配方案与交互卡片',
+    stepPackSelectFromCat: '从「{cat}」分类挑选 {n} 个书签生成「{topic}」主题笔记',
+    stepPackSelectFromVault: '从书签库挑选 {n} 个书签生成「{topic}」主题笔记',
+    stepPackPlan: '生成主题笔记装配方案与交互卡片',
     packCardTitle: '一键装配「{name}」',
-    packCardDesc: '包含 {n} 个精选工具，自动建组并生成导航笔记',
-    packCardButton: '一键装配工作台',
+    packCardDesc: '包含 {n} 个精选工具，确认后创建主题笔记',
+    packCardButton: '生成主题笔记',
 
     // ── 死链检测与自愈 ──
     stepScanDeadlinks: '扫描书签库失效链接',
-    deadNone: '当前暂未检测到确认失效的死链。已为您打开死链巡检面板，您可在此启动全面在线探测。',
+    deadNone: '当前暂未检测到确认失效的死链。已为你打开死链巡检面板，你可在此启动全面在线探测。',
     deadReport: '死链巡检报告：发现 {n} 个失效死链：',
     deadItem: '{i}. {title} ({url})',
     deadSnapshot: '   历史快照: [查看 Wayback Machine 镜像]({url})',
@@ -183,9 +183,9 @@ export const aiCmdZh = {
     deadAltRec: '- 推荐平替：{title} ({url})',
     deadAltHighlight: '- 亮点说明：{desc}',
     deadAltDefaultHighlight: '功能高度一致的现役平替',
-    deadCta: '点击下方行动卡片，即可一键将该死链无缝替换为现役平替（组与历史关联完整保留，随时支持 /undo 撤销）。',
+    deadCta: '点击下方卡片，用可用的替代网站替换这个失效链接（所属笔记与历史记录保留，可用 /undo 撤销）。',
     healCardTitle: '一键平替自愈：{from} -> {to}',
-    healCardDesc: '用现役平替「{alt}」一键替换失效链接，保留组与历史关联',
+    healCardDesc: '用「{alt}」替换失效链接，保留所属笔记与历史记录',
     healCardButton: '一键平替替换',
     stepDeadFound: '检测到 {n} 个失效书签',
     stepDeadSearchAlt: '为「{title}」检索现役平替',
@@ -202,7 +202,7 @@ export const aiCmdZh = {
     statsTitle: '与链 书签库运行状态报表：',
     statsTop: '- 活跃顶层书签：{n} 个',
     statsSub: '- 子书签（附属）：{n} 个',
-    statsGroups: '- 活跃笔记组：{n} 组',
+    statsGroups: '- 笔记：{n} 个',
     statsCats: '- 分类体系：{n} 个分类',
     statsUncat: '- 待整理未分类：{n} 个',
     statsTrash: '- 回收站待清理：{n} 项',
@@ -212,7 +212,7 @@ export const aiCmdZh = {
     stepStats: '统计全库活跃书签与分类体系',
 
     // ── 全库资产体检 (/health) ──
-    levelExcellent: '极佳（极客级整洁）',
+    levelExcellent: '优秀',
     levelGood: '良好（轻度待归拢）',
     levelFair: '中等（建议全面治理）',
     levelPoor: '较乱（亟待整理清零）',
@@ -231,11 +231,11 @@ export const aiCmdZh = {
     healthTagOk: '(良好)',
     healthTrash: '- 回收站暂存项：{n} 项 {hint}',
     healthTrashHint: '(建议清空)',
-    healthAdviceInbox: '管家建议：点击下方行动卡片，开启「收件箱清零」将未分类项一键归入对应分类。',
-    healthAdviceDedup: '管家建议：点击下方行动卡片，一键安全合并所有重复书签副本。',
-    healthPraise: '管家评价：书签资产处于极佳状态，无需额外整理！',
+    healthAdviceInbox: '建议：点击下方卡片，把未分类书签归入对应分类。',
+    healthAdviceDedup: '建议：点击下方卡片，合并重复的书签。',
+    healthPraise: '书签状态良好，暂无需要整理的内容。',
     healthInboxCardTitle: '一键智能归类 {n} 个未分类书签',
-    healthInboxCardDesc: '资产管家已基于历史偏好与特征分析出最佳归类方案',
+    healthInboxCardDesc: '已根据你的归类习惯生成建议方案',
     healthInboxCardButton: '智能归类',
     healthDedupCardTitle: '一键合并 {n} 个重复副本',
     healthDedupCardDesc: '安全移入回收站并保留最佳书签版本',
@@ -248,8 +248,8 @@ export const aiCmdZh = {
 
     // ── 收件箱清零与智能归拢 (/inbox) ──
     stepScanUncat: '扫描未分类书签',
-    inboxZeroDone: '太棒了！当前书签库已实现「收件箱清零（Inbox Zero）」，所有书签均已妥善归类。',
-    inboxPlanHeader: '智能归拢分析完成，已为您生成以下归类预案：',
+    inboxZeroDone: '所有书签都已归类，未分类为零。',
+    inboxPlanHeader: '智能归拢分析完成，已为你生成以下归类预案：',
     inboxPlanMore: ' 等 {n} 个',
     inboxPlanCount: ' ({n} 个)',
     inboxPlanLine: '- 归入「{cat}」：{titles}{more}',
@@ -271,7 +271,7 @@ export const aiCmdZh = {
     batchMoveDone: '已成功将选中的 {n} 个书签移入「{cat}」分类。',
 
     // ── 批量整理未分类 (/move uncategorized) ──
-    moveCatNotFound: '未找到分类「{name}」。您可以先输入「/cat {name}」创建该分类。',
+    moveCatNotFound: '未找到分类「{name}」。你可以先输入「/cat {name}」创建该分类。',
     moveNone: '当前没有待整理的未分类书签。',
     moveConfirm: '即将把 {n} 个未分类书签批量移动至「{cat}」分类，是否继续？',
     stepUserCancelMove: '用户取消批量归类',
@@ -295,14 +295,14 @@ export const aiCmdZh = {
     undoNone: '当前没有可撤销的站内操作。',
 
     // ── 孤儿与无效引用自检清理 (/clean) ──
-    stepAuditGroupRefs: '巡检笔记组引用关系',
+    stepAuditGroupRefs: '巡检笔记引用关系',
     stepFixOrphans: '修复孤立数据引用',
-    cleanFixed: '数据自检修复完成：修复了 {grp} 个笔记组无效引用，修正了 {par} 个孤立子书签父级关联。',
+    cleanFixed: '数据自检修复完成：修复了 {grp} 个笔记无效引用，修正了 {par} 个孤立子书签父级关联。',
     stepConsistencyOk: '数据一致性自检通过',
-    cleanOk: '数据自检完成：所有笔记组与书签关联完整无误，无需修复。',
+    cleanOk: '数据自检完成：所有笔记与书签关联完整无误，无需修复。',
 
     // ── 设置面板 ──
     stepOpenSettings: '打开系统设置面板',
-    settingsOpened: '已为您打开设置面板。',
+    settingsOpened: '已为你打开设置面板。',
   },
 } as const

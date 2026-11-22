@@ -241,7 +241,7 @@ describe('DataStore', () => {
       expect(store.customAttributes[0].name).toBe('New')
     })
 
-    it('deleteAttribute - 应该从所有书签中删除属性并软删除', () => {
+    it('deleteAttribute - 应该从所有书签中删除标签并软删除', () => {
       store.customAttributes = [{ id: 'attr1', name: 'Important', type: 'boolean' }]
       store.bookmarks = [
         { id: 'b1', attributes: { attr1: true } },

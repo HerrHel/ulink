@@ -284,18 +284,21 @@ export async function applyInboxZeroClustering(
   return { movedCount, nestedCount, message: parts.join(' ') }
 }
 
-/** 主题工作台名称后缀识别 token（含英文变体，仅用于避免重复追加，不作输出文案） */
-const WS_TOPIC_SUFFIX_TOKENS = ['工作台', '工具箱', 'Workspace', 'Toolbox']
+/** 主题笔记名称后缀识别 token（含旧称「工作台」与英文变体，仅用于避免重复追加，不作输出文案） */
+const WS_TOPIC_SUFFIX_TOKENS = ['笔记', '工作台', '工具箱', 'Note', 'Notes', 'Workspace', 'Toolbox']
 
 /**
- * 规范化主题工作台名称：已带「工作台/工具箱」等后缀（含英文变体）则原样返回，
- * 否则按当前语言追加本地化后缀（zh：「前端开发 工作台」/ en：「Frontend Workspace」）。
+ * 规范化主题笔记名称：已带「笔记 / 工作台 / 工具箱」等后缀（含英文变体）则原样返回，
+ * 否则按当前语言追加本地化后缀（zh 不加空格：「前端开发笔记」/ en：「Frontend Note」）。
  */
 export function normalizeWorkspaceTopic(topicName: string): string {
   const name = topicName || ''
   const lower = name.toLowerCase()
   const hasSuffix = WS_TOPIC_SUFFIX_TOKENS.some((s) => lower.endsWith(s.toLowerCase()))
-  return hasSuffix ? name : `${name} ${t('ai.wsTopicSuffix')}`
+  if (hasSuffix) return name
+  const suffix = t('ai.wsTopicSuffix')
+  // 中文与中文后缀之间不加空格；英文或中英混排保留空格
+  return /[\u4e00-\u9fff]$/.test(name) && /^[\u4e00-\u9fff]/.test(suffix) ? `${name}${suffix}` : `${name} ${suffix}`
 }
 
 export interface CreateTopicWorkspaceResult {

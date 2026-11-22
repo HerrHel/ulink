@@ -6,7 +6,7 @@
  * onUnlock/onReset 密码路径完全未触及（grep 确认 _bioGen 仅供 onBiometricUnlock 两个 await guard 读，
  * onUnlock/onReset 顶部仍只 `if (loading.value) return` bool 守门）。
  *
- * 触发链：用户进「私密空间入口」→ 输入保险柜主密码 → 点「解锁」→ onUnlock `await vault.unlockVault(pw)`
+ * 触发链：用户进「私密空间入口」→ 输入私密空间密码 → 点「解锁」→ onUnlock `await vault.unlockVault(pw)`
  *   （PBKDF2 600000 + GCM verifyCanary，移动端 ~200-400ms；onReset 经 resetVaultWithRecoveryKey 更长
  *   含 3×PBKDF2 + generateCanary + _saveCanaryData Supabase upsert，弱网秒数 awaiting 窗口）。
  *   此 await 期间用户点弹窗遮罩 @click.self="onCancel" → emit('close') → App.vue 置
@@ -170,7 +170,7 @@ describe('VaultUnlockModal onReset 重置路径跨取消 await 窗口 orphan emi
     await nextTick()
     expect(w.vm.mode).toBe('unlock')
 
-    // 用户切到 reset 模式（点「忘记保险柜主密码？使用 Recovery Key 重置」）
+    // 用户切到 reset 模式（点「忘记私密空间密码？使用 Recovery Key 重置」）
     await w.vm.enterReset()
     await nextTick()
     expect(w.vm.mode).toBe('reset')

@@ -224,7 +224,7 @@ export function searchSemanticBookmarks(
     if (titleScore >= 50) {
       gScore = Math.max(gScore, titleScore)
       gConcept = '组名高相关'
-      gReason = '笔记组标题吻合'
+      gReason = '笔记标题吻合'
     }
 
     if (gScore >= 40) {

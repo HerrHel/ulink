@@ -37,7 +37,7 @@
             <p style="margin-top:6px">{{ t('vaultModal.resetIntro2') }}</p>
           </div>
           <div class="form-group">
-            <label class="form-label">Recovery Key</label>
+            <label class="form-label">{{ t('e2e.recoveryKeyLabel') }}</label>
             <div class="pw-input-wrap">
               <input :type="showRk ? 'text' : 'password'" class="form-input" v-model="recoveryKey" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" @keydown.enter="onReset" autocomplete="off">
               <button class="pw-toggle" @click="showRk = !showRk" v-html="showRk ? I.eyeOff : I.eye"></button>

@@ -382,7 +382,7 @@ describe('UserPopover.vue', () => {
     const upgradeBtn = card?.querySelector('[data-testid="up-upgrade-btn"]') as HTMLButtonElement
     expect(upgradeBtn).not.toBeNull()
     expect(upgradeBtn.textContent).toContain('升级套餐')
-    expect(upgradeBtn.textContent).toContain('解锁 AI 额度与无限同步')
+    expect(upgradeBtn.textContent).toContain('解锁全部 AI 功能')
 
     // 点击升级项：关闭 popover 并打开 PurchaseModal
     await upgradeBtn.click()

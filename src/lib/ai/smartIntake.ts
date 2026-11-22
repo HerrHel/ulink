@@ -41,6 +41,8 @@ export interface FetchMetadataOptions {
   categoryHints?: Array<{ site: string; category: string }>
   /** 归纳出的标题规则 */
   titleRule?: 'shorter'
+  /** 「你告诉 AI 的」用户亲自写下的要求（优先级最高） */
+  userRules?: string[]
 }
 
 /**
@@ -166,8 +168,8 @@ export async function fetchUrlMetadataAsync(
         availableAttributes: activeAttrs.slice(0, MAX_ATTR_NAMES).map(a => ({ id: a.id, name: a.name })),
         availableCategories: activeCats.slice(0, MAX_CATEGORY_NAMES).map(c => ({ id: c.id, name: c.name })),
         ...(opts.styleSamples && opts.styleSamples.length > 0 ? { styleSamples: opts.styleSamples } : {}),
-        ...((opts.titleExamples?.length || opts.categoryHints?.length || opts.titleRule)
-          ? { habits: { titleExamples: opts.titleExamples ?? [], categoryHints: opts.categoryHints ?? [], titleRule: opts.titleRule } }
+        ...((opts.titleExamples?.length || opts.categoryHints?.length || opts.titleRule || opts.userRules?.length)
+          ? { habits: { titleExamples: opts.titleExamples ?? [], categoryHints: opts.categoryHints ?? [], titleRule: opts.titleRule, userRules: opts.userRules ?? [] } }
           : {}),
       }),
       signal: AbortSignal.timeout(18000),

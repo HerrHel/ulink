@@ -899,7 +899,7 @@ export async function executeManageWorkspaces(
 
   if (action === 'rename') {
     if (grp.name && isThreePartCipher(grp.name)) {
-      return { success: false, message: '工作台当前处于加密锁定状态，为防密文损坏，禁止重命名。' }
+      return { success: false, message: '该笔记处于加密锁定状态，解锁后才能重命名。' }
     }
     const nextName = (params.newName || '').trim()
     if (!nextName) return { success: false, message: '重命名失败：新工作台名称不能为空。' }
@@ -921,7 +921,7 @@ export async function executeManageWorkspaces(
 
   if (action === 'update_notes') {
     if (grp.notes && isThreePartCipher(grp.notes)) {
-      return { success: false, message: '工作台当前处于加密锁定状态，为防密文损坏，禁止覆盖笔记。' }
+      return { success: false, message: '该笔记处于加密锁定状态，解锁后才能修改内容。' }
     }
     const prevNotes = grp.notes
     const safeNotes = sanitizeHTML(params.notes || '')

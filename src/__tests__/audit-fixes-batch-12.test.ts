@@ -55,7 +55,7 @@ describe('Audit Fixes Batch 12', () => {
 
   // 2. smartIntake.ts
   describe('2. smartIntake.ts attribute filtering', () => {
-    it('suggestedAttrIds 过滤已软删除属性和 is-group', async () => {
+    it('suggestedAttrIds 过滤已软删除标签和 is-group', async () => {
       const attrs: CustomAttribute[] = [
         { id: 'attr-active', name: '工作', type: 'boolean' },
         { id: 'attr-del', name: '临时', type: 'boolean', deletedAt: Date.now() },
@@ -93,7 +93,7 @@ describe('Audit Fixes Batch 12', () => {
 
   // 4. candidateSave.ts
   describe('4. candidateSave candidateToBookmark protection', () => {
-    it('忽略 suggestedAttrIds 中的 is-group 与软删除属性', () => {
+    it('忽略 suggestedAttrIds 中的 is-group 与软删除标签', () => {
       const ds = useDataStore()
       ds.customAttributes = [
         { id: 'attr-valid', name: '有效', type: 'boolean' },

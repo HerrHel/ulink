@@ -126,6 +126,64 @@ export function remember(input: string): AiProfileEntry | null {
   return entry
 }
 
+/** 手动输入单条上限（字）：比对话自动抽取更严，保证注入预填 / 发现好站时的提示词预算 */
+export const MANUAL_MAX_LEN = 60
+
+export type ManualEntryResult =
+  | { ok: true; entry: AiProfileEntry }
+  | { ok: false; reason: 'empty' | 'too_long' | 'duplicate' }
+
+/**
+ * 手动告诉 AI 一条要求（设置「AI 学到了什么 → 你告诉 AI 的」）。
+ * 记为 explicit；同文本已存在返回 duplicate；满额时与 remember 同规则淘汰（先淘汰最旧 implicit）。
+ */
+export function addManualEntry(raw: string): ManualEntryResult {
+  const trimmed = String(raw ?? '').trim()
+  if (!trimmed) return { ok: false, reason: 'empty' }
+  if (trimmed.length > MANUAL_MAX_LEN) return { ok: false, reason: 'too_long' }
+  const text = sanitizeForPrompt(trimmed, MANUAL_MAX_LEN)
+  if (!text) return { ok: false, reason: 'empty' }
+  const profile = loadProfile()
+  if (profile.entries.some((e) => e.text.toLowerCase() === text.toLowerCase())) return { ok: false, reason: 'duplicate' }
+  if (profile.entries.length >= MAX_ENTRIES) {
+    const implicitIdx = profile.entries.findIndex((e) => e.kind === 'implicit')
+    profile.entries.splice(implicitIdx >= 0 ? implicitIdx : 0, 1)
+  }
+  const now = Date.now()
+  const entry: AiProfileEntry = { id: 'mem-' + now + '-' + Math.random().toString(36).slice(2, 6), kind: 'explicit', text, createdAt: now, updatedAt: now }
+  profile.entries.push(entry)
+  saveProfile(profile)
+  return { ok: true, entry }
+}
+
+/** 编辑一条记忆：改写后视为用户明确提出的要求（explicit） */
+export function updateProfileEntry(id: string, raw: string): ManualEntryResult {
+  const trimmed = String(raw ?? '').trim()
+  if (!trimmed) return { ok: false, reason: 'empty' }
+  if (trimmed.length > MANUAL_MAX_LEN) return { ok: false, reason: 'too_long' }
+  const text = sanitizeForPrompt(trimmed, MANUAL_MAX_LEN)
+  const profile = loadProfile()
+  const entry = profile.entries.find((e) => e.id === id)
+  if (!entry || !text) return { ok: false, reason: 'empty' }
+  if (profile.entries.some((e) => e.id !== id && e.text.toLowerCase() === text.toLowerCase())) return { ok: false, reason: 'duplicate' }
+  entry.text = text
+  entry.kind = 'explicit'
+  entry.updatedAt = Date.now()
+  saveProfile(profile)
+  return { ok: true, entry }
+}
+
+/**
+ * 给预填 / 补齐 / 发现好站用的规则清单：explicit 优先、同类新→旧，最多 maxItems 条、单条 ≤ MANUAL_MAX_LEN 字。
+ * 对话侧仍用 buildProfilePrompt（带标签与字符预算）。
+ */
+export function buildProfileRules(maxItems = 10): string[] {
+  return [...listProfileEntries()]
+    .sort((a, b) => (a.kind === b.kind ? b.updatedAt - a.updatedAt : a.kind === 'explicit' ? -1 : 1))
+    .slice(0, maxItems)
+    .map((e) => e.text.slice(0, MANUAL_MAX_LEN))
+}
+
 /** 全部记忆条目（插入序：旧→新） */
 export function listProfileEntries(): AiProfileEntry[] {
   return loadProfile().entries

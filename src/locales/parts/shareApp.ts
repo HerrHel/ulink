@@ -3,7 +3,7 @@ export const shareAppZh = {
   shareView: {
     defaultGroupName: '未命名',
     forking: '复制中…',
-    forkToMyLibrary: '复制到我的库',
+    forkToMyLibrary: '复制到书签库',
     loginThenCopy: '登录后复制',
     loginRequiredToast: '请先登录后再复制',
     copyFailed: '复制失败：{msg}',
@@ -31,11 +31,11 @@ export const shareAppZh = {
     readonly: '只读',
     readonlyTitle: '这是他人分享的只读内容',
     denied: '这是他人分享的只读内容，无法修改',
-    saveToLibrary: '保存至我的库',
+    saveToLibrary: '保存到书签库',
     saving: '保存中…',
     loginThenSave: '登录后保存',
     loading: '正在加载分享内容…',
-    backToMine: '返回我的库',
+    backToMine: '返回书签库',
     bookmarksInGroup: '收录的书签',
   },
   appShell: {

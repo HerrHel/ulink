@@ -20,7 +20,7 @@ describe('typeLabel — 同步冲突徽章文案', () => {
   })
 
   it('attribute → 属性', () => {
-    expect(typeLabel('attribute')).toBe('属性')
+    expect(typeLabel('attribute')).toBe('标签')
   })
 
   it('四联合类型逐一命中 map，均返回非空中文标签且互不相同', () => {
@@ -65,6 +65,6 @@ describe('typeLabel — 同步冲突徽章文案', () => {
     expect(typeLabel('bookmark')).toBe('书签')
     expect(typeLabel('group')).toBe('笔记')
     expect(typeLabel('category')).toBe('分类')
-    expect(typeLabel('attribute')).toBe('属性')
+    expect(typeLabel('attribute')).toBe('标签')
   })
 })
