@@ -14,7 +14,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 > - 13 个 HTTP 云函数 + `maintenance` 定时任务：`account / ai-api / check-link / edge-headers / extract-video / jina-proxy / mimo-chat / pay / redeem / report-error / send-feedback / share-admin / share-ssr`，代码在 `cloudbase/functions/<name>/`
 > - 视频/媒体解析现状：`ulink-video-worker` 云托管容器已于 2026-11 **下线并删除**（消除每月 ~365 元常驻成本与版权下载风险；`scripts/video-worker/` 仅归档保留，切勿重新部署）；深度媒体解析已升级为音视频直连境内大模型（MiMo-V2.6-Flash 原生多模态，音频客户端 16kHz 压缩并物化、视频关键帧秒级对齐），用户在聊天面板直接上传拥有权利的媒体文件；`extract-video` 保留 B 站原生适配器与 r.jina.ai 兜底
 > - 云函数部署：`node scripts/deploy-cloudbase-fn.mjs <fn>`（`--env-only` 只换环境变量；`maintenance` 会自动幂等补建每日 03:00 备份触发器）；派生资产 `node scripts/build-fn-assets.mjs`
-> - **前端部署**：`ulink.ren` = **CloudBase 静态托管**，由 `.github/workflows/ci.yml` 的 `deploy` job 用 `tcb hosting deploy ./dist --safe` 发布（测试全绿才发）。Cloudflare Pages **已全面退役**（原 `/api/ai-candidates` 与 `/api/extract-metadata` 已于 2026-11-09 迁入 CloudBase `ai-api`，`CF_FN_BASE` 默认置空），不要用 `npm run pages:deploy`
+> - **前端部署**：`ulink.ren` = **CloudBase 静态托管**，由 `.github/workflows/ci.yml` 的 `deploy` job 用 `tcb hosting deploy ./dist --entry <全部 html,sw.js,version.json>` 发布（测试全绿才发；入口文件最后上传）。Cloudflare Pages **已全面退役**（原 `/api/ai-candidates` 与 `/api/extract-metadata` 已于 2026-11-09 迁入 CloudBase `ai-api`，`CF_FN_BASE` 默认置空），不要用 `npm run pages:deploy`
 > - 线上自检：`npm run check:prod`（比对 `https://ulink.ren/version.json` 的 commit 与本地 HEAD；构建时 `buildInfoPlugin` 注入）
 > - 客户端双后端入口：`src/lib/dbApi.ts`（`dbFrom`/`dbRpc`）；`VITE_BACKEND` 在 `vitest.config.ts` 钉死为空
 > - 网络策略：公开读只能走 SECURITY DEFINER RPC；`consume_rate_limit` 拒绝时返回 `{}`，判定必须 `data !== true`；分享访问密码最短 6 位，`share-admin` CORS 为 fail-closed
@@ -200,7 +200,7 @@ composables 按职责分三组：
 - **PWA**：vite-plugin-pwa，缓存策略见 vite.config.ts 中 workbox 配置（favicon-cache、font-cache）
 - **安全头**：dev/preview 由 vite `headersPlugin` 注入真实响应头；生产分两层——静态入口（`/`）由 `securityMetaPlugin` 构建期注入 `<meta>` CSP + Referrer，`/app`、`/legal/*` 由 `edge-headers` 云函数反代并下发真实响应头（CSP 含 frame-ancestors、XCTO、X-Frame-Options、HSTS），分享页由 `share-ssr` 自带 XCTO/XFO；法律页另有 `default-src 'none'` 的严格 CSP meta
 - **未知路径**：CloudBase 静态托管（腾讯云 COS）对不存在路径返回 404（2026-10-31 实测），不再是 Cloudflare 的 SPA 回退；应用自身不依赖 history 路由（入口固定 `/app`，分享走网关 `/s/*`），新增前端路由需同时在托管侧配回退
-- **前端部署**：`npm run build` 产物由 CI 部署到 **CloudBase 静态托管**（`tcb hosting deploy ./dist --safe`）；**后端云函数**用 `node scripts/deploy-cloudbase-fn.mjs <fn>`。Cloudflare Pages 已全面退役（原 `/api/*` 已迁入 CloudBase `ai-api` 云函数，`ulink.pages.dev` 不再承载端点）
+- **前端部署**：`npm run build` 产物由 CI 部署到 **CloudBase 静态托管**（`tcb hosting deploy ./dist --entry <全部 html,sw.js,version.json>`）；**后端云函数**用 `node scripts/deploy-cloudbase-fn.mjs <fn>`。Cloudflare Pages 已全面退役（原 `/api/*` 已迁入 CloudBase `ai-api` 云函数，`ulink.pages.dev` 不再承载端点）
 
 ### CLI（已归档，2026-10-31）
 
@@ -242,10 +242,11 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - **云函数 check-link**（生产 `cloudbase/functions/check-link/`，原 `supabase/functions/check-link/` 已迁移）：私有 IP 黑名单防 SSRF；超时/CORS/限流由云函数环境变量控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`、`CHECK_LINK_RATE_LIMIT_PER_MIN`）；限流 fail-closed（`consume_rate_limit`）；**可选鉴权（2026-10-31）**：请求带 `Authorization: Bearer` 时用 `cb-auth.js` 换 uid，按 `plans.features['linkcheck.daily']` 计每日**手动检查**额度（`mode=manual`），自动巡检（`mode=auto`）不消耗该额度；匿名请求仍只走 IP 分钟限流。history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → CloudBase `error_logs` 表（生产经 `report-error` 云函数写入，5s 节流）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
-- **CI/CD**：两个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署，三个 job）与 `cert-check.yml`（证书到期监控）；依赖更新走 `.github/dependabot.yml`（npm 周检 / GitHub Actions 月检）。`ci.yml` 三个 job：
-  - `lint-test`：npm ci → lint → typecheck → 单测 → `npm audit --omit=dev --audit-level=high`（blocking）→ `npm run build` 产物上传 artifact
+- **CI/CD**：两个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署，四个 job）与 `cert-check.yml`（证书到期监控）；依赖更新走 `.github/dependabot.yml`（npm 周检 / GitHub Actions 月检）。`ci.yml` 四个 job：
+  - `lint-test`：npm ci → lint → typecheck → 单测 + 覆盖率门槛 → `npm audit --omit=dev --audit-level=high`（blocking）→ `npm run build` 产物上传 artifact
+  - `unit-cloudbase`：与 `lint-test` 并行，`npm run test:cloudbase`（整套单测在 CloudBase 形态下再跑一遍）
   - `e2e`：Playwright chromium（带 `~/.cache/ms-playwright` 缓存加速）
-  - `deploy`：`needs: [lint-test, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ 复用 `lint-test` 构建产物 → `tcb hosting deploy ./dist --safe`（CloudBase 静态托管；`--safe` 发布前备份+失败回滚，免 `--verify` 加速跨洋部署）
+  - `deploy`：`needs: [lint-test, unit-cloudbase, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ 复用 `lint-test` 构建产物 → `tcb hosting deploy ./dist --entry <全部 html,sw.js,version.json>`（CloudBase 静态托管）。**不用 `--safe`**：它每次发布前把线上全部文件服务端复制到 `.cloudbase-backup/` 且从不清理，文件越积越多、单步 6.5 分钟；改由 `--entry` 保证入口最后上传，中途失败线上仍是旧版本。回滚：`gh workflow run ci.yml --ref <旧提交>`
     - 认证：`tcb login --cloudbase-api-key`（非交互），密钥取 `secrets.CLOUDBASE_APIKEY`；**未配该 secret 时跳过部署并告警**，门禁照常执行
     - 手动重部署：`gh workflow run ci.yml --ref main`
     - 线上版本自检：`npm run check:prod` —— 比对 `https://ulink.ren/version.json` 的 `commit` 与本地 HEAD（构建时由 vite `buildInfoPlugin` 注入；设置→关于 也显示短提交号），并探测安全防护（CSP/Referrer/XCTO）。退出码 0=一致且安全防护完整 / 1=不一致 / 2=线上无该端点（旧版本）/ 3=网络失败 / 4=版本一致但安全防护不完整

@@ -29,7 +29,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 - 新组件放 `src/components/` 对应子目录；测试放 `src/__tests__/`（子目录 `composables/`、`stores/`）
 - 单测：vitest + jsdom + @vue/test-utils，setup 为 `src/__tests__/setup.ts`（mock localStorage，每测试自动建新 Pinia 实例）
 - E2E：Playwright 仅 chromium，baseURL `localhost:5173`，CI 下重试 2 次；默认 L1 注入 mock Supabase URL（e2e/helpers/supabaseMock page.route 拦截），`LV_E2E_L2=1` 切 L2 真后端；**线上形态（CloudBase）的同步/支付**只在 prod 模式（`LV_E2E_PROD=1`，build+preview）跑：`e2e/helpers/cloudbaseMock.ts` 是多设备共享的内存 PostgREST 云端（复刻墓地/防复活触发器），用例见 `cloudbase-sync.spec.ts`（同步）、`cloudbase-security.spec.ts`（主密码跨设备 + 私密空间不上云）、`purchase-flow.spec.ts`；CI 开 `failOnFlakyTests`，重试才过也判红
-- CI：两个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署，三 job：`lint-test`、`e2e`、`deploy`）+ `cert-check.yml`（证书到期监控）。`deploy` 仅 main 且测试全绿才发：复用 build 产物 → `tcb login --cloudbase-api-key` → `tcb hosting deploy ./dist --safe`（CloudBase 静态托管）。未配 secret 时跳过部署但门禁照常执行；手动重部署 `gh workflow run ci.yml --ref main`；线上版本自检 `npm run check:prod`。⚠️ **CI 部署与手动 `tcb hosting deploy` 互斥**，统一走 CI
+- CI：两个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署，四 job：`lint-test`、`unit-cloudbase`、`e2e` 并行，全绿后 `deploy`）+ `cert-check.yml`（证书到期监控）。`deploy` 仅 main 且测试全绿才发：复用 build 产物 → `tcb login --cloudbase-api-key` → `tcb hosting deploy ./dist --entry <全部 html,sw.js,version.json>`（CloudBase 静态托管；入口文件最后上传，**不用 `--safe`**：它每次全量服务端备份且不清理，单步 6.5 分钟）。未配 secret 时跳过部署但门禁照常执行；手动重部署 `gh workflow run ci.yml --ref main`；线上版本自检 `npm run check:prod`。⚠️ **CI 部署与手动 `tcb hosting deploy` 互斥**，统一走 CI
 - ESLint（`eslint.config.js`，Flat Config，v10）：ts/js 基础规则作用 `src/**/*.{js,ts}`（no-undef 由 TS 接管故关闭），`.vue` 由 vue flat/recommended 管理，高价值规则（require-v-for-key / no-mutating-props 等）钉 error：
   - error：no-eval / no-implied-eval / no-caller / no-redeclare / no-dupe-keys / no-duplicate-case
   - warn：no-unused-vars（`_` 前缀豁免，args 忽略）/ no-constant-condition / no-debugger / no-empty / no-unreachable / eqeqeq（smart）
@@ -79,7 +79,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 ### 构建 / 扩展 / 样式
 
-- 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头（dev/preview）；**生产部署 = CloudBase 静态托管**（CI `tcb hosting deploy ./dist --safe`），GitHub Pages / spa404Plugin 均已停用，Cloudflare Pages 已全面退役（原 `/api/*` 迁入 `ai-api` 云函数，不要用 `pages:deploy`）
+- 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头（dev/preview）；**生产部署 = CloudBase 静态托管**（CI `tcb hosting deploy ./dist --entry …`，入口最后上传），GitHub Pages / spa404Plugin 均已停用，Cloudflare Pages 已全面退役（原 `/api/*` 迁入 `ai-api` 云函数，不要用 `pages:deploy`）
 - `cli/` — **已归档（2026-10-31 移除）**：无分发渠道且仍指向 Supabase，代码留存 git 历史 `6cf8783`，见 `docs/ARCHIVED_CLI.md`
 - `extension/` — Manifest V3 扩展（v1.2.2），Ctrl+Shift+S 保存当前页（manifest `save-to-linkvault` 命令）+ 侧边栏，右键深度解析已移除，媒体解析改走网页端多模态直传，仅保留 `https://ulink.ren/*` host 权限
 - `src/styles/` — tokens/reset/layout/cards/group/editor/modals/overlays/header/nav/filter/batch/drag/settings/toast/responsive/utility.css，由 main.css 统一导入

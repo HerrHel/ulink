@@ -39,12 +39,6 @@ jobs:
       # 复用同一轮全量测试，不额外再跑一遍，避免 CI 时间翻倍（与 #20 同源考量）。
       - name: Unit Tests + Coverage (thresholds gate)
         run: npm run coverage
-      # CloudBase 形态单测（生产形态）：默认套件 VITE_BACKEND='' 使 isCloudBaseBackend()===true
-      # 分支在 CI 零执行。独立配置（vitest.cloudbase.config.ts，见 #20）现在把**整个单测集**
-      # 在云形态下再跑一遍（约 395 文件），只排除 6 个「Supabase 形态专用」文件（清单与原因
-      # 写在配置里）。新增测试默认自动获得双形态覆盖，别再往 exclude 里加而不写原因。
-      - name: Unit Tests (CloudBase)
-        run: npm run test:cloudbase
       # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错。
       # 拆两步：原 --omit=dev --audit-level=high 放过整条 dev 工具链漏洞与 prod moderate，
       # 现分别覆盖 full tree high+ 与 生产依赖 moderate+。
@@ -80,6 +74,23 @@ jobs:
           name: dist-artifacts
           path: dist/
           retention-days: 1
+  # CloudBase 形态单测（生产形态）：默认套件 VITE_BACKEND='' 使 isCloudBaseBackend()===true
+  # 分支在 CI 零执行。独立配置（vitest.cloudbase.config.ts，见 #20）把**整个单测集**
+  # 在云形态下再跑一遍，只排除少数「Supabase 形态专用」文件（清单与原因写在配置里）。
+  # 新增测试默认自动获得双形态覆盖，别再往 exclude 里加而不写原因。
+  # 2026-11-23：从 lint-test 拆成并行 job（原先与 coverage 串行，lint-test 一个 job 要 7.6 分钟）。
+  unit-cloudbase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Unit Tests (CloudBase)
+        run: npm run test:cloudbase
+
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -161,7 +172,7 @@ jobs:
   # 与手动 `tcb hosting deploy` 互斥：Git 部署每次 push 都会发布，
   # 再手动传一次会把线上覆盖成旧版本。统一走本 job。
   deploy:
-    needs: [lint-test, e2e]
+    needs: [lint-test, unit-cloudbase, e2e]
     # push 与手动触发都可发布，但都限定 main（PR 与其它分支绝不发布）
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
@@ -237,20 +248,28 @@ jobs:
             echo "::error::CloudBase 登录连续 5 次失败（约 2.5 分钟）；若持续失败请刷新 CLOUDBASE_APIKEY"
             exit 1
           fi
-          # --safe：发布前备份，上传失败自动回滚（省去跨洋 --verify 哈希对比耗时）
-          $CLI hosting deploy ./dist -e "$ENV_ID" --safe
+          # 不用 --safe（2026-11-23）：它每次发布前会把线上**全部**文件在服务端复制一份到
+          # .cloudbase-backup/，且备份从不自动清理、旧 hash 资源也不删，文件越积越多，
+          # 「Preparing upload」单步就要 6.5 分钟（实际上传仅 50 秒）。
+          # 安全性改由上传顺序保证：--entry 列出的入口文件（全部 html + sw.js + version.json）
+          # 在其余资源全部上传完成后才上传；中途失败时入口仍是旧版本，旧页面引用的旧 hash
+          # 资源都还在，线上不会坏。回滚 = 对旧提交重跑本 workflow（gh workflow run ci.yml --ref <sha>）。
+          ENTRY=$(cd dist && { find . -name '*.html'; echo ./sw.js; echo ./version.json; } | sed 's#^\./##' | paste -sd, -)
+          echo "::notice::入口文件（最后上传）：$ENTRY"
+          $CLI hosting deploy ./dist -e "$ENV_ID" --entry "$ENTRY"
       # 部署后校验线上实际版本：带时间戳穿透缓存，比对 version.json.commit 与本次
       # github.sha，杜绝「CI 全绿但线上仍是旧版本」（CDN 传播有秒级延迟，故少量重试）。
       # #47：此前 3 次不匹配只 exit 1，CI 红但线上停在错误版本。现增加兜底：
       # 首轮失败后「重传本轮 dist 再校验一轮」，而不是只报错。重传是幂等的（同一 dist），
-      # 且沿用 --safe（发布前备份）语义：重传失败不会破坏现网，线上保持原版本，
-      # 可用备份手动回滚。不改动 Deploy 步骤本身的流程。
+      # 且与 Deploy 步骤同样「入口最后上传」：重传失败不会让入口指向缺失资源，
+      # 线上保持原版本。不改动 Deploy 步骤本身的流程。
       - name: Verify deployed version
         env:
           EXPECTED_SHA: ${{ github.sha }}
           CLOUDBASE_APIKEY: ${{ secrets.CLOUDBASE_APIKEY }}
         run: |
           CLI="npx --yes -p @cloudbase/cli tcb"
+          ENTRY=$(cd dist && { find . -name '*.html'; echo ./sw.js; echo ./version.json; } | sed 's#^\./##' | paste -sd, -)
           check_deployed() {
             for attempt in 1 2 3; do
               URL="https://ulink.ren/version.json?t=$(date +%s)"
@@ -270,19 +289,19 @@ jobs:
 
           # 兜底：CDN 传播延迟 / 上次上传部分失败 → 重传本轮 dist 再校验一轮。
           # 复用 Deploy 步骤已建立的 CloudBase 登录态；若已失效则重新登录后重传。
-          echo "::warning::首轮校验未通过，重传本轮 dist 后再校验一次（--safe 备份仍在，失败不影响现网）"
-          if ! $CLI hosting deploy ./dist -e "$ENV_ID" --safe; then
+          echo "::warning::首轮校验未通过，重传本轮 dist 后再校验一次（入口最后上传，失败不影响现网）"
+          if ! $CLI hosting deploy ./dist -e "$ENV_ID" --entry "$ENTRY"; then
             $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID" || {
-              echo "::error::重传前重新登录失败；线上保持原版本（--safe 备份可手动回滚）"
+              echo "::error::重传前重新登录失败；线上保持原版本（可对上一个提交重跑 CI 回滚）"
               exit 1
             }
-            $CLI hosting deploy ./dist -e "$ENV_ID" --safe || {
-              echo "::error::重传 dist 失败；线上保持原版本（--safe 备份可手动回滚）"
+            $CLI hosting deploy ./dist -e "$ENV_ID" --entry "$ENTRY" || {
+              echo "::error::重传 dist 失败；线上保持原版本（可对上一个提交重跑 CI 回滚）"
               exit 1
             }
           fi
           sleep 5
           if check_deployed; then exit 0; fi
 
-          echo "::error::重传后线上 version.json commit 仍与本次提交不一致：期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}；请用 --safe 备份手动回滚并核查 CDN/部署链路"
+          echo "::error::重传后线上 version.json commit 仍与本次提交不一致：期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}；请对上一个提交重跑 CI 回滚并核查 CDN/部署链路"
           exit 1
