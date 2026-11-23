@@ -146,6 +146,22 @@ describe('模块 7 审计：构建输出产物与离线 PWA 策略自检', () =>
     expect(edgeCode).toContain("frame-ancestors 'self'")
   })
 
+  it('edge-headers 只放行商店扩展 ID 嵌入 /app（侧边栏模式），不放行整个扩展 scheme', () => {
+    const edgeCode = readFileSync(resolve(process.cwd(), 'cloudbase/functions/edge-headers/index.js'), 'utf8')
+    // Edge 商店扩展 ID 与 EDGE_ADDON_URL 一致
+    const urls = readFileSync(resolve(process.cwd(), 'src/config/urls.ts'), 'utf8')
+    const edgeId = urls.match(/EDGE_ADDON_URL = '[^']*\/([a-p]{32})'/)?.[1]
+    expect(edgeId).toBeTruthy()
+    expect(edgeCode).toContain(`'chrome-extension://${edgeId}'`)
+    expect(edgeCode).toContain("[\"frame-ancestors 'self'\", ...EXT_FRAME_ORIGINS].join(' ')")
+    // 生产绝不放行 scheme 通配（任意扩展可嵌入 = 点击劫持面）
+    expect(edgeCode).not.toMatch(/frame-ancestors[^\n]*(chrome|moz)-extension:['" ]/)
+    // 环境变量追加的来源必须是具体扩展 ID
+    expect(edgeCode).toContain('/^(chrome|moz)-extension:\\/\\/[a-z0-9-]+$/i')
+    // XFO 保留：老浏览器仍同源；现代浏览器以 frame-ancestors 为准
+    expect(edgeCode).toContain("'X-Frame-Options': 'SAMEORIGIN'")
+  })
+
   it('edge-headers 放行静态资源扩展名（根路径反代后 logo/landing.js 不再 404）', () => {
     const edgeCode = readFileSync(resolve(process.cwd(), 'cloudbase/functions/edge-headers/index.js'), 'utf8')
 

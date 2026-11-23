@@ -14,6 +14,7 @@ import { toast } from '../lib/toast.js'
 import { t } from '../i18n/index.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 import { AppDataSchema } from '../schemas.js'
+import { notifyDataSaved } from '../lib/crossInstance.js'
 
 /**
  * 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍。
@@ -296,6 +297,8 @@ export const useAppStore = defineStore('app', () => {
       const p = persist.saveData(data, space).then(ok => {
         if (ok) {
           _lastSavedFp[space] = fp
+          // 通知同浏览器内的其他实例（另一个标签页 / 扩展侧边栏）从 IDB 重新载入，避免后写覆盖
+          notifyDataSaved(space)
           // H11：写入恢复成功即清旗标，让「恢复→再失败」能重新提示
           _storageFailWarned = false
           _lastStorageFailToastAt = 0

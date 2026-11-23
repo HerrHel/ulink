@@ -42,6 +42,14 @@ export const shareAppZh = {
     unlockChunkLoadFailed: '解锁组件加载失败，请刷新后重试',
     unlockTimeout: '解锁超时，请重试',
   },
+  /** 浏览器扩展侧边栏模式（/app?mode=panel）顶部的「当前页」卡片 */
+  extPanel: {
+    currentPage: '当前页面',
+    save: '保存到与链',
+    saved: '已收藏',
+    edit: '编辑',
+    untitled: '未命名页面',
+  },
 } as const
 
 /** English fragment：与 zh 键完全同构；复数用 key_one/key_other 平级追加。 */

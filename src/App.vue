@@ -2,7 +2,7 @@
 <!-- E2-001：Auth/Toast/Confirm 常驻在 MainLayout 父级。分享态不再是独立页面，
      而是主应用内的只读状态（见 stores/share.ts），与常规模式共用同一套覆盖层。 -->
 <ErrorBoundary name="MainLayout">
-<div class="lv-panel" :class="{ 'share-mode-layout': !!uiStore.shareMode }">
+<div class="lv-panel" :class="{ 'share-mode-layout': !!uiStore.shareMode, 'ext-panel-mode': extPanelActive }">
   <AppNav v-if="!uiStore.shareMode" />
   <input type="file" id="importFile" accept=".json,.html,.htm,.csv" style="display:none" @change="handlers.onImportFile">
   <div v-if="!uiStore.shareMode" class="resize-handle" id="resizeLeft"></div>
@@ -29,6 +29,7 @@
               <button class="btn btn-ghost btn-sm" @click="share.retry()">{{ t('common.retry') }}</button>
             </div>
             <ErrorBoundary name="CardGrid" v-else>
+              <ExtPanelCurrentPage v-if="extPanelActive && !uiStore.shareMode" />
               <CardGrid />
               <footer v-if="uiStore.shareMode" class="share-footer">
                 <div class="share-footer-inner">
@@ -136,6 +137,7 @@ import BatchBottom from './components/shell/BatchBottom.vue'
 import CardGrid from './components/cards/CardGrid.vue'
 import AppNav from './components/shell/AppNav.vue'
 import ErrorBoundary from './components/ui/ErrorBoundary.vue'
+import { useExtPanel } from './composables/useExtPanel.js'
 // AI 对话侧栏 / 边缘暂存栏：常驻挂载语义不变，但整条 AI 对话链路（ChatStream / useAiChat /
 // universalAgent 等，约占首屏 app 包一半）改为首屏渲染后再拉取。侧栏默认收起（宽 0），无布局跳动；
 // useResize 以 MutationObserver 等待 #detailPanel 出现，对异步渲染安全。
@@ -146,6 +148,10 @@ const { t, locale: curLocale } = useI18n()
 const isZh = computed(() => curLocale.value === 'zh-CN')
 const currentYear = new Date().getUTCFullYear()
 // PERF-5：非首屏 overlay / modal 全部 async，切断启动链
+// 浏览器扩展侧边栏模式（/app?mode=panel，被扩展 iframe 嵌入）：尽早判定，后续 ext_save 会清掉 URL 参数
+const extPanelActive = useExtPanel()
+const ExtPanelCurrentPage = defineAsyncComponent(() => import('./components/shell/ExtPanelCurrentPage.vue'))
+
 const AiWorkspace = defineAsyncComponent(() => import('./components/chat/AiWorkspace.vue'))
 const AddPopover = defineAsyncComponent(() => import('./components/overlays/AddPopover.vue'))
 const DeadLinksPopover = defineAsyncComponent(() => import('./components/overlays/DeadLinksPopover.vue'))

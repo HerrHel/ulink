@@ -19,6 +19,18 @@ const http = require('http')
 const PORT = Number(process.env.PORT) || 9000
 const STATIC_ORIGIN = (process.env.STATIC_ORIGIN || 'https://ulink-d1g5srvjo54b1886a-1436146693.tcloudbaseapp.com').replace(/\/+$/, '')
 
+/**
+ * 允许以 iframe 嵌入 /app 的浏览器扩展来源（扩展侧边栏 = /app?mode=panel，见 src/lib/extPanel.ts）。
+ * 只放行商店发布的固定扩展 ID，不放行整个 chrome-extension: scheme（否则任意扩展都能嵌入 → 点击劫持面）。
+ * X-Frame-Options 保持 SAMEORIGIN：现代浏览器在 CSP 含 frame-ancestors 时以 CSP 为准、忽略 XFO，
+ * 老浏览器仍只认 XFO 同源（2026-11-23 实测 Chromium：XFO=SAMEORIGIN + frame-ancestors 含扩展 → 可嵌入）。
+ * 新增商店（Chrome Web Store / Firefox AMO）上架后，用环境变量 EXT_FRAME_ORIGINS（空格分隔）追加。
+ */
+const EXT_FRAME_ORIGINS = [
+  'chrome-extension://epjlkfndeonlpjocdafoiaomdigopeeh', // Edge 加载项商店（src/config/urls.ts EDGE_ADDON_URL）
+  ...String(process.env.EXT_FRAME_ORIGINS || '').split(/\s+/).filter((o) => /^(chrome|moz)-extension:\/\/[a-z0-9-]+$/i.test(o)),
+]
+
 /** 与 vite securityMetaPlugin 的 CSP 保持一致，并补上 meta 不支持的 frame-ancestors */
 const CSP = [
   "default-src 'self'",
@@ -29,7 +41,7 @@ const CSP = [
   "img-src 'self' data: https:",
   "connect-src 'self' https: wss://*.supabase.co",
   "font-src 'self' https://fonts.gstatic.com",
-  "frame-ancestors 'self'",
+  ["frame-ancestors 'self'", ...EXT_FRAME_ORIGINS].join(' '),
   "form-action 'self'",
   "base-uri 'self'",
 ].join('; ')

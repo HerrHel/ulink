@@ -16,7 +16,9 @@ export function onShareRoute(cb: (gid: string) => void) { _onShareRoute = cb }
 
 // E1 门闩实现见 lib/dataReady；此处 re-export 便于 App 与其它入口使用
 export { whenDataReady, isDataHydrated } from '../lib/dataReady.js'
-import { markDataReady } from '../lib/dataReady.js'
+import { markDataReady, isDataHydrated } from '../lib/dataReady.js'
+import { onOtherInstanceSaved } from '../lib/crossInstance.js'
+import { useSyncStore } from '../stores/sync.js'
 
 // 多设备主密码一致性维护（每会话一次）：登录后先确保本机 canary 上云（打通
 // 「一个主密码解锁所有设备」——本机设置时未登录、之后登录，云端无 canary 则推送），
@@ -51,6 +53,36 @@ import { useCloudSync } from './domain/useCloudSync.js'
 import { useE2E } from './domain/useE2E.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
 import { captureNavState } from './interaction/useKeyboardOps.js'
+
+let _reloadRetryTimer: ReturnType<typeof setTimeout> | null = null
+const RELOAD_RETRY_MS = 800
+
+/**
+ * 其他实例落盘后从 IDB 重新载入主页数据。
+ * 本实例「忙」时（有未落盘的编辑 / 正在云同步 / 不在主页空间 / 分享只读态）不重载，稍后重试：
+ * - 有未落盘编辑时强行重载会丢掉本实例的修改；等它落盘后对方会收到通知再对齐。
+ *   两个实例在同一个 300ms 防抖窗口内同时改动仍是「后写者为准」，这是整份快照存储的固有限制。
+ */
+export async function reloadFromOtherInstance(): Promise<void> {
+  if (_reloadRetryTimer) { clearTimeout(_reloadRetryTimer); _reloadRetryTimer = null }
+  if (!isDataHydrated()) return
+  const ds = useDataStore()
+  const ui = useUIStore()
+  if (ui.shareMode || ui.curSpace !== 'main') return
+  if (ds._saveTimer || useSyncStore().syncStatus === 'syncing') {
+    _reloadRetryTimer = setTimeout(() => { void reloadFromOtherInstance() }, RELOAD_RETRY_MS)
+    return
+  }
+  const loaded = await loadData('main')
+  // await 期间可能切了空间或产生了新编辑：放弃本次，交给下一次通知 / 重试
+  if (ui.curSpace !== 'main' || ds._saveTimer) return
+  ds.categories = loaded.categories
+  ds.bookmarks = loaded.bookmarks
+  ds.customAttributes = loaded.customAttributes
+  ds.siblingGroups = loaded.siblingGroups
+  ds._syncMaps()
+  ds._restoreDeletedGroupMemberships()
+}
 
 export function useAppLifecycle() {
   const ds = useDataStore()
@@ -168,6 +200,10 @@ export function useAppLifecycle() {
       window.removeEventListener('beforeunload', onClearSel as EventListener)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     })
+
+    // 同浏览器其他实例（另一个标签页 / 扩展侧边栏）落盘后，本实例空闲时从 IDB 重新载入，
+    // 避免两边各持旧内存快照、后保存的一方把对方刚写的内容整份覆盖（见 lib/crossInstance.ts）。
+    cleanups.push(onOtherInstanceSaved(() => { void reloadFromOtherInstance() }))
 
     initCardTags()
     useMentionStore().hide()

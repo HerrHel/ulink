@@ -108,7 +108,9 @@ const securityHeaders: Record<string, string> = {
     "connect-src 'self' https: wss://*.supabase.co",
     // 字体已自托管（public/fonts/gf/，scripts/selfhost-google-fonts.mjs），不再放行 Google Fonts
     "font-src 'self'",
-    "frame-ancestors 'self'",
+    // 浏览器扩展侧边栏以 iframe 嵌入 /app?mode=panel（见 src/lib/extPanel.ts）。dev/preview 放行整个
+    // 扩展 scheme，便于本地加载未打包扩展（ID 随机）调试；生产由 edge-headers 只放行商店扩展 ID。
+    "frame-ancestors 'self' chrome-extension: moz-extension:",
     "form-action 'self'",
     "base-uri 'self'",
   ].join('; '),
@@ -166,7 +168,7 @@ function headersPlugin(): Plugin {
           "img-src 'self' data: https:",
           "connect-src 'self' ws: wss: https:",
           "font-src 'self' data:",
-          "frame-ancestors 'self'",
+          "frame-ancestors 'self' chrome-extension: moz-extension:",
           "form-action 'self'",
           "base-uri 'self'",
         ].join('; ')

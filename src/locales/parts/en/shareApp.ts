@@ -51,4 +51,12 @@ export const shareAppEn = {
     unlockChunkLoadFailed: 'Failed to load the unlock dialog — please refresh and retry',
     unlockTimeout: 'Unlock timed out — please retry',
   },
+  /** Browser-extension side panel mode (/app?mode=panel): "current page" card */
+  extPanel: {
+    currentPage: 'Current page',
+    save: 'Save to ulink',
+    saved: 'Saved',
+    edit: 'Edit',
+    untitled: 'Untitled page',
+  },
 } as const
