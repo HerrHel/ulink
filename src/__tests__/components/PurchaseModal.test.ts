@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import PurchaseModal from '../../components/modals/PurchaseModal.vue'
+import { useEntitlement } from '../../composables/domain/useEntitlement.js'
+import { useUIStore } from '../../stores/ui.js'
 
-// 与线上 plans 表同构（2026-11-03 核对）：月付 ¥15 / 季付 ¥32 / 年付 ¥108，
+// 与线上 plans 表同构（2026-11-03 核对）：月付 ¥15 / 季付 ¥36 / 年付 ¥108，
 // plan id 也取真实库里的值（plus_monthly / pro_quarterly / plus_yearly），
 // 避免 mock 与生产漂移后测试仍"自说自话"。
 const { mockPlans, mockCreate } = vi.hoisted(() => {
@@ -12,7 +14,7 @@ const { mockPlans, mockCreate } = vi.hoisted(() => {
       // features 取迁移 20261121000001 之后的线上口径（历史保留 free 7 / PRO 365，storage.bytes 已撤下）
       { planId: 'free', name: '免费版', priceCents: 0, currency: 'CNY', periodDays: 0, features: { 'history.days': 7, 'ai.requests.daily': 20 } },
       { planId: 'plus_monthly', name: 'PRO 月付', priceCents: 1500, currency: 'CNY', periodDays: 30, features: { 'history.days': 365, 'ai.requests.daily': 100 } },
-      { planId: 'pro_quarterly', name: 'PRO 季付', priceCents: 3200, currency: 'CNY', periodDays: 90, features: { 'history.days': 365, 'ai.requests.daily': 100 } },
+      { planId: 'pro_quarterly', name: 'PRO 季付', priceCents: 3600, currency: 'CNY', periodDays: 90, features: { 'history.days': 365, 'ai.requests.daily': 100 } },
       { planId: 'plus_yearly', name: 'PRO 年付', priceCents: 10800, currency: 'CNY', periodDays: 365, features: { 'history.days': 365, 'ai.requests.daily': 100 } },
     ],
     mockCreate: vi.fn().mockResolvedValue({
@@ -88,14 +90,14 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     expect(tabs[1].text()).toContain('包季')
     expect(tabs[2].text()).toContain('包年')
 
-    // 包季：¥32，划线 ¥45（= 月付 ¥15 × 3），立省 ¥13
+    // 包季：¥36（2026-11-23 调价），划线 ¥45（= 月付 ¥15 × 3），立省 ¥9
     await tabs[1].trigger('click')
     await nextTick()
     const quarterlyCard = wrapper.find('[data-testid="plan-pro_quarterly"]')
     expect(quarterlyCard.exists()).toBe(true)
     expect(quarterlyCard.text()).toContain('PRO 季付')
     expect(quarterlyCard.find('del').text()).toBe('¥45')
-    expect(quarterlyCard.text()).toContain('省 ¥13')
+    expect(quarterlyCard.text()).toContain('省 ¥9')
     expect(quarterlyCard.text()).toContain('按月订阅 3 个月合计 ¥45')
 
     // 包年：¥108，划线 ¥180，立省 ¥72（40%），并标推荐
@@ -223,7 +225,7 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     await tabs[1].trigger('click')
     await nextTick()
     const quarterlyCard = wrapper.find('[data-testid="plan-pro_quarterly"]')
-    expect(quarterlyCard.text()).toContain('省 ¥13')
+    expect(quarterlyCard.text()).toContain('省 ¥9')
     const badge = quarterlyCard.find('.pur-tier-badge')
     expect(badge.classes()).toContain('badge-discount')
 
@@ -293,5 +295,54 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     } finally {
       saved.forEach((p, i) => { mockPlans[i].features = p.features })
     }
+  })
+  describe('续费：顺延说明与年付优先', () => {
+    function setPro(expiresAt: string | null) {
+      useEntitlement().entitlement.value = {
+        planId: expiresAt ? 'pro_quarterly' : 'free',
+        planName: expiresAt ? 'PRO 季付' : '免费版',
+        status: 'active',
+        expiresAt,
+        features: {},
+        isPaid: Boolean(expiresAt),
+      }
+    }
+
+    it('10. 已是 PRO：显示剩余天数与「续费顺延不浪费」说明；免费用户不显示', async () => {
+      setPro(new Date(Date.now() + 10 * 86_400_000 - 60_000).toISOString())
+      try {
+        const wrapper = mount(PurchaseModal, { props: { visible: true, currentPlanId: 'pro_quarterly' }, attachTo: document.body })
+        await nextTick()
+        const note = wrapper.find('[data-testid="purchase-renew-note"]')
+        expect(note.exists()).toBe(true)
+        expect(note.text()).toContain('10 天')
+        expect(note.text()).toContain('顺延')
+        wrapper.unmount()
+      } finally {
+        setPro(null)
+      }
+      const free = mount(PurchaseModal, { props: { visible: true, currentPlanId: 'free' }, attachTo: document.body })
+      await nextTick()
+      expect(free.find('[data-testid="purchase-renew-note"]').exists()).toBe(false)
+      free.unmount()
+    })
+
+    it('11. 从续费提醒打开（preferCycle=yearly）：季付用户默认选中包年；关闭后清除偏好', async () => {
+      const ui = useUIStore()
+      // 对照：不带偏好时季付用户默认停在当前档（包季）
+      const plain = mount(PurchaseModal, { props: { visible: true, currentPlanId: 'pro_quarterly' }, attachTo: document.body })
+      await nextTick()
+      expect(plain.find('.pur-cycle-tab.active').text()).toContain('包季')
+      plain.unmount()
+
+      ui.openPurchase({ preferCycle: 'yearly' })
+      const wrapper = mount(PurchaseModal, { props: { visible: true, currentPlanId: 'pro_quarterly' }, attachTo: document.body })
+      await nextTick()
+      expect(wrapper.find('.pur-cycle-tab.active').text()).toContain('包年')
+      expect(wrapper.find('[data-testid="plan-plus_yearly"]').exists()).toBe(true)
+      await wrapper.find('.pur-close').trigger('click')
+      expect(ui.purchasePreferCycle).toBeNull()
+      wrapper.unmount()
+    })
   })
 })

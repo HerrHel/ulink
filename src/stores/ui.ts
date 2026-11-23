@@ -106,6 +106,8 @@ export interface UIState {
   focusedGroupId: string | null
   /** 分享只读态（null = 正常模式）。详见 ShareModeState 注释。 */
   shareMode: ShareModeState | null
+  /** 购买弹窗打开时优先选中的周期（续费提醒推荐年付用）；null = 按当前套餐 / 默认逻辑 */
+  purchasePreferCycle: 'yearly' | null
   batchMode: boolean
   batchSelected: string[]
   activeAttrs: string[]
@@ -188,6 +190,7 @@ export const useUIStore = defineStore('ui', {
       searchQuery: '',
       focusedGroupId: null,
       shareMode: null,
+      purchasePreferCycle: null,
       batchMode: false,
       batchSelected: [],
       activeAttrs: [],
@@ -381,8 +384,9 @@ export const useUIStore = defineStore('ui', {
       if (this.isMobile) this.panels.rail = false
     },
 
-    /** 打开会员升级/续费弹窗 */
-    openPurchase() {
+    /** 打开会员升级/续费弹窗；opts.preferCycle 指定优先选中的周期（续费提醒推荐年付） */
+    openPurchase(opts: { preferCycle?: 'yearly' } = {}) {
+      this.purchasePreferCycle = opts.preferCycle ?? null
       this.modals.purchase = true
     },
     /** 打开存量书签主动补齐对比窗 */

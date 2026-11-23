@@ -178,7 +178,7 @@ composables 按职责分三组：
 ### 计费与会员（2026-10 上线）
 
 - 云函数：`pay`（微信 Native / 支付宝电脑与手机网站支付：下单 / 回调 / 查单 + 幂等发货；微信 Native 已上线可收款，支付宝电脑网站支付 `alipay.trade.page.pay` + 手机网站支付 `alipay.trade.wap.pay` 代码就绪已接入自适应收银台）、`redeem`（兑换码）、`account`（注销 + 交易记录）
-- 数据：迁移 `20261025000002_billing_core.sql`（plans / entitlements / orders / usage_ledger）、`20261025000004_redeem_code.sql`、`20261028000010_payment_flow.sql`；**价格与权益唯一来源 = `plans` 表（`price_cents` + `features`，PRO 月付 ¥15 / 季付 ¥32 / 年付 ¥108）**，前端不硬编码；全额退款由 `mark_order_refunded` 自动把 entitlements 设为 `refunded`
+- 数据：迁移 `20261025000002_billing_core.sql`（plans / entitlements / orders / usage_ledger）、`20261025000004_redeem_code.sql`、`20261028000010_payment_flow.sql`；**价格与权益唯一来源 = `plans` 表（`price_cents` + `features`，PRO 月付 ¥15 / 季付 ¥36 / 年付 ¥108）**，前端不硬编码；全额退款由 `mark_order_refunded` 自动把 entitlements 设为 `refunded`
 - 前端：`PurchaseModal.vue` + `usePayment`（下单/轮询/到账）、`usePurchasePlans`、`useTransactions`、`useRedeem`、`useEntitlement`，设置面板会员区
 - 计费模式：`BILLING_MODE`（`shadow` 只计量 / `enforce` 超额 429）；**2026-11-07 经 `tcb fn detail mimo-chat -e ulink-d1g5srvjo54b1886a --json` 实测线上为 `enforce`**，`reserve_quota → 调用 → settle_quota` 两段式计费已接入云函数（客户端断连亦会 settle）。如需回退改回 `shadow`，见 `docs/BILLING_OPS.md` §7；改额度展示前先读 `docs/BILLING_OPS.md`
 - 上线手册：`docs/WXPAY_ROLLOUT.md`、`docs/ALIPAY_ROLLOUT.md`；微信与支付宝双渠道接入细节详见两份手册

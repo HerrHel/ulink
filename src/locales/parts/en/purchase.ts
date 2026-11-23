@@ -6,6 +6,12 @@ export const purchaseEn = {
   purchase: {
     title: 'Upgrade to ulink PRO',
     renewTitle: 'Renew ulink PRO',
+    renewCarryOver: 'Your PRO has {n} days left. Renew now and the new term starts when the current one ends — no days are lost.',
+    reminderTitle: 'PRO expires in {n} days',
+    reminderTitleFinal: 'PRO expires within 24 hours',
+    reminderBody: 'No plan auto-renews. Renew now and the new term starts when the current one ends, so no days are lost. Yearly has the lowest monthly price.',
+    reminderCta: 'Renew',
+    reminderLater: 'Later',
     // 合规修订：中英同步，能力名统一为 light platform parsing / chat media analysis
     subtitle: 'Light platform parsing · Chat media analysis · AI knowledge processing · Autonomous health patrol',
     noPlans: 'No plans available',

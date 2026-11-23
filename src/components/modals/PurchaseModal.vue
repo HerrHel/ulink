@@ -15,6 +15,10 @@
         <div class="pur-head-main">
           <h3 class="pur-title">{{ isUserPro ? t('purchase.renewTitle') : t('purchase.title') }}</h3>
           <p class="pur-subtitle">{{ t('purchase.subtitle') }}</p>
+          <!-- 已是 PRO：说明提前续费会从到期日起顺延（settle_paid_order 叠加有效期），剩余天数不浪费 -->
+          <p v-if="renewDaysLeft !== null" class="pur-renew-note" data-testid="purchase-renew-note">
+            {{ t('purchase.renewCarryOver', { n: renewDaysLeft }) }}
+          </p>
         </div>
 
         <div class="pur-head-actions">
@@ -429,6 +433,8 @@ import { fetchPurchasePlans, getCachedPlans, type PlanRow } from '../../composab
 import { useAuthStore } from '../../stores/auth.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import { toast } from '../../lib/toast.js'
+import { useUIStore } from '../../stores/ui.js'
+import { daysUntilExpiry } from '../../lib/renewal.js'
 
 const props = defineProps<{ visible: boolean; currentPlanId?: string }>()
 const authStore = useAuthStore()
@@ -462,6 +468,12 @@ const isUserPro = computed(() => {
 
 const isCurrentFree = computed(() => !isUserPro.value)
 
+const ui = useUIStore()
+/** 当前 PRO 剩余天数（未付费 / 无到期日 / 已过期为 null），用于「续费顺延」说明 */
+const renewDaysLeft = computed(() =>
+  entService.isPaid.value ? daysUntilExpiry(entService.expiresAt.value) : null,
+)
+
 const pay = usePayment()
 const stage = ref<'select' | 'paying' | 'done'>('select')
 const initialPlans = getCachedPlans()
@@ -479,7 +491,11 @@ function applyPlanSelection(list: PlanRow[]) {
     const quarterly = list.find((p) => (p.periodDays || 0) >= 80 && (p.periodDays || 0) <= 120 && p.priceCents > 0)
     const yearly = list.find((p) => (p.periodDays || 0) >= 365 && p.priceCents > 0)
 
-    if (current) {
+    // 从续费提醒打开：优先选中年付（续费时刻是推荐年付最自然的时机）
+    if (ui.purchasePreferCycle === 'yearly' && yearly) {
+      selectedCycle.value = 'yearly'
+      selectedPlan.value = yearly.planId
+    } else if (current) {
       selectedPlan.value = current.planId
       if ((current.periodDays || 0) >= 365) selectedCycle.value = 'yearly'
       else if ((current.periodDays || 0) >= 80 && (current.periodDays || 0) <= 120) selectedCycle.value = 'quarterly'
@@ -964,6 +980,7 @@ function restart() {
 function close() {
   pay.stopPolling()
   stopCountdown()
+  ui.purchasePreferCycle = null
   emit('close')
 }
 
@@ -1055,6 +1072,11 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: var(--fs-xs, 0.75rem);
   color: var(--text-secondary);
+}
+.pur-renew-note {
+  margin: 6px 0 0;
+  font-size: var(--fs-xs, 0.75rem);
+  color: var(--accent);
 }
 
 .pur-head-actions {

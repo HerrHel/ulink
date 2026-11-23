@@ -37,7 +37,7 @@ test.describe('宣传落地页', () => {
     await expect(pricing.locator('.price-featured del')).toHaveText('¥180')
     // 合规修订：徽标改为中性表述，省额注明「较按月订阅同周期合计省」
     await expect(pricing.locator('.price-featured .price-badge')).toContainText('订阅期内价格锁定 · 较按月订阅同周期合计省 ¥72')
-    await expect(pricing).toContainText('进阶特惠 · 较按月订阅同周期合计省 ¥13')
+    await expect(pricing).toContainText('进阶特惠 · 较按月订阅同周期合计省 ¥9')
     // 权益对比表的关键差异行（免费 200MB / PRO 5GB，且免费不支持全库巡检）
     // 合规修订：加密口径改为「仅账号字段端到端加密同步」，不再用无限定措辞
     await expect(pricing.locator('.price-compare')).toContainText('仅账号字段端到端加密同步')

@@ -91,6 +91,7 @@
 <AddPopover />
 <DeadLinksPopover />
 <SyncConflictBanner />
+<RenewalReminderBanner />
 <CommandPalette />
 <ShortcutHelpPanel />
 <UserPopover />
@@ -162,6 +163,8 @@ const BatchPopover = defineAsyncComponent(() => import('./components/overlays/Ba
 const FormatToolbar = defineAsyncComponent(() => import('./components/editor/FormatToolbar.vue'))
 const MentionDropdown = defineAsyncComponent(() => import('./components/overlays/MentionDropdown.vue'))
 const SyncConflictBanner = defineAsyncComponent(() => import('./components/overlays/SyncConflictBanner.vue'))
+// 到期前续费提醒（仅 PRO 且到期前 7 天内才渲染内容；异步加载不进首屏）
+const RenewalReminderBanner = defineAsyncComponent(() => import('./components/overlays/RenewalReminderBanner.vue'))
 const CommandPalette = defineAsyncComponent(() => import('./components/overlays/CommandPalette.vue'))
 const ShortcutHelpPanel = defineAsyncComponent(() => import('./components/overlays/ShortcutHelpPanel.vue'))
 const UserPopover = defineAsyncComponent(() => import('./components/overlays/UserPopover.vue'))

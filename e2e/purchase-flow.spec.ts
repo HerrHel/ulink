@@ -23,7 +23,7 @@ const USER = { sub: 'pay-e2e-uid', email: 'pay-e2e@example.com' }
 const PLANS = [
   { planId: 'free', name: '免费版', priceCents: 0, currency: 'CNY', periodDays: 0, features: { 'ai.requests.daily': 20 } },
   { planId: 'plus_monthly', name: 'PRO 月付', priceCents: 1500, currency: 'CNY', periodDays: 30, features: { 'ai.requests.daily': 100 } },
-  { planId: 'pro_quarterly', name: 'PRO 季付', priceCents: 3200, currency: 'CNY', periodDays: 90, features: { 'ai.requests.daily': 100 } },
+  { planId: 'pro_quarterly', name: 'PRO 季付', priceCents: 3600, currency: 'CNY', periodDays: 90, features: { 'ai.requests.daily': 100 } },
   { planId: 'plus_yearly', name: 'PRO 年付', priceCents: 10800, currency: 'CNY', periodDays: 365, features: { 'ai.requests.daily': 100 } },
 ]
 

@@ -12,6 +12,14 @@ export const purchaseZh = {
   purchase: {
     title: '升级 与链 PRO',
     renewTitle: '续费 与链 PRO',
+    // 续费顺延说明（settle_paid_order 在有效期内续费时叠加到原到期日之后）
+    renewCarryOver: '当前 PRO 还剩 {n} 天。现在续费会从到期日起顺延，剩余天数不会浪费。',
+    // 到期前续费提醒横幅（文案不写价格：价格只来自 plans 表）
+    reminderTitle: 'PRO 将在 {n} 天后到期',
+    reminderTitleFinal: 'PRO 将在 24 小时内到期',
+    reminderBody: '所有档位都不自动续费。现在续费会从到期日起顺延，剩余天数不浪费；年付折合最低。',
+    reminderCta: '续费',
+    reminderLater: '稍后',
     // 合规修订：平台深度解析已下线，统一为留存能力「轻量平台解析」「聊天媒体解析」
     subtitle: '轻量平台解析 · 聊天媒体解析 · AI 知识深加工 · 收藏夹全自动自愈 · 随订随用',
     noPlans: '暂无可购买的套餐',

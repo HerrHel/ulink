@@ -184,9 +184,9 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     'price.days30': '30 days',
     'price.quarterly': 'PRO Quarterly',
     // 合规修订：早鸟包装去掉，省额注明「较按月订阅同周期合计」
-    'price.quarterlyBadge': 'Quarterly deal · Save ¥13 vs. monthly over the same term',
+    'price.quarterlyBadge': 'Quarterly deal · Save ¥9 vs. monthly over the same term',
     'price.perQuarter': '/ quarter',
-    'price.quarterUnit': '90 days · ¥10.7/mo (3 months of monthly = ¥45, save 29%)',
+    'price.quarterUnit': '90 days · ¥12/mo (3 months of monthly = ¥45, save 20%)',
     'price.yearly': 'PRO Yearly',
     'price.perYear': '/ year',
     'price.yearUnit': '365 days · only ¥9/mo (12 months of monthly = ¥180, save 40%)',
