@@ -46,8 +46,9 @@ describe('audit-fixes-batch-8: 8项隐患与稳定性修复验证', () => {
       const ui = useUIStore()
       const app = useAppStore()
 
-      const primary = makeBm({ id: 'primary-1', title: 'GitHub', url: 'https://github.com' })
-      const dup = makeBm({ id: 'dup-1', title: 'GitHub Clone', url: 'https://github.com' })
+      // 质量分相同时按 updatedAt 新者为主书签：显式给定时间，避免两次 Date.now() 跨毫秒导致主副颠倒（CI 偶发红）
+      const primary = makeBm({ id: 'primary-1', title: 'GitHub', url: 'https://github.com', updatedAt: 2_000 })
+      const dup = makeBm({ id: 'dup-1', title: 'GitHub Clone', url: 'https://github.com', updatedAt: 1_000 })
       const child = makeBm({ id: 'child-1', title: 'GitHub Repo', url: 'https://github.com/repo', parentId: 'dup-1' })
 
       ds.bookmarks = [primary, dup, child]
