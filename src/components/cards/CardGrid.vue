@@ -45,6 +45,7 @@ import BookmarkCard from './BookmarkCard.vue'
 import GroupCard from './GroupCard.vue'
 import { provideListNav, type ListNav, type ListNavTarget } from '../../composables/useListNav.js'
 import { t } from '../../i18n/index.js'
+import { provideTileLayout } from './tileLayout.js'
 
 const ui = useUIStore()
 const bookmarkIcon = I.emptyBookmark
@@ -57,7 +58,11 @@ const { combinedList } = useCombinedList()
 // 可见片段且索引与 combinedList 错位，reorder 必然错误。批量模式本就需要全量 DOM
 // 才能拖拽排序，故 batchMode 时强制走非虚拟完整列表（normalGridRef 挂载），>100 项
 // 仅在非批量时启用虚拟滚动。
-const useVirtual = computed(() => combinedList.value.length > 100 && !ui.batchMode && !ui.focusedGroupId)
+// 小宫格是轻量图标瓦片，阈值放宽到 600（虚拟滚动会退化成列表行，启动器最需要的就是一屏多放）
+const virtualThreshold = computed(() => (ui.layoutMode === 'mini-grid' ? 600 : 100))
+const useVirtual = computed(() => combinedList.value.length > virtualThreshold.value && !ui.batchMode && !ui.focusedGroupId)
+// 小宫格图标启动器：BookmarkCard / GroupCard 注入后改渲染瓦片
+provideTileLayout(computed(() => ui.layoutMode === 'mini-grid' && !useVirtual.value && !ui.focusedGroupId))
 // 虚拟滚动强制 list-view：用户在 grid 布局下条目超过 100 会被静默切换渲染方式，
 // 布局与点击语义（行主体=主操作）一并变化，进入时提示一次避免困惑
 watch(useVirtual, (v, prev) => {
@@ -134,7 +139,7 @@ const gridClass = computed(() => {
 // 仅 Y 轴跟手 + leadEdge×midY 落点（列表/小宫格共用同一单列语义）。
 // 历史：曾为大宫格 grid-view 注入 axis:'xy' 走 2D 最近邻落点，但移动端 grid 模式被
 // SettingsPanel 双重拦截（line 33 移动端不显按钮 + line 269 isMobile 时 return）不可达，
-// 且小宫格用 CSS columns 瀑布流（DOM 索引≠视觉位置）2D 落点算法对瀑布流不成立 → 2D 路径
+// 且小宫格（现为图标启动器）批量模式不显拖拽手柄 → 2D 路径
 // 全程死代码，已整体删除回归纯 Y。虚拟模式强制 list-view，纯 Y 不污染虚拟滚动。
 useMobileDragReorder(normalGridRef, combinedList)
 </script>

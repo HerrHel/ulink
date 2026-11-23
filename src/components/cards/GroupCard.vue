@@ -77,15 +77,35 @@
       <input ref="fileInputRef" type="file" accept="image/*" multiple hidden @change="onPickImage" />
     </div>
   </div>
-  <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode }"
-       role="listitem" :aria-label="groupDisplayName"
+  <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode, 'card-tile': isTile }"
+       role="listitem" :aria-label="groupDisplayName" :title="isTile ? tileTooltip : undefined"
        :data-group-id="group.id" :draggable="!ui.isMobile"
-       :tabindex="listKeyboardNav ? 0 : undefined"
+       :tabindex="listKeyboardNav || isTile ? 0 : undefined"
        @click="onCardClick" @keydown="onCardKeydown">
-    <div class="group-card-accent"></div>
+    <div v-if="!isTile" class="group-card-accent"></div>
     <input v-if="ui.batchMode" type="checkbox" class="batch-chk"
            :id="'batchChk_group:' + group.id" :checked="isSelected"
            @change.stop @click.stop="toggleSelect">
+    <!-- 小宫格 = 图标启动器：组显示为文件夹（2×2 成员图标），点开进入聚焦视图 -->
+    <template v-if="isTile">
+      <div class="card-logo tile-icon tile-folder" :class="{ 'tile-folder-empty': !tileMembers.length }">
+        <template v-if="tileMembers.length">
+          <span v-for="m in tileMembers" :key="m.id" class="tile-folder-cell" :style="{ '--tile-hue': String(m.hue) }">
+            <span class="tile-folder-fb">{{ m.initial }}</span>
+            <img v-if="m.icon" :src="m.icon" alt="" :class="{ 'dark-invert': m.invert }" loading="lazy" decoding="async" @load="onTileMemberLoad" @error="onTileMemberError">
+          </span>
+        </template>
+        <img v-else-if="group.icon" class="img-loaded" :src="group.icon" alt="">
+        <span v-else v-html="noteIcon" class="display-contents"></span>
+        <span v-if="isPinned" class="tile-badge tile-badge-pin" :title="t('cards.pinned')" v-html="I.pin"></span>
+        <span v-if="memberCount" class="tile-badge tile-badge-count">{{ memberCount }}</span>
+      </div>
+      <div class="tile-name">
+        <span v-if="searchQuery" v-html="hlName"></span>
+        <template v-else>{{ groupDisplayName }}</template>
+      </div>
+    </template>
+    <template v-else>
     <div class="group-card-head">
       <div class="card-logo group-card-icon" :title="t('cards.focusGroup')" @click.stop="onFocusClick">
         <img v-if="group.icon" :src="group.icon" alt="">
@@ -130,6 +150,7 @@
     <button v-if="hasBody && ui.layoutMode === 'list' && !detailMode && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
     <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" :aria-label="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="ui.batchMode && ui.isMobile && ui.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
+    </template>
   </div>
   <Teleport to="body">
     <Transition name="cpalette">
@@ -140,7 +161,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { getTagNames, stripEntranceAnim, sanitizeReadonlyHTML, displayText, extractGroupTitle } from '../../utils.js'
+import { getTagNames, stripEntranceAnim, sanitizeReadonlyHTML, displayText, extractGroupTitle, favicon, domain, getOfficialDarkIcon, isDarkInvertSite } from '../../utils.js'
+import { useTileLayout, tileHue } from './tileLayout.js'
 import { isThreePartCipher } from '../../crypto.js'
 // PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
 const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
@@ -277,6 +299,41 @@ function onPublicBadgeClick() {
 }
 
 const previewText = computed(() => groupPreview(props.group))
+
+// 小宫格（图标启动器）：仅主网格非虚拟渲染时生效
+const tileLayout = useTileLayout()
+const isTile = computed(() => tileLayout.value && !props.detailMode && !isFocused.value)
+const memberCount = computed(() => props.group.bookmarkIds?.length ?? (props.group as any).bookmark_ids?.length ?? 0)
+/** 文件夹预览：前 4 个成员（书签取 favicon，嵌套组取其图标；都没有时用首字母色块） */
+const tileMembers = computed(() => {
+  if (!isTile.value) return []
+  const ids: string[] = props.group.bookmarkIds || (props.group as any).bookmark_ids || []
+  const out: { id: string; icon: string; initial: string; hue: number; invert?: boolean }[] = []
+  const dark = ui.themeColor === 'dark'
+  for (const id of ids) {
+    if (out.length >= 4) break
+    const b = ds.bookmarkMap[id]
+    if (b && !b.deletedAt) {
+      const dm = domain(b.url)
+      const name = displayText(b.title).trim() || dm || '?'
+      // 深色主题与书签卡片同口径：官方深色图标优先，否则按像素分析结果反色暗色剪影
+      const officialDark = dark ? (b.iconDark || getOfficialDarkIcon(b.url) || '') : ''
+      const icon = officialDark || favicon(b.url, b.icon)
+      const invert = dark && !officialDark && isDarkInvertSite(b.url, icon, b.attributes)
+      out.push({ id, icon, invert, initial: Array.from(name)[0].toUpperCase(), hue: tileHue(dm || name) })
+      continue
+    }
+    const g = ds.groupMap[id]
+    if (g) {
+      const name = displayText(g.name).trim() || '?'
+      out.push({ id, icon: g.icon || '', initial: Array.from(name)[0].toUpperCase(), hue: tileHue(name) })
+    }
+  }
+  return out
+})
+const tileTooltip = computed(() => [groupDisplayName.value, previewText.value].filter(Boolean).join('\n'))
+function onTileMemberLoad(e: Event) { (e.target as HTMLImageElement).classList.add('img-loaded') }
+function onTileMemberError(e: Event) { (e.target as HTMLImageElement).classList.add('img-error') }
 
 const undoStore = useUndoStore()
 const hasUndo = computed(() => !!undoStore.canUndo(props.group.id))
@@ -453,6 +510,8 @@ function onCardClick(e: MouseEvent) {
 }
 
 function onCardKeydown(e: KeyboardEvent) {
+  // 小宫格瓦片：Enter 主操作（打开网页 / 进入组）
+  if (isTile.value) { if (e.key === 'Enter' && !ui.batchMode) { e.preventDefault(); toggleFocus() } return }
   if (!listKeyboardNav.value) return
   const action = handleListCardKeydown(e, cardEl.value, {
     canExpand: hasBody.value,

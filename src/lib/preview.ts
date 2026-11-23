@@ -1,7 +1,7 @@
 /**
  * preview.ts — 卡片备注/内容的统一纯文本摘要
  *
- * 列表模式与小宫格共享此函数。组遍历 bookmarkIds，把成员（书签或嵌套组）
+ * 列表模式与小宫格悬停提示共享此函数。组遍历 bookmarkIds，把成员（书签或嵌套组）
  * 渲染成【名字】拼接；书签直接取 notes 纯文本。富文本 HTML 先抽 textContent。
  */
 import { useDataStore } from '../stores/data.js'
@@ -10,7 +10,7 @@ import { isThreePartCipher } from '../crypto.js'
 import { t } from '../i18n/index.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
-/** 纯文本摘要字符上限（超出省略号），约四行小宫格所见 */
+/** 纯文本摘要字符上限（超出省略号） */
 const PREVIEW_MAX = 160
 
 /** 复用的临时 DOM 元素，避免 htmlToText 每次创建 div */

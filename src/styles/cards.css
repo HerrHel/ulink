@@ -825,89 +825,126 @@
 .vs-ph-line{height:12px;border-radius:var(--radius-xs);background:var(--border)}
 @keyframes vs-pulse{0%,100%{opacity:.45}50%{opacity:.2}}
 
-/* ==================== MINI GRID VIEW ==================== */
-/* 小宫格：瀑布流（columns），只显标题+四行摘要+底部计数，卡片变矮变窄 */
+/* ==================== MINI GRID VIEW（图标启动器） ==================== */
+/* 小宫格 = 浏览器/手机桌面式启动器：规整网格，每格只有图标 + 名字。
+   摘要走 title 悬停提示（桌面）/ 长按菜单（移动端）；组显示为 2×2 成员图标的文件夹。 */
 .card-grid.mini-grid-view{
   display:block;
-  column-gap:10px;
-  column-fill:balance;
-  column-width:clamp(140px, 11vw, 200px);
 }
-.mini-grid-view .card,
-.mini-grid-view .group-card{
-  break-inside:avoid;
-  -webkit-column-break-inside:avoid;
-  page-break-inside:avoid;
-  display:block;
+.card-grid.mini-grid-view .card-list-inner{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(92px,1fr));
+  gap:6px 4px;
+}
+.mini-grid-view .card.card-tile{
+  height:auto;min-height:0;
+  padding:12px 6px 10px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  background:transparent;
+  border-color:transparent;
+  box-shadow:none;
+  border-radius:var(--radius-lg);
+  overflow:visible;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mini-grid-view .card.card-tile:hover{
+    background:var(--surface);
+    border-color:var(--border-light);
+    box-shadow:var(--shadow-card);
+    transform:none;
+  }
+  .mini-grid-view .card.card-tile:hover .tile-icon{transform:translateY(-2px)}
+}
+.mini-grid-view .card.card-tile:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.mini-grid-view .card.card-tile.drag-over{background:var(--surface);border-color:var(--accent)}
+/* 图标底座：固定 52px 圆角方块，favicon 居中 30px —— 低清 favicon 不被硬放大到糊 */
+.mini-grid-view .tile-icon{
+  width:52px;height:52px;
+  border-radius:14px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  box-shadow:0 1px 2px rgba(0,0,0,.06);
+  overflow:visible;
+  cursor:pointer;
+  transition:transform .2s var(--ease-out);
+  will-change:auto;
+}
+.mini-grid-view .tile-icon:hover{transform:none;box-shadow:0 1px 2px rgba(0,0,0,.06);border-color:var(--border)}
+.mini-grid-view .tile-icon > img{width:30px;height:30px;border-radius:6px}
+.mini-grid-view .tile-icon .brand-logo-icon{width:30px;height:30px}
+/* 首字母兜底：按域名稳定取色的实心色块 */
+.mini-grid-view .tile-icon .card-logo-fallback{
+  border-radius:13px;
+  background:hsl(var(--tile-hue,210) 52% 52%);
+  color:#fff;
+  font-size:22px;font-weight:600;
+}
+/* 文件夹：2×2 成员图标 */
+.mini-grid-view .tile-folder{
+  display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+  gap:4px;padding:7px;
+  background:var(--bg-alt);
+}
+.mini-grid-view .tile-folder.tile-folder-empty{display:flex;padding:0}
+.mini-grid-view .tile-folder.tile-folder-empty svg{width:26px;height:26px;color:var(--text-muted)}
+.mini-grid-view .tile-folder.tile-folder-empty > img{width:30px;height:30px;opacity:1}
+.tile-folder-cell{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;min-width:0;
+  border-radius:4px;overflow:hidden;
+  background:var(--surface);
+}
+.tile-folder-cell img{position:absolute;inset:0;margin:auto;width:14px;height:14px;opacity:0;transition:opacity .2s}
+.tile-folder-cell img.img-loaded{opacity:1}
+.tile-folder-cell img.img-error{display:none}
+.tile-folder-fb{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:hsl(var(--tile-hue,210) 52% 52%);color:#fff;font-size:9px;font-weight:700;
+}
+.tile-folder-cell:has(img.img-loaded) .tile-folder-fb{display:none}
+/* 角标：置顶 / 死链 / 墙 / 子书签或成员数 */
+.tile-badge{
+  position:absolute;z-index:3;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+}
+.tile-badge-pin{
+  top:-5px;left:-5px;width:18px;height:18px;border-radius:50%;
+  background:var(--accent);color:#fff;
+}
+.tile-badge-pin svg{width:11px;height:11px}
+.tile-badge-dead,.tile-badge-gfw{
+  bottom:-3px;left:-3px;width:11px;height:11px;border-radius:50%;
+  border:2px solid var(--bg);
+}
+.tile-badge-dead{background:var(--danger,#e5484d)}
+.tile-badge-gfw{background:var(--warning,#f5a524)}
+.tile-badge-count{
+  top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text-muted);font-size:10px;font-weight:600;line-height:1;
+}
+.tile-name{
   width:100%;
-  height:auto;
-  margin:0 0 10px;
-  padding:8px 10px;
-  min-height:auto;
+  font-size:var(--fs-xs);line-height:1.35;
+  color:var(--text);
+  text-align:center;
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;word-break:break-word;
 }
-.mini-grid-view .card-topline{padding:0;margin:0}
-/* 小宫格里隐藏：标签、富文本组预览、账户区、子站点、头部操作按钮、缩进交互按钮；
-   只留图标+标题（toprow）、摘要、底部统计 */
-.mini-grid-view .card-tags,
-.mini-grid-view .card-notes,
-.mini-grid-view .group-notes-preview,
-.mini-grid-view .card-acct-toggle,
-.mini-grid-view .card-acct-body,
-.mini-grid-view .sub-sites,
-.mini-grid-view .group-head-actions,
-.mini-grid-view .btn-undo-group,
-.mini-grid-view .btn-redo-group,
-.mini-grid-view .list-expand-btn,
-.mini-grid-view .group-card-accent{display:none !important}
-/* 底部只显示计数，隐藏操作按钮 */
-.mini-grid-view .card-foot{padding:4px 0 0;margin-top:4px;border-top:1px solid var(--border-light)}
-.mini-grid-view .card-actions{display:none}
+/* 批量模式：复选框压在图标左上角，不再给内容留左侧空位 */
+.mini-grid-view .card.card-tile.batch-mode{padding-left:6px}
+.mini-grid-view .card.card-tile .batch-chk{top:6px;left:calc(50% - 34px)}
+.mini-grid-view .card.card-tile:has(.batch-chk:checked){background:var(--accent-glow);border-color:var(--accent)}
+/* 移动端：更紧凑，一行 4~5 个 */
+@media(max-width:768px){
+  .card-grid.mini-grid-view .card-list-inner{grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:4px 2px}
+  .mini-grid-view .card.card-tile{padding:10px 2px 8px;gap:6px}
+  .mini-grid-view .tile-icon{width:50px;height:50px}
+}
 /* 移动端主网格大宫格卡片隐藏底部操作按钮（新增子书签/编辑/删除）——详情走辅助栏与长按菜单 */
 @media(max-width:768px){
   #cardGrid.grid-view .card-actions{display:none}
 }
-.mini-grid-view .card-stat{font-size:11px;opacity:.8}
-/* 摘要：最多四行截断 */
-.mini-grid-view .card-body{display:block;padding:0;margin-top:4px}
-.mini-grid-view .card-preview{
-  display:-webkit-box;
-  -webkit-line-clamp:4;
-  line-clamp:4;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
-  font-size:var(--fs-xs);
-  line-height:1.45;
-  color:var(--text-muted);
-  margin:0;
-  text-overflow:ellipsis;
-}
-.mini-grid-view .card-name{font-size:var(--fs-sm);font-weight:600;height:20px;line-height:20px}
-.mini-grid-view .card-domain{font-size:10px;opacity:.6}
-.mini-grid-view .card-logo{width:20px;height:20px}
-.mini-grid-view .card-logo img{width:20px;height:20px}
-.mini-grid-view .card-logo svg{width:20px;height:20px}
-.mini-grid-view .card-logo-fallback{width:20px;height:20px;font-size:var(--fs-xs)}
-.mini-grid-view .card-toprow{gap:6px;align-items:center;margin-bottom:2px}
-/* titlewrap 与图标等高、无 padding/margin 撑大，确保与图标同行水平对齐 */
-.mini-grid-view .card-titlewrap{height:20px;padding:0;margin:0}
-.mini-grid-view .card-titlewrap-text{height:20px}
-.mini-grid-view .card-open-hint{display:none !important}
-/* mini-grid-view card-name height merged above */
-/* 小宫格隐藏 titlewrap 内的原网址 */
-.mini-grid-view .card-titlewrap .card-domain{display:none}
-/* 第二行小字网址 */
-.mini-domain{
-  font-size:10px;
-  opacity:.6;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  margin-top:2px;
-}
-/* 小宫格缩窄间距 */
-.mini-grid-view .card-scroll-wrap{display:block}
-.mini-grid-view .grp-scroll-body{display:block;overflow:visible}
-.mini-grid-view .grp-scroll-body .card-scroll-wrap{overflow:visible}
 
 /* AI 引用与反向写回触发的卡片定位光晕
  *
@@ -938,7 +975,8 @@
 [data-theme="dark"] .card-icon img.dark-invert,
 [data-theme="dark"] .bm-icon img.dark-invert,
 [data-theme="dark"] .group-inline-card img.dark-invert,
-[data-theme="dark"] .inline-card-logo img.dark-invert {
+[data-theme="dark"] .inline-card-logo img.dark-invert,
+[data-theme="dark"] .tile-folder-cell img.dark-invert {
   filter: invert(0.94) !important;
 }
 
@@ -955,7 +993,8 @@
   :root:not([data-theme="light"]) .card-icon img.dark-invert,
   :root:not([data-theme="light"]) .bm-icon img.dark-invert,
   :root:not([data-theme="light"]) .inline-card-logo img.dark-invert,
-  :root:not([data-theme="light"]) .group-inline-card img.dark-invert {
+  :root:not([data-theme="light"]) .group-inline-card img.dark-invert,
+  :root:not([data-theme="light"]) .tile-folder-cell img.dark-invert {
     filter: invert(0.94) !important;
   }
 }

@@ -1,13 +1,32 @@
 <template>
-  <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen, 'batch-mode': uiStore.batchMode }"
-       role="listitem" :aria-label="bookmark.title"
+  <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen, 'batch-mode': uiStore.batchMode, 'card-tile': isTile }"
+       role="listitem" :aria-label="bookmark.title" :title="isTile ? tileTooltip : undefined"
        :data-id="bookmark.id" :draggable="!uiStore.isMobile && !isShareReadonly"
-       :tabindex="listKeyboardNav ? 0 : undefined"
+       :tabindex="listKeyboardNav || isTile ? 0 : undefined"
        @click="onCardClick" @keydown="onCardKeydown">
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
             :id="'batchChk_' + bookmark.id" :checked="isSelected"
             :aria-label="bookmark.title"
             @change.stop @click.stop="toggleSelect">
+    <!-- 小宫格 = 图标启动器：只留图标 + 名字（摘要走悬停提示 / 长按菜单） -->
+    <template v-if="isTile">
+      <div class="card-logo tile-icon" :style="tileFallbackStyle">
+        <BrandLogo v-if="isOfficialBrand" :size="30" />
+        <template v-else>
+          <img v-if="iconSrc" :src="iconSrc" alt="" loading="lazy" decoding="async" :class="{ 'img-loaded': imgLoaded, 'dark-invert': isDarkInvert }" @load="onImgLoad" @error="onImgError">
+          <span class="card-logo-fallback">{{ tileInitial }}</span>
+        </template>
+        <span v-if="isPinned" class="tile-badge tile-badge-pin" :title="t('cards.pinned')" v-html="I.pin"></span>
+        <span v-if="linkStatus === 'dead'" class="tile-badge tile-badge-dead" :title="t('cards.deadLinkTitle')"></span>
+        <span v-else-if="linkStatus === 'gfw'" class="tile-badge tile-badge-gfw" :title="t('cards.gfwBlockedTitle')"></span>
+        <span v-if="children.length" class="tile-badge tile-badge-count">{{ children.length }}</span>
+      </div>
+      <div class="tile-name">
+        <span v-if="searchQuery" v-html="hlTitle"></span>
+        <template v-else>{{ displayText(bookmark.title) || domainStr }}</template>
+      </div>
+    </template>
+    <template v-else>
     <div class="card-topline">
       <div class="card-toprow">
         <div class="card-logo" :title="t('cards.openLink')" @click.stop="onOpenClick">
@@ -34,7 +53,6 @@
           <span class="card-open-hint" aria-hidden="true" v-html="I.external"></span>
         </div>
       </div>
-      <div class="card-domain mini-domain" v-if="uiStore.layoutMode === 'mini-grid'">{{ domainStr }}</div>
       <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode === 'list'">
         <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
@@ -90,6 +108,7 @@
     <button v-if="!detailMode && hasExpandableContent && uiStore.layoutMode === 'list' && (!uiStore.isMobile || isShareReadonly)" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
     <button v-if="!detailMode && uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" :aria-label="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && uiStore.isMobile && uiStore.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
+    </template>
   </div>
 </template>
 
@@ -113,6 +132,7 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { bookmarkPreview } from '../../lib/preview.js'
+import { useTileLayout, tileHue } from './tileLayout.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import { useListNav } from '../../composables/useListNav.js'
 import { t, tN } from '../../i18n/index.js'
@@ -279,6 +299,17 @@ const linkStatus = computed<'dead' | 'gfw' | 'normal'>(() => {
   return 'normal'
 })
 const isPinned = computed(() => !!props.bookmark.pinnedAt)
+// 小宫格（图标启动器）：仅在主网格非虚拟渲染时生效，辅助栏/详情等复用场景保持原卡片
+const tileLayout = useTileLayout()
+const isTile = computed(() => tileLayout.value && !props.detailMode)
+const tileInitial = computed(() => Array.from(displayText(props.bookmark.title).trim() || domainStr.value || '?')[0].toUpperCase())
+// 首字母兜底底色：按域名（无则标题）稳定取色，同站同色，避免糊图标与灰块混杂
+const tileFallbackStyle = computed(() => ({ '--tile-hue': String(tileHue(domainStr.value || props.bookmark.title || '')) }))
+const tileTooltip = computed(() => {
+  const lines = [displayText(props.bookmark.title), domainStr.value]
+  if (previewText.value) lines.push(previewText.value)
+  return lines.filter(Boolean).join('\n')
+})
 const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
 
 // 搜索高亮：旧实现模板内直接 v-html="hlText(...)" 非缓存，每次重渲染（滚动/批量切换/
@@ -326,6 +357,8 @@ function onCardClick(e: MouseEvent) {
 }
 
 function onCardKeydown(e: KeyboardEvent) {
+  // 小宫格瓦片：Enter 主操作（打开网页 / 进入组）
+  if (isTile.value) { if (e.key === 'Enter' && !uiStore.batchMode) { e.preventDefault(); visit() } return }
   if (!listKeyboardNav.value) return
   const action = handleListCardKeydown(e, cardEl.value as HTMLElement | null, {
     canExpand: hasExpandableContent.value,
