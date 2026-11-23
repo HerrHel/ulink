@@ -81,7 +81,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 - 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头（dev/preview）；**生产部署 = CloudBase 静态托管**（CI `tcb hosting deploy ./dist --entry …`，入口最后上传），GitHub Pages / spa404Plugin 均已停用，Cloudflare Pages 已全面退役（原 `/api/*` 迁入 `ai-api` 云函数，不要用 `pages:deploy`）
 - `cli/` — **已归档（2026-10-31 移除）**：无分发渠道且仍指向 Supabase，代码留存 git 历史 `6cf8783`，见 `docs/ARCHIVED_CLI.md`
-- `extension/` — Manifest V3 扩展（v2.0.0）：**侧边栏 = 主站 iframe 壳**（`sidepanel.js` 嵌入 `/app?mode=panel`，`panel-bridge.js` 协议与主站 `src/lib/extPanel.ts` 同构），扩展不再直连数据库；Ctrl+Shift+S / 右键在侧边栏内原地保存（复用主站新增书签弹窗含 AI 预填），侧边栏打不开时退回 `ext_save` 新标签保存；权限仅 sidePanel/activeTab/contextMenus/scripting + host `ulink.ren`。主站侧 `lib/crossInstance.ts` 多实例落盘广播防互相覆盖；线上 `/app` 为静态托管直连、安全头由网关域名层注入，**须先在网关加 `Content-Security-Policy: frame-ancestors 'self' chrome-extension://<Edge 商店 ID>` 再发扩展**（只改 edge-headers 不生效）。详见 AGENTS.md「浏览器扩展」
+- `extension/` — Manifest V3 扩展（v2.0.0）：**侧边栏 = 主站 iframe 壳**（`sidepanel.js` 嵌入 `/app?mode=panel`，`panel-bridge.js` 协议与主站 `src/lib/extPanel.ts` 同构），扩展不再直连数据库；Ctrl+Shift+S / 右键在侧边栏内原地保存（复用主站新增书签弹窗含 AI 预填），侧边栏打不开时退回 `ext_save` 新标签保存；权限仅 sidePanel/activeTab/contextMenus/scripting + host `ulink.ren`。主站侧 `lib/crossInstance.ts` 多实例落盘广播防互相覆盖；线上 `/app` 为静态托管直连、安全头由网关域名层注入，网关已加 `Content-Security-Policy: frame-ancestors 'self' chrome-extension://<Edge 商店 ID>`，**动作必须是「仅不存在时添加」**（选「覆盖」会抹掉 share-ssr 分享页自带的严格 CSP；只改 edge-headers 不生效）。详见 AGENTS.md「浏览器扩展」
 - `src/styles/` — tokens/reset/layout/cards/group/editor/modals/overlays/header/nav/filter/batch/drag/settings/toast/responsive/utility.css，由 main.css 统一导入
 
 ### 移动端拖拽（`useMobileDragReorder.ts`）
