@@ -81,7 +81,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 - 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头（dev/preview）；**生产部署 = CloudBase 静态托管**（CI `tcb hosting deploy ./dist --entry …`，入口最后上传），GitHub Pages / spa404Plugin 均已停用，Cloudflare Pages 已全面退役（原 `/api/*` 迁入 `ai-api` 云函数，不要用 `pages:deploy`）
 - `cli/` — **已归档（2026-10-31 移除）**：无分发渠道且仍指向 Supabase，代码留存 git 历史 `6cf8783`，见 `docs/ARCHIVED_CLI.md`
-- `extension/` — Manifest V3 扩展（v1.2.2），Ctrl+Shift+S 保存当前页（manifest `save-to-linkvault` 命令）+ 侧边栏，右键深度解析已移除，媒体解析改走网页端多模态直传，仅保留 `https://ulink.ren/*` host 权限
+- `extension/` — Manifest V3 扩展（v2.0.0）：**侧边栏 = 主站 iframe 壳**（`sidepanel.js` 嵌入 `/app?mode=panel`，`panel-bridge.js` 协议与主站 `src/lib/extPanel.ts` 同构），扩展不再直连数据库；Ctrl+Shift+S / 右键在侧边栏内原地保存（复用主站新增书签弹窗含 AI 预填），侧边栏打不开时退回 `ext_save` 新标签保存；权限仅 sidePanel/activeTab/contextMenus/scripting + host `ulink.ren`。主站侧 `lib/crossInstance.ts` 多实例落盘广播防互相覆盖；线上 `/app` 为静态托管直连、安全头由网关域名层注入，**须先在网关加 `Content-Security-Policy: frame-ancestors 'self' chrome-extension://<Edge 商店 ID>` 再发扩展**（只改 edge-headers 不生效）。详见 AGENTS.md「浏览器扩展」
 - `src/styles/` — tokens/reset/layout/cards/group/editor/modals/overlays/header/nav/filter/batch/drag/settings/toast/responsive/utility.css，由 main.css 统一导入
 
 ### 移动端拖拽（`useMobileDragReorder.ts`）
@@ -90,7 +90,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 ## 安全与运维
 
-- CSP / 安全头：规则定义在 `vite.config.ts`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，**勿私自收紧**）。生产分两层：静态入口（`/`）由 `securityMetaPlugin` 注入 meta CSP + Referrer；`/app`、`/legal/*` 由云函数 `edge-headers` 反代并下发真实响应头（CSP 含 frame-ancestors、XCTO、XFO、HSTS）；分享页由 `share-ssr` 下发 XCTO/XFO。`npm run check:prod` 探测 `/app`、`/legal`，缺失退出码 4
+- CSP / 安全头：规则定义在 `vite.config.ts`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，**勿私自收紧**）。生产形态（2026-11-12 起）：`/`、`/app`、`/legal/*` 均为静态托管直连，XCTO / XFO / HSTS / Referrer 由**网关「自定义域名 → Headers 设置」统一注入**，CSP 只在构建期注入的页面 `<meta>`（`securityMetaPlugin`）；`edge-headers` 云函数仍保留但已不在入口路径上；分享页由 `share-ssr` 下发 XCTO/XFO。`npm run check:prod` 探测 `/app`、`/legal`，缺失退出码 4
 - 云函数 check-link（生产 `cloudbase/functions/check-link/`）：私有 IP 黑名单防 SSRF；CORS/超时/限流由云函数环境变量控制
 - 错误追踪：errorHandler → `src/lib/errorReporter.ts` → `report-error` 云函数 → CloudBase `error_logs`（5s 节流）
 - 公开分享：RLS 允许匿名 SELECT `is_public = true` 的组及其书签；分享页由 `share-ssr` 云函数渲染

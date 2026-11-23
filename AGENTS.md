@@ -28,7 +28,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 > - 自检：`bash <tcb> env list`（应见 `ulink-d1g5srvjo54b1886a`）
 > - 查库：`bash <tcb> db execute -e ulink-d1g5srvjo54b1886a --json --sql "SELECT ..."`（SQL ≤10KB/批）
 > - 函数/路由：`bash <tcb> fn list`、`bash <tcb> routes list --json`
-> - **HTML 入口边缘代理 `edge-headers`（2026-10-31 新增）**：`/app` 与 `/legal/*` 经该云函数反代静态托管文件，补 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、CSP `frame-ancestors 'self'`、HSTS（CloudBase 静态托管无自定义响应头能力）。路由在网关 `*` 域（`/app`、`/legal`，均开 `enablePathTransmission`）；回滚=删除这两条路由，静态兜底会接管。`/`（营销首页）仍直连静态托管，只有构建期 meta CSP/Referrer。
+> - **HTML 入口边缘代理 `edge-headers`（2026-10-31 新增；⚠️ 2026-11-12 起已不在入口路径上——`/`、`/app`、`/legal/*` 改为静态托管直连，安全头改由网关「自定义域名 → Headers 设置」注入，见 `scripts/check-prod-version.mjs` 说明；以下为历史形态）**：`/app` 与 `/legal/*` 经该云函数反代静态托管文件，补 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、CSP `frame-ancestors 'self'`、HSTS（CloudBase 静态托管无自定义响应头能力）。路由在网关 `*` 域（`/app`、`/legal`，均开 `enablePathTransmission`）；回滚=删除这两条路由，静态兜底会接管。`/`（营销首页）仍直连静态托管，只有构建期 meta CSP/Referrer。
 > - 迁移应用：`node scripts/apply-cloudbase-migration.mjs cloudbase/migrations/<file>.sql`（`tcb db execute` 只有 `--sql`，没有 `--file`）
 > - 部署（cwd 必须为仓库根）：`node scripts/deploy-cloudbase-fn.mjs <fn> [--env-only]`
 
@@ -208,7 +208,18 @@ composables 按职责分三组：
 
 ### 浏览器扩展
 
-`extension/` 目录包含通用 Manifest V3 浏览器扩展（兼容 Edge、Chrome、Firefox、Brave、Arc 等多浏览器；通过 `npm run ext:pack` 打包），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏（side_panel / sidebar_action）沉浸式操作。**当前版本 1.2.2**（2026-11-01：平台视频深度解析下线，移除右键解析入口；只保留保存书签/侧边栏；同日移除遗留 Supabase host 权限、`config.js` 改为 CloudBase 配置）。**网页端多模态媒体解析**：用户上传自己拥有权利的视频/音频/图片 → 前端 `unifiedMedia` 压缩/分流 → 直连境内大模型 MiMo-V2.6-Flash（不走平台抓取、无需容器微服务、不用扩展/代理）。**双语文案**：扩展使用标准 WebExtensions i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` **现为 CloudBase shim**（`window.supabase.createClient(envId, publishableKey)` → `{ from: rdb().from, auth }`，`verifyOtp` 闭包适配），配套 `lib/cloudbase-sdk.js`（@cloudbase/js-sdk IIFE bundle）；`npm run ext:bundle-supabase` 的 supabase-js 生成物已废弃。
+`extension/` 目录包含通用 Manifest V3 浏览器扩展（兼容 Edge、Chrome、Firefox、Brave、Arc；`npm run ext:pack` 打包）。**当前版本 2.0.0（2026-11-23）：侧边栏 = 主站 iframe 壳**——1.x 自带 CloudBase SDK 的独立书签客户端（`lib/`、`config.js`、`crypto.js`、`sidepanel-match.js` 等 ~3 万行）已整体删除，扩展不再直连数据库、不再碰 token。
+- 文件：`sidepanel.html` / `sidepanel.js`（iframe 嵌入 `https://ulink.ren/app?mode=panel`，15 秒无握手显示离线兜底；推当前标签页、按主站回报设角标 ✓）、`panel-bridge.js`（协议纯函数，与主站 `src/lib/extPanel.ts` 同构，vitest 锁两端契约；本地调试可 `sidepanel.html?app=http://localhost:4173`，只允许本地地址）、`background.js`（快捷键 Ctrl+Shift+S / 右键：在用户手势内同步 `sidePanel.open` → 现场提取元数据 → `PANEL_SAVE` 交付，侧边栏尚未就绪则暂存由 `PANEL_READY` 领取；侧边栏打不开时退回 `pwa-open.js` 新标签 `ext_save` 静默保存）、`meta-extract.js`（OG/描述/划词/视频字幕）。
+- 权限：`sidePanel` / `activeTab` / `contextMenus` / `scripting`，host 仅 `https://ulink.ren/*`；**不申请 `tabs`**（H10 隐私取舍）——切换标签后若无 activeTab 授权拿不到网址，主站「当前页」卡片隐藏，快捷键 / 右键 / 点图标仍可用。
+- 文案：`_locales/{zh_CN,en}` 只保留实际引用的 11 个键（护栏测试校验两语同构且无缺键）。
+- 1.x 历史：1.2.2 平台视频深度解析下线；1.2.3 删除其残留代码与 `storage` 权限。
+
+**主站侧（侧栏模式）**：直接嵌入 `/app?mode=panel`，主站在 iframe 里完整运行（登录态 / IndexedDB / `navigator.locks` / BroadcastChannel 与普通标签页共享，Chromium 实测；Firefox 未验证）。
+- `src/lib/extPanel.ts`：协议纯函数。消息带 `ns:'ulink-ext'` + `v:1`；入站 `tab`（字段白名单 + 截断，URL 只放行 http(s)）/ `save`；出站 `ready` / `matched {url, saved}`（去重）。只收 `window.parent` 且 origin 为 `chrome-extension://` / `moz-extension://` 的消息，含网址的出站消息只发给已确认的扩展 origin；侧栏模式要求真的被 iframe 嵌入，sessionStorage `lv_ext_panel_mode` 跨刷新延续。
+- `src/stores/extPanel.ts` + `src/composables/useExtPanel.ts`（App.vue setup 内调用）+ `components/shell/ExtPanelCurrentPage.vue`。保存**复用主站新增书签弹窗**：真实网页标题经 `cleanWebTitle` 去品牌尾巴后置 `_userEditedTitle=true` 且 `_autoTitle` 同值（本地按路径猜的标题不得覆盖、AI 仍可替换）；划选文字作为用户备注保留；已收藏则打开编辑。
+- `src/lib/crossInstance.ts`：同浏览器多实例「已落盘」广播（BroadcastChannel `linkvault-data`，只广播主页空间）；`useAppLifecycle.reloadFromOtherInstance` 在本实例空闲时从 IDB 重载，忙则 800ms 后重试。同一 300ms 防抖窗口内两边同时改仍是后写者为准。
+- 安全头（⚠️ 线上生效点在**网关**，不在 `edge-headers`）：2026-11-12 起 `/`、`/app`、`/legal/*` 为静态托管直连，XFO/XCTO/HSTS/Referrer 由网关「自定义域名 → Headers 设置」统一注入，CSP 只在页面 `<meta>`（`frame-ancestors` 不能经 meta 交付）。线上 `/app` 只有 `X-Frame-Options: SAMEORIGIN` 时扩展 iframe 会被拦（Chromium 实测）。上线侧栏需在网关域名层**追加一个只含 frame-ancestors 的 CSP 响应头**：`Content-Security-Policy: frame-ancestors 'self' chrome-extension://epjlkfndeonlpjocdafoiaomdigopeeh`（Edge 商店 ID；只有这一条指令，不会与页面 meta CSP 的其他指令取交集），XFO 保留（现代浏览器在有 frame-ancestors 时以 CSP 为准，Chromium 实测成立，`check:prod` 不受影响）。`edge-headers` 代码里同步加了相同的扩展 ID 白名单（`EXT_FRAME_ORIGINS` 可追加），仅在 `/app` 重新路由回该函数时生效。dev/preview 放行 `chrome-extension: moz-extension:`。
+- ⚠️ 发布顺序：**先在网关域名层加上述 frame-ancestors 响应头（并上线主站），再发扩展 2.0**，否则侧边栏只会显示「暂时连不上与链」。
 
 ### 样式
 
