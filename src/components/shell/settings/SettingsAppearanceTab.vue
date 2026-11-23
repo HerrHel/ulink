@@ -39,13 +39,14 @@
 
     <div class="sp-card">
       <div class="sp-card-head">{{ t('settings.viewAndSort') }}</div>
-      <div class="sp-card-row" v-if="!uiStore.isMobile">
+      <!-- 移动端无大宫格，只给列表 / 小宫格两档 -->
+      <div class="sp-card-row">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.layout') }}</span>
         </div>
         <div class="sp-row-ctrl">
           <div class="sp-seg">
-            <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" @click="onSetLayout('grid')" :title="t('settings.gridView')"><span aria-hidden="true" v-html="I.grid"></span> {{ t('settings.gridView') }}</button>
+            <button v-if="!uiStore.isMobile" class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" @click="onSetLayout('grid')" :title="t('settings.gridView')"><span aria-hidden="true" v-html="I.grid"></span> {{ t('settings.gridView') }}</button>
             <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" @click="onSetLayout('list')" :title="t('settings.listView')"><span aria-hidden="true" v-html="I.list"></span> {{ t('settings.listView') }}</button>
             <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'mini-grid' }" @click="onSetLayout('mini-grid')" :title="t('settings.miniGridView')"><span aria-hidden="true" v-html="I.miniGrid"></span> {{ t('settings.miniGridView') }}</button>
           </div>

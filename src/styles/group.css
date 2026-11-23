@@ -65,6 +65,10 @@
   white-space:nowrap;cursor:pointer;transition:color .15s ease,border-color .15s ease;
 }
 @media (hover: hover) and (pointer: fine){.guide-import-btn:hover{color:var(--text);border-color:var(--border-hover)}}
+/* 移动端列表：右侧绝对定位的「⋯」（40px，right:4px）会压住靠右的导入按钮，给它让出位置 */
+@media(max-width:768px){
+  .list-view .group-card:has(> .card-menu-btn) .guide-import-btn{margin-right:40px}
+}
 
 .focus-view{
   display:flex;flex-direction:column;
