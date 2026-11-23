@@ -41,7 +41,10 @@ test.describe('宣传落地页', () => {
     // 权益对比表的关键差异行（免费 200MB / PRO 5GB，且免费不支持全库巡检）
     // 合规修订：加密口径改为「仅账号字段端到端加密同步」，不再用无限定措辞
     await expect(pricing.locator('.price-compare')).toContainText('仅账号字段端到端加密同步')
-    await expect(pricing.locator('.price-compare')).toContainText('5 GB')
+    // 与 plans 表对齐：AI 为 PRO 专属（免费仅终身试用）、云端历史分档；已撤下的存储空间不得再展示
+    await expect(pricing.locator('.price-compare')).toContainText('试用 30 次（累计）')
+    await expect(pricing.locator('.price-compare')).toContainText('365 天')
+    await expect(pricing.locator('.price-compare')).not.toContainText('5 GB')
     await expect(pricing.locator('.price-compare')).toContainText('每周巡检')
     // 退款政策链接可达（支付经营审核需要）
     await expect(pricing.locator('a[href="/legal/refund-policy.html"]')).toBeVisible()

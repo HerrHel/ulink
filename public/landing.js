@@ -198,10 +198,10 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     'price.cmp.devices': 'Only the account field is end-to-end encrypted (sync)',
     'price.cmp.bookmarks': 'Bookmarks & categories',
     'price.cmp.noLimit': 'Unlimited',
-    'price.cmp.storage': 'Cloud storage',
     'price.cmp.linkcheck': 'Daily manual link checks',
     'price.cmp.patrol': 'Automatic link patrol',
-    'price.cmp.ai': 'Monthly AI compute quota',
+    'price.cmp.ai': 'AI autofill, page enrichment & chat',
+    'price.cmp.history': 'Cloud version history',
     'price.cmp.video': 'Daily light platform parses',
     // EN 定价表：原 price.yes 被「支持 / 不限设备 / 每周巡检」复用，拆成三键避免英文态全塌缩成 Included；
     // 数值单元补键，避免英文页残留「次 / 万字」等中文量词
@@ -212,8 +212,11 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     'price.cmp.times3': '3 / day',
     'price.cmp.times10': '10 / day',
     'price.cmp.times50': '50 / day',
-    'price.cmp.aiFree': '100k chars (50k tokens)',
-    'price.cmp.aiPro': '400k chars (200k tokens)',
+    'price.cmp.aiTrial': '30 trial uses (lifetime)',
+    'price.cmp.aiProDaily': '100 / day',
+    'price.cmp.aiProMonthly': '400k chars / month',
+    'price.cmp.days7': '7 days',
+    'price.cmp.days365': '365 days',
     'price.no': 'Not included',
     'price.note1': 'No auto-renewal on any plan. Renew on demand.',
     'price.deepNote':
