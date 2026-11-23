@@ -242,11 +242,13 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - **云函数 check-link**（生产 `cloudbase/functions/check-link/`，原 `supabase/functions/check-link/` 已迁移）：私有 IP 黑名单防 SSRF；超时/CORS/限流由云函数环境变量控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`、`CHECK_LINK_RATE_LIMIT_PER_MIN`）；限流 fail-closed（`consume_rate_limit`）；**可选鉴权（2026-10-31）**：请求带 `Authorization: Bearer` 时用 `cb-auth.js` 换 uid，按 `plans.features['linkcheck.daily']` 计每日**手动检查**额度（`mode=manual`），自动巡检（`mode=auto`）不消耗该额度；匿名请求仍只走 IP 分钟限流。history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → CloudBase `error_logs` 表（生产经 `report-error` 云函数写入，5s 节流）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
-- **CI/CD**：两个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署，四个 job）与 `cert-check.yml`（证书到期监控）；依赖更新走 `.github/dependabot.yml`（npm 周检 / GitHub Actions 月检）。`ci.yml` 四个 job：
-  - `lint-test`：npm ci → lint → typecheck → 单测 + 覆盖率门槛 → `npm audit --omit=dev --audit-level=high`（blocking）→ `npm run build` 产物上传 artifact
-  - `unit-cloudbase`：与 `lint-test` 并行，`npm run test:cloudbase`（整套单测在 CloudBase 形态下再跑一遍）
+- **CI/CD**：三个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署）、`cert-check.yml`（证书到期监控）与 `prune-hosting-assets.yml`（手动触发，清理托管 `assets/` 下「不在线上 sw.js 引用里且超过 30 天没被重传」的旧分包，默认只统计，`mode=delete` + `confirm=DELETE` 才删）；依赖更新走 `.github/dependabot.yml`（npm 周检 / GitHub Actions 月检）。`ci.yml` 的 job：
+  - `lint-test`：npm ci → lint → typecheck → `npm audit --omit=dev --audit-level=high`（blocking）→ `npm run build` 产物上传 artifact
+  - `unit`：3 分片并行（`--shard=i/3 --reporter=blob`，`VITEST_COVERAGE_SHARD=1` 让分片只产出含覆盖率原始数据的 blob、不判门槛）
+  - `coverage`：`needs: unit`，`vitest --merge-reports --coverage` 合并 3 片结果并按 `vitest.config.ts` 的 thresholds 判覆盖率门槛
+  - `unit-cloudbase`：3 分片并行，`npm run test:cloudbase -- --shard=i/3`（整套单测在 CloudBase 形态下再跑一遍）
   - `e2e`：Playwright chromium（带 `~/.cache/ms-playwright` 缓存加速）
-  - `deploy`：`needs: [lint-test, unit-cloudbase, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ 复用 `lint-test` 构建产物 → `tcb hosting deploy ./dist --entry <全部 html,sw.js,version.json>`（CloudBase 静态托管）。**不用 `--safe`**：它每次发布前把线上全部文件服务端复制到 `.cloudbase-backup/` 且从不清理，文件越积越多、单步 6.5 分钟；改由 `--entry` 保证入口最后上传，中途失败线上仍是旧版本。回滚：`gh workflow run ci.yml --ref <旧提交>`
+  - `deploy`：`needs: [lint-test, unit-cloudbase, coverage, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ 复用 `lint-test` 构建产物 → `tcb hosting deploy ./dist --entry <全部 html,sw.js,version.json>`（CloudBase 静态托管）。**不用 `--safe`**：它每次发布前把线上全部文件服务端复制到 `.cloudbase-backup/` 且从不清理，文件越积越多、单步 6.5 分钟；改由 `--entry` 保证入口最后上传，中途失败线上仍是旧版本。回滚：`gh workflow run ci.yml --ref <旧提交>`
     - 认证：`tcb login --cloudbase-api-key`（非交互），密钥取 `secrets.CLOUDBASE_APIKEY`；**未配该 secret 时跳过部署并告警**，门禁照常执行
     - 手动重部署：`gh workflow run ci.yml --ref main`
     - 线上版本自检：`npm run check:prod` —— 比对 `https://ulink.ren/version.json` 的 `commit` 与本地 HEAD（构建时由 vite `buildInfoPlugin` 注入；设置→关于 也显示短提交号），并探测安全防护（CSP/Referrer/XCTO）。退出码 0=一致且安全防护完整 / 1=不一致 / 2=线上无该端点（旧版本）/ 3=网络失败 / 4=版本一致但安全防护不完整

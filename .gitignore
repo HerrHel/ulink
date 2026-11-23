@@ -7,6 +7,8 @@ dist_check*/
 dist_legal*/
 .tmp_trash/
 coverage/
+# vitest 分片 blob 报告（CI 合并覆盖率用）
+.vitest-reports/
 .claude/
 .mimocode/
 task_plan.md

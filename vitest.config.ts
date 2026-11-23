@@ -4,6 +4,11 @@ import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath } from 'node:url'
 
+// CI 分片：各分片只产出 blob（含覆盖率原始数据），不出报告、不判门槛；
+// 由合并步骤 `vitest --merge-reports --coverage` 统一出报告并按全量判门槛。
+// 单片只跑 1/N 的测试，覆盖率必然远低于门槛，若在分片里判会全部误红。
+const isCoverageShard = process.env.VITEST_COVERAGE_SHARD === '1'
+
 // 注入 @vitejs/plugin-vue：vitest 默认不继承 vite.config.ts 的 plugins，
 // 缺它则 import *.vue 报 "Failed to parse ... Install @vitejs/plugin-vue"。
 // 仅作用 .vue 文件，对纯 ts/js 测无副作用。
@@ -64,7 +69,7 @@ export default defineConfig({
     exclude: ['e2e/**', '**/node_modules/**', '.claude/worktrees/**', '.workbuddy/**'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: isCoverageShard ? [] : ['text', 'json', 'html'],
       exclude: [
         '**/node_modules/',
         'src/__tests__/',
@@ -74,8 +79,8 @@ export default defineConfig({
       // #54（审计 2026-11-14）：coverage 此前无 thresholds 且从不进 CI，覆盖率断崖下跌无红灯。
       // 2026-11-17 按 CI 实测基线（run 44101653726：Stmts 77.44 / Branch 67.58 / Funcs 74.17 /
       // Lines 80.02）锁定为「略低于实际值」约 2 个点：正常波动不红，明显下滑即红。
-      // 覆盖率持续上升后可同步上调；CI 接入见 ci.yml「Unit Tests + Coverage (thresholds gate)」。
-      thresholds: {
+      // 覆盖率持续上升后可同步上调；CI 接入见 ci.yml 的 coverage job（合并 unit 3 分片后判门槛）。
+      thresholds: isCoverageShard ? undefined : {
         lines: 78,
         functions: 72,
         branches: 65,

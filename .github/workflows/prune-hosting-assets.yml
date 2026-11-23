@@ -1,0 +1,58 @@
+# 清理静态托管 assets/ 下历次部署留下的旧分包文件（规则见 scripts/prune-hosting-assets.mjs）
+# 只能手动触发。默认只统计；mode=delete 且 confirm 填 DELETE 才会真的删。
+# 只删「不在线上 sw.js 引用里、且超过 keep_days 天没被重传」的文件，线上正在用的不会动。
+name: prune-hosting-assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run 只统计；delete 删除'
+        type: choice
+        options: [dry-run, delete]
+        default: dry-run
+      confirm:
+        description: 'mode=delete 时必须填 DELETE'
+        required: false
+        default: ''
+      keep_days:
+        description: '保留最近多少天内修改过的文件（不小于 7）'
+        required: false
+        default: '30'
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 与部署共用并发组：部署中途清理可能误判刚上传的文件
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      ENV_ID: ulink-d1g5srvjo54b1886a
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: 清理旧 assets
+        env:
+          CLOUDBASE_APIKEY: ${{ secrets.CLOUDBASE_APIKEY }}
+          MODE: ${{ inputs.mode }}
+          CONFIRM: ${{ inputs.confirm }}
+          KEEP_DAYS: ${{ inputs.keep_days }}
+        run: |
+          if [ "$MODE" = "delete" ]; then
+            if [ "$CONFIRM" != "DELETE" ]; then
+              echo "::error::删除模式需要在 confirm 中填 DELETE"
+              exit 1
+            fi
+            node scripts/prune-hosting-assets.mjs --delete
+          else
+            node scripts/prune-hosting-assets.mjs
+          fi

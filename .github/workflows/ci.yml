@@ -33,12 +33,7 @@ jobs:
       # F2-006：类型检查进入门禁（现串联主 tsconfig 与 e2e/config 专用 tsconfig.e2e.json）
       - name: Typecheck
         run: npm run typecheck
-      # #54（审计 2026-11-14）：coverage 此前无 thresholds 且从不进 CI（覆盖率断崖
-      # 下跌无红灯）。把单测步骤升级为 `npm run coverage`：vitest.config.ts 的
-      # coverage.thresholds 会在覆盖率不达标时让该步骤非零退出 → CI 红。
-      # 复用同一轮全量测试，不额外再跑一遍，避免 CI 时间翻倍（与 #20 同源考量）。
-      - name: Unit Tests + Coverage (thresholds gate)
-        run: npm run coverage
+      # 单测 + 覆盖率门槛已拆到 unit（3 分片并行）+ coverage（合并判门槛）两个 job，见下方。
       # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错。
       # 拆两步：原 --omit=dev --audit-level=high 放过整条 dev 工具链漏洞与 prod moderate，
       # 现分别覆盖 full tree high+ 与 生产依赖 moderate+。
@@ -78,8 +73,53 @@ jobs:
   # 分支在 CI 零执行。独立配置（vitest.cloudbase.config.ts，见 #20）把**整个单测集**
   # 在云形态下再跑一遍，只排除少数「Supabase 形态专用」文件（清单与原因写在配置里）。
   # 新增测试默认自动获得双形态覆盖，别再往 exclude 里加而不写原因。
-  # 2026-11-23：从 lint-test 拆成并行 job（原先与 coverage 串行，lint-test 一个 job 要 7.6 分钟）。
+  # 2026-11-23：从 lint-test 拆成并行 job，再按文件分 3 片（单 job 约 5 分钟 → 每片约 2 分钟）。
   unit-cloudbase:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Unit Tests (CloudBase) ${{ matrix.shard }}/3
+        run: npm run test:cloudbase -- --shard=${{ matrix.shard }}/3
+
+  # 默认形态单测，3 分片并行。#54（审计 2026-11-14）的覆盖率门槛不在分片里判
+  # （单片只跑 1/3，必然低于门槛）：VITEST_COVERAGE_SHARD=1 让分片只产出含覆盖率
+  # 原始数据的 blob，由下方 coverage job 合并后按全量判门槛。
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Unit Tests ${{ matrix.shard }}/3
+        env:
+          VITEST_COVERAGE_SHARD: '1'
+        run: npx vitest run --coverage --shard=${{ matrix.shard }}/3 --reporter=blob
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: .vitest-reports/
+          include-hidden-files: true
+          retention-days: 1
+
+  # 合并 3 个分片的 blob：汇总测试结果 + 覆盖率报告，并执行 vitest.config.ts 的 thresholds 门槛
+  coverage:
+    needs: unit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -88,8 +128,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - name: Unit Tests (CloudBase)
-        run: npm run test:cloudbase
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: vitest-blob-*
+          path: .vitest-reports
+          merge-multiple: true
+      - name: Merge reports + Coverage (thresholds gate)
+        run: npx vitest run --merge-reports --coverage
 
   e2e:
     runs-on: ubuntu-latest
@@ -172,7 +217,7 @@ jobs:
   # 与手动 `tcb hosting deploy` 互斥：Git 部署每次 push 都会发布，
   # 再手动传一次会把线上覆盖成旧版本。统一走本 job。
   deploy:
-    needs: [lint-test, unit-cloudbase, e2e]
+    needs: [lint-test, unit-cloudbase, coverage, e2e]
     # push 与手动触发都可发布，但都限定 main（PR 与其它分支绝不发布）
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
