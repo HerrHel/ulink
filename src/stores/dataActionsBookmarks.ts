@@ -20,6 +20,10 @@ export const OFFICIAL_SITE_APP_ID = 'bm_ulink_app'
 export const OFFICIAL_SITE_EDGE_EXT_ID = 'bm_ulink_edge_ext'
 /** 品牌链条图标（本地静态 /logo.svg，安全相对路径，杜绝 data: 协议被 safeIconUrl 拒拦） */
 export const OFFICIAL_SITE_ICON = '/logo.svg'
+/** 宣传页地址（2026-11-25 起 / 直接是应用，宣传页在 /about） */
+export const OFFICIAL_SITE_ABOUT_URL = `${APP_CANONICAL_BASE}about`
+/** 旧宣传页地址：迁移时只改写仍等于它的书签 URL */
+const LEGACY_LANDING_URL = `${APP_CANONICAL_BASE}?stay=1`
 
 export const bookmarkActions = {
   /** L10：现存书签最大 order + 1，新建书签统一入口（防负数、NaN 与毫秒时间戳整型溢出） */
@@ -104,8 +108,8 @@ export const bookmarkActions = {
   },
 
   /**
-   * 官网落地页书签（双入口改造配套）：给每个库补一条指向宣传页的入口书签，
-   * 点击以 ?stay=1 打开 / —— 落地页脚本据此豁免返客秒跳，老用户随时能看/分享新页。
+   * 官网落地页书签（双入口改造配套）：给每个库补一条指向宣传页的入口书签。
+   * 2026-11-25 起宣传页在 /about（/ 直接是应用），旧的 /?stay=1 链接由下方迁移改写。
    *
    * 幂等三重护栏：
    *  1. localStorage 标记（lv_landing_bm_done）：本机一旦处理过就不再动，
@@ -118,7 +122,7 @@ export const bookmarkActions = {
   /**
    * 官网与主应用入口书签：
    * 主书签「与链ulink」挂载三个子书签：
-   *  1.「宣传页」指向 /?stay=1（落地页脚本据此豁免返客秒跳）；
+   *  1.「宣传页」指向 /about（旧值 /?stay=1 启动时幂等改写，用户手改过的 URL 不动）；
    *  2.「app页」指向 /app；
    *  3.「Edge扩展」指向 Edge 官方扩展商店详情页。
    *
@@ -154,6 +158,9 @@ export const bookmarkActions = {
         if (existingHome.icon !== OFFICIAL_SITE_ICON) {
           updates.icon = OFFICIAL_SITE_ICON
         }
+        if (existingHome.url === LEGACY_LANDING_URL) {
+          updates.url = OFFICIAL_SITE_ABOUT_URL
+        }
 
         // 补齐或升级子书签 1：宣传页
         const landingBm = this.bookmarks.find(b => b.id === OFFICIAL_SITE_LANDING_ID)
@@ -161,10 +168,10 @@ export const bookmarkActions = {
           this.addBookmark({
             id: OFFICIAL_SITE_LANDING_ID,
             title: isEn ? 'Landing' : '宣传页',
-            url: `${APP_CANONICAL_BASE}?stay=1`,
+            url: OFFICIAL_SITE_ABOUT_URL,
             username: '',
             password: '',
-            notes: isEn ? 'Showcase landing page (?stay=1)' : '宣传落地页（?stay=1）',
+            notes: isEn ? 'Product introduction (/about)' : '产品介绍页（/about）',
             icon: OFFICIAL_SITE_ICON,
             categoryId: existingHome.categoryId || CAT_UNCATEGORIZED,
             parentId: OFFICIAL_SITE_BM_ID,
@@ -176,9 +183,20 @@ export const bookmarkActions = {
             updatedAt: now,
           })
           changed = true
-        } else if (landingBm.icon !== OFFICIAL_SITE_ICON) {
-          this.updateBookmark(OFFICIAL_SITE_LANDING_ID, { icon: OFFICIAL_SITE_ICON })
-          changed = true
+        } else {
+          const landingUpdates: Partial<Bookmark> = {}
+          if (landingBm.icon !== OFFICIAL_SITE_ICON) landingUpdates.icon = OFFICIAL_SITE_ICON
+          // 宣传页搬到 /about：只改写仍是旧默认值的 URL，用户手改过的不动
+          if (landingBm.url === LEGACY_LANDING_URL) {
+            landingUpdates.url = OFFICIAL_SITE_ABOUT_URL
+            if (landingBm.notes === '宣传落地页（?stay=1）' || landingBm.notes === 'Showcase landing page (?stay=1)') {
+              landingUpdates.notes = isEn ? 'Product introduction (/about)' : '产品介绍页（/about）'
+            }
+          }
+          if (Object.keys(landingUpdates).length > 0) {
+            this.updateBookmark(OFFICIAL_SITE_LANDING_ID, landingUpdates)
+            changed = true
+          }
         }
 
         // 补齐或升级子书签 2：app页
@@ -259,7 +277,7 @@ export const bookmarkActions = {
     this.addBookmark({
       id: OFFICIAL_SITE_BM_ID,
       title: isEn ? 'ulink' : '与链ulink',
-      url: `${APP_CANONICAL_BASE}?stay=1`,
+      url: OFFICIAL_SITE_ABOUT_URL,
       username: '',
       password: '',
       notes: isEn ? 'ulink official entry' : '与链官方站点',
@@ -277,10 +295,10 @@ export const bookmarkActions = {
     this.addBookmark({
       id: OFFICIAL_SITE_LANDING_ID,
       title: isEn ? 'Landing' : '宣传页',
-      url: `${APP_CANONICAL_BASE}?stay=1`,
+      url: OFFICIAL_SITE_ABOUT_URL,
       username: '',
       password: '',
-      notes: isEn ? 'Showcase landing page (?stay=1)' : '宣传落地页（?stay=1）',
+      notes: isEn ? 'Product introduction (/about)' : '产品介绍页（/about）',
       icon: OFFICIAL_SITE_ICON,
       categoryId: CAT_UNCATEGORIZED,
       parentId: OFFICIAL_SITE_BM_ID,

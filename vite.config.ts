@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import { PurgeCSS } from 'purgecss';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import pkg from './package.json';
@@ -224,7 +224,7 @@ function purgeCssPlugin(): Plugin {
 
             const result = await new PurgeCSS().purge({
               content: [
-                './index.html',
+                './about.html',
                 './app.html',
                 './src/**/*.vue',
                 './src/**/*.js',
@@ -279,6 +279,33 @@ function purgeCssPlugin(): Plugin {
 }
 
 /**
+ * 站点首页 = 应用（2026-11-25，原版 C 方案）：构建完成后把 dist/app.html 复制为
+ * dist/index.html，让静态托管的 `/` 直接出应用，省掉旧宣传页「下载 → 等 CSS →
+ * 跑 landing.js → 跳转 /app」这一整段中转（老用户首屏少 2~3 个网络来回）。
+ *
+ * 两份内容只差一处：首页副本去掉 `noindex`（首页要能被收录；/app 仍 noindex，
+ * 两者 canonical 都指向 https://ulink.ren/，不构成重复内容）。
+ * 用 writeBundle 读盘再写：此时 vite 的 HTML 产物与 securityMetaPlugin 注入的 CSP
+ * 都已落盘，副本与 /app 完全一致；HTML 不进 SW precache，无需同步 manifest。
+ */
+function rootAppCopyPlugin(): Plugin {
+  return {
+    name: 'root-app-copy',
+    apply: 'build',
+    writeBundle(options) {
+      const outDir = options.dir || here('./dist')
+      const appHtml = readFileSync(resolve(outDir, 'app.html'), 'utf8')
+      const robots = /<meta name="robots" content="noindex, follow">\r?\n?/
+      if (!robots.test(appHtml)) {
+        // 标记丢了就让构建失败，避免首页悄悄带着 noindex 上线（或副本逻辑静默失效）
+        throw new Error('[root-app-copy] app.html 中找不到 noindex 标记，无法生成首页副本')
+      }
+      writeFileSync(resolve(outDir, 'index.html'), appHtml.replace(robots, ''))
+    },
+  }
+}
+
+/**
  * 2026-08-23 移除：原 spa404Plugin（GitHub Pages SPA fallback，把 index.html 复制为
  * dist/404.html）。托管已迁 Cloudflare Pages——它检测到顶层 404.html 会判定为
  * 非 SPA，导致未知路径返回 404（原生 SPA 支持被关闭）。移除后 dist 无 404.html，
@@ -287,31 +314,36 @@ function purgeCssPlugin(): Plugin {
  */
 
 /**
- * 双入口 MPA 路径别名：把 `/app` 重写到 `app.html`，对齐 Cloudflare Pages 的
- * Pretty URL 行为（/app → app.html），dev / preview / e2e 与生产保持同一 URL。
- * dev 下 `/s/*` 无 SSR Function（生产走 Pages Function），同样重写到 app.html，
- * 模拟生产「SSR 壳内接管 SPA」的分享路由环境，e2e 分享用例行为不变。
- * 落地页（index.html）自身位于 /，无需别名。
+ * 双入口 MPA 路径别名（2026-11-25 起：/ 与 /app 都是应用，宣传页在 /about）：
+ * - `/`、`/app` → `app.html`。生产里 `/` 由 rootAppCopyPlugin 产出的 dist/index.html
+ *   （app.html 的副本）承接；dev 下源码已无 index.html，这里重写对齐。
+ * - `/about` → `about.html`，对齐生产静态托管「无扩展名自动补 .html」的行为。
+ * - dev 下 `/s/*` 无 SSR（生产走 share-ssr 云函数），同样重写到 app.html，
+ *   模拟生产「SSR 壳内接管 SPA」的分享路由环境，e2e 分享用例行为不变。
  */
 function mpaAliasPlugin(): Plugin {
-  const rewrite = (reqUrl: string | undefined): string | null => {
+  // dev 源码里没有 index.html，`/` 需要重写到 app.html；preview 服务的是 dist，
+  // 那里 `/` 由 rootAppCopyPlugin 产出的 index.html（去掉 noindex 的副本）承接，不能再重写
+  const rewrite = (reqUrl: string | undefined, isDev: boolean): string | null => {
     if (!reqUrl) return null
     const q = reqUrl.indexOf('?')
     const path = q === -1 ? reqUrl : reqUrl.slice(0, q)
     const rest = q === -1 ? '' : reqUrl.slice(q)
+    if (isDev && (path === '/' || path === '/index.html')) return '/app.html' + rest
     if (path === '/app' || path === '/app/') return '/app.html' + rest
+    if (path === '/about' || path === '/about/') return '/about.html' + rest
     if (path.startsWith('/s/')) return '/app.html' + rest
     return null
   };
-  const middleware = (req: { url?: string }, _res: unknown, next: () => void) => {
-    const rewritten = rewrite(req.url)
+  const makeMiddleware = (isDev: boolean) => (req: { url?: string }, _res: unknown, next: () => void) => {
+    const rewritten = rewrite(req.url, isDev)
     if (rewritten) req.url = rewritten
     next();
   };
   return {
     name: 'mpa-app-alias',
-    configureServer(server) { server.middlewares.use(middleware) },
-    configurePreviewServer(server) { server.middlewares.use(middleware) },
+    configureServer(server) { server.middlewares.use(makeMiddleware(true)) },
+    configurePreviewServer(server) { server.middlewares.use(makeMiddleware(false)) },
   };
 }
 
@@ -1578,6 +1610,7 @@ export default defineConfig({
     }),
     purgeCssPlugin(),
     mpaAliasPlugin(),
+    rootAppCopyPlugin(),
     headersPlugin(),
     securityMetaPlugin(),
     buildInfoPlugin()],
@@ -1585,10 +1618,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     rollupOptions: {
-      // 双入口：/ = 宣传落地页（index.html），/app = 应用主体（app.html，
-      // Cloudflare Pages Pretty URL 自动映射，dev/preview 由 mpaAliasPlugin 对齐）
+      // 双入口：应用主体 app.html（/app；构建后由 rootAppCopyPlugin 复制为 index.html 承接 /），
+      // 宣传页 about.html（/about，静态托管自动补 .html；dev/preview 由 mpaAliasPlugin 对齐）
       input: {
-        landing: here('./index.html'),
+        landing: here('./about.html'),
         app: here('./app.html'),
       },
       output: {

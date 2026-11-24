@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
+const html = readFileSync(resolve(process.cwd(), 'about.html'), 'utf8')
 const landingJs = readFileSync(resolve(process.cwd(), 'public/landing.js'), 'utf8')
 
 /** 卡片里的 `.price-amount` 块（可能含 <del> 划线价） */

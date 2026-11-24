@@ -135,6 +135,8 @@ const EXTRA_SECURITY_PAGES = [
   { key: 'privacy', label: '隐私 /privacy.html', path: '/privacy.html' },
   { key: 'terms', label: '条款 /terms.html', path: '/terms.html' },
   { key: 'extensionGuide', label: '扩展 /extension-guide.html', path: '/extension-guide.html' },
+  // 2026-11-25：宣传页从 / 搬到 /about（/ 现在直接是应用）
+  { key: 'about', label: '介绍 /about', path: '/about' },
 ]
 
 async function checkSecurity(base) {

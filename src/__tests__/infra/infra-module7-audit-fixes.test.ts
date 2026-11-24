@@ -4,7 +4,7 @@
  * 覆盖范围：
  * 1. 法律合规文档公开性判定（isPublicLegalDoc）与内部审核/修订记录泄露防护
  * 2. 真实 docs/legal 目录的合规性过滤与索引页卡片数校验
- * 3. 站点备案信息（ICP 备案号、工信部跳转链接）一致性校验（site.ts / landing.js / index.html）
+ * 3. 站点备案信息（ICP 备案号、工信部跳转链接）一致性校验（site.ts / landing.js / about.html / app.html）
  * 4. PWA 与 Service Worker 离线更新策略（version.json 强穿透校验、workbox 配置）
  * 5. 安全响应头（CSP、XCTO、frame-ancestors）与 CloudBase 边缘代理配置规范
  */
@@ -92,7 +92,7 @@ describe('模块 7 审计：法律文档公开性判定与泄露防护', () => {
 })
 
 describe('模块 7 审计：国家合规备案与工信部跳转一致性', () => {
-  it('site.ts、landing.js 与 index.html 中的 ICP 备案号严格一致', () => {
+  it('site.ts、landing.js、about.html 与 app.html（首页）中的 ICP 备案号严格一致', () => {
     expect(ICP_NUMBER).toBe('鄂ICP备2026061718号-1')
     expect(MIIT_URL).toBe('https://beian.miit.gov.cn/')
 
@@ -101,10 +101,14 @@ describe('模块 7 审计：国家合规备案与工信部跳转一致性', () =
     expect(landingJs).toContain(`ICP_NUMBER = '${ICP_NUMBER}'`)
     expect(landingJs).toContain('https://beian.miit.gov.cn/')
 
-    // 校验 index.html 静态 DOM
-    const indexHtml = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
-    expect(indexHtml).toContain(ICP_NUMBER)
-    expect(indexHtml).toContain('href="https://beian.miit.gov.cn/"')
+    // 校验宣传页 about.html 与应用 app.html 的静态 DOM。
+    // 2026-11-25 起首页 / 是 app.html 的构建副本：首页底部备案号必须静态写在 app.html 里
+    // （核查工具不一定执行 JS），不能只靠 Vue 渲染的侧栏。
+    for (const f of ['about.html', 'app.html']) {
+      const html = readFileSync(resolve(process.cwd(), f), 'utf8')
+      expect(html, f).toContain(ICP_NUMBER)
+      expect(html, f).toContain('href="https://beian.miit.gov.cn/"')
+    }
   })
 })
 

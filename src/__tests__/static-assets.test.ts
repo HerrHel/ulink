@@ -55,8 +55,8 @@ describe('public/_headers', () => {
   })
 })
 
-describe('index.html SEO meta & JSON-LD', () => {
-  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+describe('about.html SEO meta & JSON-LD', () => {
+  const html = fs.readFileSync(path.join(root, 'about.html'), 'utf8')
 
   it('含基础 SEO meta', () => {
     expect(html).toContain('name="description"')
@@ -84,9 +84,9 @@ describe('index.html SEO meta & JSON-LD', () => {
   })
 })
 
-describe('落地页国际化字典对称性 (index.html ⇄ landing.js)', () => {
-  it('index.html 的所有 data-i18n 与 landing.js EN 字典严格一一对应', () => {
-    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+describe('落地页国际化字典对称性 (about.html ⇄ landing.js)', () => {
+  it('about.html 的所有 data-i18n 与 landing.js EN 字典严格一一对应', () => {
+    const html = fs.readFileSync(path.join(root, 'about.html'), 'utf8')
     const landingJs = fs.readFileSync(path.join(root, 'public', 'landing.js'), 'utf8')
 
     // 提取 index.html 中的所有 data-i18n 与 data-i18n-aria

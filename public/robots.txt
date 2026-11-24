@@ -5,7 +5,7 @@ Allow: /
 # 此处兜底屏蔽历史已上传副本，避免被搜索引擎索引。
 Disallow: /legal/*.md
 
-# / 是宣传落地页（SEO 主场），/app 是应用主体（noindex）。
+# / 是应用主体（2026-11-25 起可收录），/about 是产品介绍页；/app 与 / 同一份应用，noindex。
 #
 # /s/<gid> 与 /s/c/<sid> 是私有分享链接：由 SSR 直接输出
 #   <meta name="robots" content="noindex, nofollow">  以及  X-Robots-Tag 响应头。

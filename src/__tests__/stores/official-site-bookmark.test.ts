@@ -1,9 +1,9 @@
 /**
  * stores/official-site-bookmark.test.ts — ensureOfficialSiteBookmark 护栏测试
  *
- * 双入口改造配套：给每个库补一条官网落地页书签（?stay=1 免返客秒跳）。
+ * 双入口改造配套：给每个库补一条官网书签（2026-11-25 起宣传页在 /about，旧 /?stay=1 自动迁移）。
  * 锁定幂等三重护栏的契约（实现见 dataActionsBookmarks.ensureOfficialSiteBookmark）：
- *   1. 首次调用：写入固定 id 书签（未分类置顶 + ?stay=1 URL）并落 flag；
+ *   1. 首次调用：写入固定 id 书签（未分类置顶 + /about URL）并落 flag；
  *   2. 重复调用：不产生副本；
  *   3. 同 id 已存在（含软删墓碑）：不重加、只落 flag；
  *   4. flag 已存在：书签不在也绝不复活（用户「彻底删除」后不被启动时重灌）；
@@ -41,7 +41,7 @@ describe('ensureOfficialSiteBookmark', () => {
     const home = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)
     expect(home).toBeDefined()
     expect(home!.title).toBe('与链ulink')
-    expect(home!.url).toBe('https://ulink.ren/?stay=1')
+    expect(home!.url).toBe('https://ulink.ren/about')
     expect(home!.categoryId).toBe(CAT_UNCATEGORIZED)
     expect(home!.parentId).toBeNull()
     expect(home!.order).toBe(0)
@@ -52,7 +52,7 @@ describe('ensureOfficialSiteBookmark', () => {
     const landing = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_LANDING_ID)
     expect(landing).toBeDefined()
     expect(landing!.title).toBe('宣传页')
-    expect(landing!.url).toBe('https://ulink.ren/?stay=1')
+    expect(landing!.url).toBe('https://ulink.ren/about')
     expect(landing!.parentId).toBe(OFFICIAL_SITE_BM_ID)
     expect(landing!.order).toBe(0)
     expect(landing!.icon).toBe('/logo.svg')
@@ -242,6 +242,46 @@ describe('ensureOfficialSiteBookmark', () => {
     expect(landing!.icon).toBe('/logo.svg')
     expect(app!.icon).toBe('/logo.svg')
     expect(edgeExt!.icon).toBe('/logo.svg')
+  })
+  it('宣传页搬到 /about：仍是旧默认 /?stay=1 的主书签与宣传页书签被改写，笔记同步更新', () => {
+    const ds = useDataStore()
+    ds.bookmarks = [
+      makeBm({ id: OFFICIAL_SITE_BM_ID, title: '与链ulink', url: 'https://ulink.ren/?stay=1', icon: '/logo.svg' }),
+      makeBm({
+        id: OFFICIAL_SITE_LANDING_ID, title: '宣传页', url: 'https://ulink.ren/?stay=1',
+        notes: '宣传落地页（?stay=1）', icon: '/logo.svg', parentId: OFFICIAL_SITE_BM_ID,
+      }),
+      makeBm({ id: OFFICIAL_SITE_APP_ID, title: 'app页', url: 'https://ulink.ren/app', icon: '/logo.svg', parentId: OFFICIAL_SITE_BM_ID }),
+      makeBm({ id: OFFICIAL_SITE_EDGE_EXT_ID, title: 'Edge扩展', url: EDGE_ADDON_URL, icon: '/logo.svg', parentId: OFFICIAL_SITE_BM_ID }),
+    ]
+    ds._syncMaps()
+    expect(ds.ensureOfficialSiteBookmark()).toBe(true)
+    const home = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)
+    const landing = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_LANDING_ID)
+    expect(home!.url).toBe('https://ulink.ren/about')
+    expect(landing!.url).toBe('https://ulink.ren/about')
+    expect(landing!.notes).toBe('产品介绍页（/about）')
+    // 迁移完成后再次调用是 no-op
+    expect(ds.ensureOfficialSiteBookmark()).toBe(false)
+  })
+
+  it('宣传页搬到 /about：用户手改过的 URL 与笔记不被覆盖', () => {
+    const ds = useDataStore()
+    ds.bookmarks = [
+      makeBm({ id: OFFICIAL_SITE_BM_ID, title: '与链ulink', url: 'https://ulink.ren/my-own', icon: '/logo.svg' }),
+      makeBm({
+        id: OFFICIAL_SITE_LANDING_ID, title: '宣传页', url: 'https://ulink.ren/custom',
+        notes: '我自己的备注', icon: '/logo.svg', parentId: OFFICIAL_SITE_BM_ID,
+      }),
+      makeBm({ id: OFFICIAL_SITE_APP_ID, title: 'app页', url: 'https://ulink.ren/app', icon: '/logo.svg', parentId: OFFICIAL_SITE_BM_ID }),
+      makeBm({ id: OFFICIAL_SITE_EDGE_EXT_ID, title: 'Edge扩展', url: EDGE_ADDON_URL, icon: '/logo.svg', parentId: OFFICIAL_SITE_BM_ID }),
+    ]
+    ds._syncMaps()
+    expect(ds.ensureOfficialSiteBookmark()).toBe(false)
+    expect(ds.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)!.url).toBe('https://ulink.ren/my-own')
+    const landing = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_LANDING_ID)
+    expect(landing!.url).toBe('https://ulink.ren/custom')
+    expect(landing!.notes).toBe('我自己的备注')
   })
 })
 

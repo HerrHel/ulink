@@ -9,19 +9,21 @@
 <meta name="theme-color" content="#122E8A">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<!-- 应用主体入口（/app）。站点首页 `/` 是宣传落地页（index.html），SEO 由其承担：
-     本页 noindex 避免与落地页内容重复竞争；WebApplication 结构化数据一并迁至落地页。 -->
+<!-- 应用主体。2026-11-25 起站点首页 `/` 与 `/app` 是同一个应用：构建后 vite rootAppCopyPlugin
+     把本文件复制为 dist/index.html，并**只在首页副本里去掉下面这行 noindex**（首页可收录，
+     /app 不收录；canonical 都指向首页）。改动这行的写法需同步改 rootAppCopyPlugin 的匹配。
+     宣传页在 /about（about.html）。 -->
 <meta name="robots" content="noindex, follow">
 <title>与链 — 个人书签管理器</title>
 <!-- 合规修订：四处 description 去掉无限定加密宣称，改为仅账号字段加密；分享表述改为专属私有链接、不设公共广场（与隐私政策一致） -->
 <meta name="description" content="与链（ulink）是支持云同步的个人书签管理器，仅账号字段端到端加密，专属私有链接定向分享，不设公共广场。">
-<link rel="canonical" href="https://ulink.ren/app">
+<link rel="canonical" href="https://ulink.ren/">
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ulink">
 <meta property="og:title" content="与链 — 个人书签管理器">
 <meta property="og:description" content="支持云同步的个人书签管理器，仅账号字段端到端加密，专属私有链接定向分享，不设公共广场。">
-<meta property="og:url" content="https://ulink.ren/app">
+<meta property="og:url" content="https://ulink.ren/">
 <meta property="og:image" content="https://ulink.ren/share-cover.png">
 <meta property="og:locale" content="zh_CN">
 <!-- QQ / 微信爬虫识别标签（Microdata / itemprop） -->
@@ -45,7 +47,15 @@
 <div style="display:none;font-size:0;line-height:0;" aria-hidden="true">
   <img src="https://ulink.ren/share-cover.png" alt="与链 ulink" width="300" height="300">
 </div>
-<div id="app"></div>
+<div id="app">
+  <!-- 首页底部备案号（合规：《非经营性互联网信息服务备案管理办法》第十三条要求在网站首页标明）。
+       必须**静态**写在 HTML 里：核查工具/爬虫不一定执行 JS。Vue 挂载后整块被替换，
+       运行时由 AppNav 侧栏底部的 .rail-beian 接替展示。号与 src/config/site.ts 保持一致；
+       公安联网备案号下发后同样在此静态补上。 -->
+  <footer style="position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#8a8580">
+    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit">鄂ICP备2026061718号-1</a>
+  </footer>
+</div>
 <!-- src 必须根绝对路径：本页会被 /s/* SSR-接管与 dev 中间件在任意路径下服务，
      相对路径会基于当前页面 URL 解析而出错 -->
 <script type="module" src="/src/main.ts"></script>

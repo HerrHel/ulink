@@ -28,7 +28,7 @@ describe('PRO AI 月额度文案', () => {
     const tokens = Number(/'\{ai\.tokens\.monthly\}',\s*'(\d+)'/.exec(sql)?.[1])
     expect(tokens).toBe(3_000_000)
     const wan = (tokens * 2) / 10_000
-    const html = read('index.html')
+    const html = read('about.html')
     expect(html).toContain(`每月 ${wan} 万字`)
     expect(html).not.toContain('每月 40 万字')
     expect(read('public/landing.js')).toContain(`'${(tokens * 2) / 1_000_000}M chars / month'`)

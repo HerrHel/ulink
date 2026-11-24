@@ -44,7 +44,7 @@ describe('2026-11-09 回归护栏', () => {
   })
 
   it('生产 HTML 入口不再手写 CSP meta（由 securityMetaPlugin 单一注入）', () => {
-    for (const f of ['index.html', 'app.html']) {
+    for (const f of ['about.html', 'app.html']) {
       const html = read(f)
       expect((html.match(/http-equiv=["']Content-Security-Policy/gi) || []).length,
         `${f} 不应再手写 CSP meta，避免多条策略取交集抵消 worker-src`).toBe(0)

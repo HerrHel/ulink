@@ -1,15 +1,14 @@
 /**
- * e2e/landing.spec.ts — 宣传落地页（/）E2E 测试
+ * e2e/landing.spec.ts — 站点首页与宣传页（/about）E2E 测试
  *
- * 双入口结构：/ = 落地页（index.html 静态），/app = 应用主体（app.html）。
- * 覆盖关键分流行为：
- * - 新访客：留在落地页，CTA 指向 /app
- * - 返客（localStorage 有应用痕迹）：首次曝光一次（落 seen 标记），之后秒跳 /app
- * - 关键参数直通：扩展保存 / 旧 #share/ 兜底链接不落宣传页
+ * 2026-11-25 起：/ 与 /app 都直接是应用主体（app.html；生产里 / 是构建副本 index.html），
+ * 宣传页搬到 /about（about.html），landing.js 不再做任何跳转。
+ * 覆盖：
+ * - / 直接出应用、URL 不跳转；任务参数（扩展保存 / 旧 #share/）在 / 上由应用直接处理
+ * - /about：老用户（有本地数据）也不被跳走；CTA 指向 /app
  * - 登录按钮：/app?login=1 直开认证弹窗
  * - 双语切换：EN ⇄ 中文即时切换
- * 依赖 dev server（playwright.config.ts 自动启动）；landing.js 的跳转规则
- * 与 public/landing.js 保持同步。
+ * 依赖 dev server（playwright.config.ts 自动启动）。
  */
 import { test, expect } from '@playwright/test'
 
@@ -23,7 +22,7 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('宣传落地页', () => {
   test('定价区：展示免费与 PRO 三档价格及权益对比', async ({ page }) => {
-    await page.goto('/?stay=1')
+    await page.goto('/about')
     const pricing = page.locator('#pricing')
     await expect(pricing).toBeVisible()
     // 档位卡数量（免费 + 月付 + 季付 + 年付）
@@ -51,7 +50,7 @@ test.describe('宣传落地页', () => {
   })
 
   test('加密口径：页面任意处不得出现无限定的「端到端加密」裸宣称', async ({ page }) => {
-    await page.goto('/?stay=1')
+    await page.goto('/about')
     // 合规修订：所有「端到端加密」字样都必须带「仅账号字段」限定；
     // 剔除如实限定后不得再残留裸宣称（含 >端到端加密< 一类裸文本节点）。
     // sync.d2 是「加密范围如实说明」，本身不含该字样，不在此列。
@@ -61,15 +60,16 @@ test.describe('宣传落地页', () => {
 
 
 
-  test('直接访问 /：新老用户一律秒跳直达 /app 应用主体', async ({ page }) => {
+  test('直接访问 /：就是应用本身，不发生跳转', async ({ page }) => {
     await page.goto('/')
-    await page.waitForURL(/\/app/, { timeout: 10000 })
-    await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
+    await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 15000 })
+    expect(new URL(page.url()).pathname).toBe('/')
+    // 首页底部备案号：运行时由侧栏常驻展示
+    await expect(page.getByTestId('rail-beian')).toContainText('ICP备')
   })
 
-  test('?stay=1 显式停留：正常展示落地页与星链画布', async ({ page }) => {
-    await page.goto('/?stay=1')
-    await page.waitForURL(/stay=1/)
+  test('/about：正常展示宣传页与星链画布', async ({ page }) => {
+    await page.goto('/about')
     await expect(page.locator('h1')).toContainText('随时随地')
     await expect(page.locator('.hero-ctas a[href="/app"]')).toHaveCount(1)
     const canvas = page.locator('#constellation')
@@ -80,7 +80,7 @@ test.describe('宣传落地页', () => {
   })
 
   test('点击「开始使用」进入应用主体', async ({ page }) => {
-    await page.goto('/?stay=1')
+    await page.goto('/about')
     await page.locator('.hero-ctas a[href="/app"]').click()
     await page.waitForURL(/\/app$/)
     // 应用挂载完成（此处只验证入口打通）
@@ -88,50 +88,38 @@ test.describe('宣传落地页', () => {
   })
 
   test('顶栏「登录」→ /app?login=1 直开认证弹窗', async ({ page }) => {
-    await page.goto('/?stay=1')
+    await page.goto('/about')
     await page.locator('a[href="/app?login=1"]').click()
     await page.waitForURL(/\/app/)
     // App.vue 读 login 参数后打开认证弹窗并清 query（H8）
     await expect(page.locator('.modal-mask.open').first()).toBeVisible({ timeout: 15000 })
   })
 
-  test('返客到访：无 stay 参数时直接秒跳 /app', async ({ page }) => {
+  test('老用户（有本地数据）访问 /about 不会被跳走', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('linkvault_v2', '{}')
+      localStorage.setItem('lv_setup_done', '1')
     })
-    await page.goto('/')
-    await page.waitForURL(/\/app/, { timeout: 10000 })
-    await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
-  })
-
-  test('?stay=1 豁免秒跳（官网书签/手动分享链接场景）', async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('linkvault_v2', '{}')
-      localStorage.setItem('lv_landing_seen_v1', '1')
-    })
-    await page.goto('/?stay=1')
-    // 未被秒跳：URL 仍带 stay 参数，落地页正常渲染
-    await expect(page).toHaveURL(/stay=1/)
+    await page.goto('/about')
     await expect(page.locator('h1')).toContainText('随时随地')
+    expect(new URL(page.url()).pathname).toBe('/about')
   })
 
-  test('扩展保存参数直通应用，不落宣传页', async ({ page }) => {
+  test('扩展保存参数在 / 上由应用直接处理', async ({ page }) => {
     await page.goto('/?ext_save=1&ext_save_url=https%3A%2F%2Fexample.com%2Fpage&ext_save_title=%E6%B5%8B%E8%AF%95')
-    // 落地页透传 ?ext_save=... → /app；应用按 H8 隐私设计读参后立即清 query，
-    // 故最终 URL 是干净的 /app，且扩展保存的书签已入库
-    await page.waitForURL(/\/app$/, { timeout: 10000 })
+    // 应用按 H8 隐私设计读参后立即清 query，最终 URL 是干净的 /
+    await page.waitForURL((u) => u.pathname === '/' && u.search === '', { timeout: 10000 })
     await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
   })
 
-  test('旧 #share/ 兜底链接直通应用', async ({ page }) => {
+  test('旧 #share/ 兜底链接在 / 上由应用接管', async ({ page }) => {
     await page.goto('/#share/nonexistent-group-for-e2e')
-    await page.waitForURL(/\/app#share\//, { timeout: 10000 })
     // 应用接管分享路由（不存在的组 → 分享错误占位，同 app.spec 的 #share 用例）
     await expect(page.locator('.share-state').first()).toBeVisible({ timeout: 15000 })
   })
 
   test('语言切换：中文 ⇄ English', async ({ page }) => {
-    await page.goto('/?stay=1')
+    await page.goto('/about')
     await expect(page.locator('h1')).toContainText('随时随地')
     // 切到英文（原地替换，无 reload）
     await page.locator('#lang-toggle').click()
@@ -144,7 +132,7 @@ test.describe('宣传落地页', () => {
   })
 
   test('主题风格与深浅模式演示：丝滑滑块指示器与四套主题色同步', async ({ page }) => {
-    await page.goto('/?stay=1#looks')
+    await page.goto('/about#looks')
     const looks = page.locator('#looks')
     await expect(looks).toBeVisible()
 
@@ -200,14 +188,14 @@ test.describe('宣传落地页', () => {
   })
 
   test('创作与分享：轻松分享区块呈现', async ({ page }) => {
-    await page.goto('/?stay=1#create')
+    await page.goto('/about#create')
     const createSec = page.locator('#create')
     await expect(createSec).toBeVisible()
     await expect(page.locator('[data-i18n="create.title"]')).toBeVisible()
   })
 
   test('更多细节：拖拽卡片与双语呈现', async ({ page }) => {
-    await page.goto('/?stay=1#extras')
+    await page.goto('/about#extras')
     const extras = page.locator('#extras')
     await expect(extras).toBeVisible()
 

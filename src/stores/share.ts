@@ -172,9 +172,9 @@ export const useShareStore = defineStore('share', () => {
     }
     uiSnapshot.value = null
     cleanupInjectedHead()
-    // app.html 的静态 canonical 是 /app；退出分享后 URL 也会剥回 /app，
-    // 不能回写成站点根（会造成 canonical 与实际页面不一致）。
-    setCanonical(APP_CANONICAL_BASE.replace(/\/+$/, '') + '/app')
+    // app.html 的静态 canonical 是站点根（2026-11-25 起 / 与 /app 是同一个应用，
+    // 首页可收录、/app noindex），退出分享后写回同一个值，与静态 canonical 保持一致。
+    setCanonical(APP_CANONICAL_BASE)
     if (stripUrl) _stripSharePath()
     _resetData()
   }
