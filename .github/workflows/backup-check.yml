@@ -1,0 +1,70 @@
+name: backup-check
+
+# 数据库备份心跳。共享集群没有平台备份，唯一恢复点是 maintenance 云函数每天北京时间
+# 03:00 跑的 fn_create_db_backup（写 public.db_backup，保留 30 天）。触发器丢失或函数
+# 静默失败时没有任何东西会通知人，所以每天查一次「今天（Asia/Shanghai）有没有备份」：
+# 没有就让 job 亮红 → GitHub 给仓库 owner 发失败邮件。
+#
+# 只读：仅执行一条 SELECT，不写库。
+
+on:
+  schedule:
+    # 01:00 UTC = 北京时间 09:00，晚于 03:00 的备份 6 小时
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENV_ID: ulink-d1g5srvjo54b1886a
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: 查询最近一次备份
+        env:
+          CLOUDBASE_APIKEY: ${{ secrets.CLOUDBASE_APIKEY }}
+        run: |
+          if [ -z "$CLOUDBASE_APIKEY" ]; then
+            echo "::error::未配置 CLOUDBASE_APIKEY，无法检查备份"
+            exit 1
+          fi
+          CLI="npx --yes -p @cloudbase/cli tcb"
+          # CloudBase 鉴权偶发瞬时失败（见 ci.yml deploy 的同款重试说明）
+          login_ok=0
+          for attempt in 1 2 3 4 5; do
+            if $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"; then login_ok=1; break; fi
+            sleep $((attempt * 15))
+          done
+          if [ "$login_ok" -ne 1 ]; then
+            echo "::error::CloudBase 登录连续 5 次失败，无法检查备份"
+            exit 1
+          fi
+
+          SQL="SELECT CASE WHEN max(day) >= (now() AT TIME ZONE 'Asia/Shanghai')::date THEN 'BACKUP_FRESH' ELSE 'BACKUP_STALE' END AS status, coalesce(max(day)::text, 'none') AS last_day, count(*) AS kept FROM public.db_backup;"
+          ok=0
+          for attempt in 1 2 3; do
+            if $CLI db execute -e "$ENV_ID" --sql "$SQL" > /tmp/backup.txt 2>&1; then ok=1; break; fi
+            sleep 20
+          done
+          cat /tmp/backup.txt
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::备份查询执行失败（见上方输出）"
+            exit 1
+          fi
+          # 只认显式 FRESH；查不到、解析不到一律按失败处理，不做假绿
+          if grep -q 'BACKUP_FRESH' /tmp/backup.txt; then
+            echo "::notice::今日备份正常"
+          elif grep -q 'BACKUP_STALE' /tmp/backup.txt; then
+            echo "::error::今天（北京时间）没有数据库备份。检查 maintenance 云函数日志与 03:00 定时触发器；补跑：node scripts/deploy-cloudbase-fn.mjs maintenance 会幂等补建触发器"
+            exit 1
+          else
+            echo "::error::无法解析备份查询结果"
+            exit 1
+          fi

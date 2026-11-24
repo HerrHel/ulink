@@ -56,6 +56,11 @@ const MAX_CONTACT = 200
 const MIN_MESSAGE = 5
 const RATE_LIMIT = 5
 const RATE_WINDOW_MS = 60 * 60 * 1000
+// 与 IP 无关的全局小时上限：X-Forwarded-For / X-Real-IP 可伪造，按 ip_hash 的 5 次/小时
+// 换一次请求头就是新桶；每条反馈都会发一封邮件，全局桶保证邮件总量有上限（与 check-link /
+// jina-proxy / ai-api 同口径）。正常反馈量远低于此值。
+const gfVal = parseInt(process.env.FEEDBACK_GLOBAL_PER_HOUR || '60', 10)
+const RATE_GLOBAL_PER_HOUR = Number.isFinite(gfVal) && gfVal > 0 ? gfVal : 60
 const SMTP_TIMEOUT_MS = 20_000
 
 /** 允许的来源：环境变量优先；未注入时回落到主站/默认域/本地 dev（不开放 *） */
@@ -279,6 +284,22 @@ const server = http.createServer(async (req, res) => {
       return
     }
     if ((r.count ?? 0) >= RATE_LIMIT) {
+      sendJson(res, 429, { error: 'rate_limited' })
+      return
+    }
+    // 全局桶放在单 IP 检查之后：被单 IP 拒绝的请求不消耗全局额度
+    const g = await db.rpc('consume_rate_limit', {
+      p_key: 'fb-global',
+      p_limit: RATE_GLOBAL_PER_HOUR,
+      p_window_secs: 3600,
+    })
+    if (g.error) {
+      console.error('[send-feedback] global rate limit failed (fail-closed):', g.error)
+      sendJson(res, 500, { error: 'rate_check_failed' })
+      return
+    }
+    // 已知坑：拒绝时 data 是 {} 而非 false，只认显式 true
+    if (g.data !== true) {
       sendJson(res, 429, { error: 'rate_limited' })
       return
     }

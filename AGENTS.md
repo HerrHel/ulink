@@ -253,7 +253,7 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - **云函数 check-link**（生产 `cloudbase/functions/check-link/`，原 `supabase/functions/check-link/` 已迁移）：私有 IP 黑名单防 SSRF；超时/CORS/限流由云函数环境变量控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`、`CHECK_LINK_RATE_LIMIT_PER_MIN`）；限流 fail-closed（`consume_rate_limit`）；**可选鉴权（2026-10-31）**：请求带 `Authorization: Bearer` 时用 `cb-auth.js` 换 uid，按 `plans.features['linkcheck.daily']` 计每日**手动检查**额度（`mode=manual`），自动巡检（`mode=auto`）不消耗该额度；匿名请求仍只走 IP 分钟限流。history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → CloudBase `error_logs` 表（生产经 `report-error` 云函数写入，5s 节流）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
-- **CI/CD**：三个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署）、`cert-check.yml`（证书到期监控）与 `prune-hosting-assets.yml`（手动触发，清理托管 `assets/` 下「不在线上 sw.js 引用里且超过 30 天没被重传」的旧分包，默认只统计，`mode=delete` + `confirm=DELETE` 才删）；依赖更新走 `.github/dependabot.yml`（npm 周检 / GitHub Actions 月检）。`ci.yml` 的 job：
+- **CI/CD**：四个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署）、`cert-check.yml`（证书到期监控）、`backup-check.yml`（每日数据库备份心跳：北京时间 09:00 查当天 `db_backup`，缺失即红）与 `prune-hosting-assets.yml`（手动触发，清理托管 `assets/` 下「不在线上 sw.js 引用里且超过 30 天没被重传」的旧分包，默认只统计，`mode=delete` + `confirm=DELETE` 才删）；依赖更新走 `.github/dependabot.yml`（npm 周检 / GitHub Actions 月检）。`ci.yml` 的 job：
   - `lint-test`：npm ci → lint → typecheck → `npm audit --omit=dev --audit-level=high`（blocking）→ `npm run build` 产物上传 artifact
   - `unit`：3 分片并行（`--shard=i/3 --reporter=blob`，`VITEST_COVERAGE_SHARD=1` 让分片只产出含覆盖率原始数据的 blob、不判门槛）
   - `coverage`：`needs: unit`，`vitest --merge-reports --coverage` 合并 3 片结果并按 `vitest.config.ts` 的 thresholds 判覆盖率门槛

@@ -19,14 +19,12 @@
  */
 
 const http = require('http')
-const crypto = require('crypto')
 const { verifyCbToken } = require('./cb-auth.js')
 const { hashPassword, validatePasswordInput } = require('./share-lock.js')
 
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)
-const IP_HASH_SALT = process.env.IP_HASH_SALT || ''
 
 /** 写操作限流：每用户 20 次 / 分钟（正常用户远达不到） */
 const WRITE_LIMIT_PER_MIN = 20
@@ -82,19 +80,6 @@ function readJsonBody(req) {
     })
     req.on('error', reject)
   })
-}
-
-function clientIp(req) {
-  const real = req.headers['x-real-ip']
-  if (typeof real === 'string' && real.trim()) return real.trim()
-  const xff = String(req.headers['x-forwarded-for'] || '')
-  const hops = xff.split(',').map((s) => s.trim()).filter(Boolean)
-  if (hops.length) return hops[hops.length - 1]
-  return req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown'
-}
-
-function sha256Hex(s) {
-  return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex')
 }
 
 function isValidShareId(id) {
@@ -193,7 +178,8 @@ const server = http.createServer(async (req, res) => {
     // 3) 限流（fail-closed）
     const db = getDb()
     const rl = await db.rpc('consume_rate_limit', {
-      p_key: `share-admin:${uid}:${sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)}`,
+      // 只按 uid 计数：uid 已验签可信；旧 key 拼了可伪造的请求头 IP，换头即得新桶
+      p_key: `share-admin:${uid}`,
       p_limit: WRITE_LIMIT_PER_MIN,
       p_window_secs: 60,
     })
