@@ -135,7 +135,7 @@ async function captureLocale(browser, locale) {
     const textRight = await pm.evaluate((el) => {
       // 只量文本节点本身的宽度（块级元素的盒子是整行宽，量它没意义）
       let right = 0
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      const walker = document.createTreeWalker(el, window.NodeFilter.SHOW_TEXT)
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         if (!n.textContent.trim()) continue
         const range = document.createRange()
