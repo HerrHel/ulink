@@ -90,10 +90,43 @@ interface ErrorPayload {
 }
 
 /**
+ * 本机开发 / 测试地址：这些地址上的报错不写入线上 error_logs。
+ * 2026-11-24 起：本机 dev 的 HMR 瞬态报错（如「xxx is not defined」）、E2E 生产预览（localhost）
+ * 都曾混进线上错误表，干扰上线后的排障判断。判定「本机」而不是写死生产域名，
+ * 这样默认域名（*.tcloudbaseapp.com）、扩展侧栏 iframe 等线上形态照常上报。
+ */
+export function isLocalDevHost(hostname: string): boolean {
+  const h = (hostname || '').toLowerCase()
+  return (
+    h === 'localhost' ||
+    h === '127.0.0.1' ||
+    h === '[::1]' ||
+    h === '::1' ||
+    h.endsWith('.localhost') ||
+    h.endsWith('.test')
+  )
+}
+
+/** 仅测试用：强制开 / 关上报（null = 按真实环境判定） */
+let _reportingOverride: boolean | null = null
+export function _setReportingOverrideForTest(v: boolean | null): void {
+  _reportingOverride = v
+}
+
+/** 是否把错误上报到线上：开发构建或本机地址一律不报 */
+export function isErrorReportingEnabled(): boolean {
+  if (_reportingOverride !== null) return _reportingOverride
+  if (import.meta.env.DEV) return false
+  const host = typeof window !== 'undefined' ? window.location.hostname : ''
+  return !isLocalDevHost(host)
+}
+
+/**
  * 上报错误到 Supabase error_logs 表
  * 非阻塞（fire-and-forget），静默失败
  */
 export function reportError(payload: ErrorPayload): void {
+  if (!isErrorReportingEnabled()) return
   if (_throttleKey(payload.message)) return
 
   // H9：含密模式不入库

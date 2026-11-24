@@ -20,7 +20,7 @@
  * + fake timers 验 R28 clearTimeout + Promise.race 超时。
  * P1-4 方案 B：user_id 不再前端直传（函数侧仅信 JWT），auth store 读取已移除。
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest'
 
 // ── supabase mock：functions.invoke('report-error', { body }) 可控 success/error + spy 断言 body ──
 // P1-4 方案 B（2026-09-02）：写入通道从直插 error_logs 表改为调 Edge Function
@@ -57,7 +57,12 @@ import {
   reportError,
   vueErrorHandler,
   unhandledRejectionHandler,
+  _setReportingOverrideForTest,
 } from '../../lib/errorReporter.js'
+
+// jsdom 跑在 localhost：本机地址默认不上报，这里强制开启以测上报编排本身
+beforeAll(() => _setReportingOverrideForTest(true))
+afterAll(() => _setReportingOverrideForTest(null))
 
 describe('reportError 编排护栏', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
