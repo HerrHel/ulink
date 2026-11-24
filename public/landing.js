@@ -1,15 +1,20 @@
 /*
  * 与链 ulink — 宣传页脚本（/about 专用，无框架零依赖）
  *
- * 2026-11-25 起站点首页 / 直接是应用主体（与 /app 同一份 app.html），本页搬到 /about，
- * 不再承担任何跳转职责（原返客秒跳、任务参数直通、?stay=1 豁免、lv_landing_seen_v1
- * 一次性曝光均已删除）。
+ * 2026-11-25 改版：画面改为真实应用截图（scripts/capture-landing.mjs 生成，中英各一套），
+ * 手绘 canvas（hero/manage/sync/share-visual.js）与主题演示舞台全部移除。
  *
  * 职责（与 app 内代码零耦合，键名与 src/i18n 保持一致）：
- *  1. 双语切换 —— 中文是 HTML 静态默认（SEO 与全站惯例一致）；切到英文由本脚本
- *     按 ?lang= → lv_locale → navigator.language（与 /s/* 的 resolveLocale
- *     顺序一致）即时替换 data-i18n 文案；切回中文整页还原（reload 到静态原文）；
- *  2. 页面增强 —— 滚动显现（.reveal）、视图演示卡填充、主题/深浅色演示切换。
+ *  1. 备案号兜底渲染；
+ *  2. 双语 —— 中文是 HTML 静态默认（SEO 与全站惯例一致）；切到英文由本脚本按
+ *     ?lang= → lv_locale → navigator.language（与 /s/* 的 resolveLocale 顺序一致）即时替换：
+ *       data-i18n       → textContent
+ *       data-i18n-html  → innerHTML（词典是本文件内的常量，含 <br>/<kbd>/<a> 等少量标记）
+ *       data-i18n-aria  → aria-label
+ *       data-i18n-alt   → alt
+ *       data-src-en     → 换成英文界面截图（data-size-en 给出与中文版不同的宽高）
+ *     切回中文整页 reload 到静态原文；
+ *  3. 页面增强 —— 顶栏吸顶分隔线、入场淡入、贯穿全页的「结」线（随滚动描出）。
  */
 
 /* ────────────────────────────────────────────────────────────
@@ -30,7 +35,7 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     var host = document.getElementById('foot-beian')
     if (!host) return
     var parts = []
-    // ICP 号已在 index.html 里静态写死（不依赖 JS，便于核查工具抓取）。
+    // ICP 号已在 about.html 里静态写死（不依赖 JS，便于核查工具抓取）。
     // 此处仅做兜底：若静态标记被误删，补回一个；已有则跳过，避免重复。
     if (ICP_NUMBER && host.textContent.indexOf(ICP_NUMBER) === -1) {
       host.insertAdjacentHTML(
@@ -57,151 +62,141 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
   'use strict';
 
   var LOCALE_KEY = 'lv_locale';            // 与 src/i18n/index.ts 的 LOCALE_KEY 一致
-  var search = location.search;            // 读 ?lang=
-  // 2026-11-25：/ 改为直接出应用（app.html），宣传页移到 /about。
-  // 原「返客秒跳 / 任务参数直通 / ?stay=1 豁免 / 一次性曝光」跳转逻辑随之删除——
-  // 带任务参数（ext_save / share_target / token）的 URL 现在本来就落在应用上。
 
-  // JS 可用标记：CSS 据此启用「滚动显现」初始隐藏态（无 JS 时内容直接可见）
-  document.documentElement.className += ' js';
-
-  /* ── 移动端视口与画面比例锁定（禁止双指放大缩小、iOS 手势捏合等） ── */
-  (function lockViewport() {
-    if (typeof document === 'undefined') return;
-    // 拦截 iOS Safari 专有的双指放大缩小手势（gesturestart / gesturechange）
-    document.addEventListener('gesturestart', function (e) {
-      e.preventDefault();
-    }, { passive: false });
-    document.addEventListener('gesturechange', function (e) {
-      e.preventDefault();
-    }, { passive: false });
-    // 拦截双指或多指触控移动（防止 pinch 缩放画面，单指正常上下滑动不受任何影响）
-    document.addEventListener('touchmove', function (e) {
-      if (e.touches && e.touches.length > 1) {
-        e.preventDefault();
-      }
-    }, { passive: false });
-  })();
-
-  /* ── 4：双语 ── */
-  // 英文字典（中文是 HTML 内的静态默认，无需字典）
+  /* ── 双语 ── */
+  // 英文字典（中文是 HTML 内的静态默认，无需字典）。标点一律用 ASCII 直引号/撇号：标题宋体是中文字体，
+  // 弯引号与撇号在其中是全角字形，会在英文里留出大空隙。合规口径与中文一致：
+  // 加密只说「仅账号字段」，价格与额度不写数字，AI 标明为 PRO 能力。
   var EN = {
+    'skip': 'Skip to content',
+    'brand.aria': 'ulink',
+    'brand.name': 'ulink',
+    'nav.aria': 'Page sections',
+    'nav.collect': 'Collect',
+    'nav.organize': 'Organize',
+    'nav.use': 'Use',
+    'nav.pricing': 'Pricing',
+    'lang.aria': 'Switch to Chinese',
     'head.login': 'Sign in',
     'head.start': 'Get started',
-    // 合规修订：EN 加密口径统一为「Only the account field is end-to-end encrypted」，其余明文
-    'hero.title1': 'Save, organize & share,',
-    'hero.title2': ' anywhere',
-    'hero.sub': 'A local-first bookmark manager. Nested sub-bookmarks, rich-text notes, multi-device sync, full export any time.',
+
+    'hero.kicker1': 'ulink',
+    'hero.kicker2': 'Bookmarks × Notes × AI',
+    'hero.title': 'Turn scattered links<br>into <span class="mark">your own</span> knowledge.',
+    'hero.lede': 'Save a page and jot down why you saved it; let AI fill in the name and category. Opens instantly — no sign-up needed.',
     'cta.start': 'Get started',
-    'manage.title': 'Organize in layers, not a flat list',
-    'manage.sub': 'Keep a site’s docs, console and repo in one place.',
-    'm1.t': 'Nested sub-bookmarks',
-    'm1.d': 'Multiple levels of entries under one site.',
-    'm2.t': 'Categories & rich-text notes',
-    'm2.d': 'Cite bookmark cards in notes with @.',
-    'm3.t': 'Custom attributes',
-    'm3.d': 'Combine attributes to filter a large library fast.',
-    // 合规修订：sync.title 改为仅账号字段加密；sync.d2 为如实说明，与中文静态原文保持一致、不改动
-    'sync.title': 'Multi-device sync, credentials encrypted on device',
-    'sync.d1': 'Incremental sync, pick a version on conflict, roll back through history.',
-    'sync.d2': 'Account names and passwords are encrypted on your device before upload: the key is derived from your master password via PBKDF2 and sealed with AES-256-GCM. It never leaves your device and the server cannot decrypt it. Titles, URLs and notes are stored as plain text.',
-    'looks.title': 'Two palettes, three views',
-    'theme.aria': 'Theme style',
-    'theme.eff': 'Efficiency',
-    'theme.comfort': 'Comfort',
-    'mode.aria': 'Color scheme',
-    'mode.light': 'Light mode',
-    'mode.dark': 'Dark mode',
-    'view.grid': 'Grid',
-    'view.list': 'List',
-    'view.mini': 'Mini grid',
-    'create.title': 'Private link sharing',
-    'create.d1': 'Not public, not indexed by search engines. Recipients read it without signing in and can save a copy in one click.',
-    'extra.title': 'More details',
-    'x1.t': 'One-key capture',
-    'x1.d': 'Press ',
-    'x1.d2': ' in the browser extension to save the current page and selected text.',
-    'x2.t': 'Works offline, installable',
-    'x2.d': 'Data lives in IndexedDB on your device and works without a connection.',
-    'x5.t': 'Drag to sort & file',
-    'x5.d': 'Drag to reorder, into the sidebar to file, into a note to cite.',
-    'x3.t': 'Pinyin & fuzzy search',
-    'x3.d': 'Type “js” to find 键盘快捷键 (keyboard shortcuts).',
-    'x4.t': 'Undo & trash',
-    'x4.d': 'Every action can be undone; deleted items go to the trash first.',
-    'faq.title': 'Frequently Asked Questions',
-    'q2': 'Where does my data live?',
-    // 合规修订：FAQ 改为仅账号字段本机加密，其余明文
-    'a2': 'By default, data is stored only in your local browser (IndexedDB) and is not uploaded. With cloud sync enabled, changes sync incrementally to your account: only the account field is encrypted on your device before upload, while titles, URLs and notes are stored as plain text. Images embedded in notes are written to a public storage bucket, accessible to anyone holding the link — please do not place sensitive images there. A full JSON export is available at any time.',
-    'q3': 'What about switching devices or browsers?',
-    'a3': 'Signing in to the same account syncs changes incrementally and automatically; you may also export the full dataset as a standard JSON backup and import it offline on any device.',
-    'q4': 'How does this differ from browser bookmarks?',
-    'a4': 'Browser bookmarks are bound to a single browser and device, with nowhere to attach explanations or notes. ulink supports multi-level sub-bookmark nesting, rich-text notes, instant pinyin search and private link sharing.',
-    'cta.title': 'Link your library together today',
-    'price.title': 'Pricing',
-    // 合规修订：中英同步，能力名统一为 light platform parsing / chat media analysis
+    'cta.how': 'See how saving works',
+    'promises.aria': 'Promises',
+    'promises.free': 'Free to start',
+    'promises.renew': 'No auto-renewal',
+    'promises.export': 'Full data export',
+    'alt.heroApp': 'The ulink app: categories on the left, a grid of bookmark cards on the right, the first one a Getting Started note',
+    'alt.heroMobile': 'ulink on a phone: a list of bookmark cards',
+    'cap.hero': 'What a new user sees on first open · real screenshot, not a mock-up',
+
+    'no.collect': 'Collect',
+    'collect.title': 'Paste the URL.<br>It handles the rest.',
+    'collect.s1t': 'Save in a keystroke',
+    'collect.s1d': 'Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd> in the browser extension, or <kbd>Ctrl</kbd> <kbd>N</kbd> in the app.',
+    'collect.s2t': 'Just the URL',
+    'collect.s2d': 'Every other field can stay empty.',
+    'collect.s3t': 'Filled in for you',
+    'collect.s3d': 'Site name and category are detected automatically; change them if you like.',
+    'collect.fine': 'AI autofill is a PRO feature, with a free trial.',
+    'alt.collect': 'New bookmark dialog: only the URL https://www.figma.com was typed; the site name and category are already filled in',
+    'collect.noteName': 'Name detected',
+    'collect.noteCat': 'Category filed',
+    'cap.collect': 'The real New bookmark dialog · only one URL typed',
+
+    'no.organize': 'Organize',
+    'organize.title': 'A link isn\'t just a URL.<br>It\'s a card with context.',
+    'alt.note': 'Full-screen note: a rich-text Getting Started guide with GitHub and I Love PDF bookmark cards embedded at the end',
+    'organize.tagNote': 'Bookmarks inside notes',
+    'cap.note': 'Full-screen note · type @ to find and embed a bookmark',
+    'alt.sub': 'A DeepSeek bookmark card with two sub-bookmarks underneath',
+    'organize.tagSub': 'One site, many entries',
+    'cap.sub': 'Sub-bookmarks · nest entry points under a site',
+    'organize.f1t': 'Nested sub-bookmarks',
+    'organize.f1d': 'Docs, console and repo, all kept under one site.',
+    'organize.f2t': 'Notes with embeds',
+    'organize.f2d': 'Write why you saved it and how to use it; embed bookmarks right in the text.',
+    'organize.f3t': 'Attribute filters',
+    'organize.f3d': 'Combine custom attributes to find anything in a large library.',
+
+    'alt.chat': 'AI chat panel: asked for free online drawing tools, the answer offers Excalidraw, tldraw and Figma as candidate cards; the first is already saved',
+    'cap.chat': 'Real interface · scripted demo answer',
+    'no.use': 'Use',
+    'use.title': 'Ask once.<br>It finds, and it saves.',
+    'use.q1': '"Find me a few free online drawing tools"',
+    'use.a1': 'Get candidate cards — tap the one you like to save it.',
+    'use.q2': '"Put these into one group"',
+    'use.a2': 'Assemble a topic note in one step, bookmarks and notes together.',
+    'use.q3': 'Paste a video link',
+    'use.a3': 'Pull out the title, description and the sites mentioned in its subtitles, then turn them into a note.',
+    'use.fine': 'AI is a PRO feature with a lifetime free trial. AI output is for reference only.',
+    'use.cta': 'Try the AI assistant',
+
+    'no.promise': 'Promise',
+    'promise.title': 'Before you pay,<br>here\'s the fine print.',
+    'promise.p1t': 'Your device comes first',
+    'promise.p1d': 'Data is kept in your browser by default and everything works without signing in; changes only sync to your account once you turn cloud sync on.',
+    'promise.p2t': 'Take it all with you',
+    'promise.p2d': 'Export the full library as JSON any time and restore it offline on any device — no account required.',
+    'promise.p3t': 'Credentials encrypted on device',
+    'promise.p3d': 'Only the account field is end-to-end encrypted: it is encrypted on your device before upload and the server cannot decrypt it; titles, URLs and notes are stored as plain text. Images in notes live in public storage — don\'t put sensitive images there.',
+    'promise.p4t': 'No auto-renewal',
+    'promise.p4d': 'No paid plan charges you automatically; renew when you want, and the price is fixed for the term. See the <a href="/legal/refund-policy.html">refund policy</a>.',
+    'promise.p5t': 'Expiry doesn\'t lock your data',
+    'promise.p5d': 'When PRO ends you drop back to Free: bookmarks, notes and sync keep working; only PRO features turn off.',
+
+    'no.pricing': 'Pricing',
+    'price.title': 'Start free.<br>Upgrade when you want AI.',
     'price.free': 'Free',
-    'price.forever': '/ forever',
+    'price.freeSub': 'Free forever, no payment details needed',
+    'price.f.free1': 'Unlimited bookmarks, categories & notes',
+    'price.f.free2': 'Multi-device sync; only the account field is end-to-end encrypted',
+    'price.f.free3': 'Free trial of AI autofill & chat',
+    'price.f.free4': 'Basic link checks & cloud version history',
     'price.freeCta': 'Start for free',
-    'price.monthly': 'PRO Monthly',
-    'price.perMonth': '/ month',
-    'price.days30': '30 days',
-    'price.quarterly': 'PRO Quarterly',
-    // 合规修订：早鸟包装去掉，省额注明「较按月订阅同周期合计」
-    'price.quarterlyBadge': 'Quarterly deal · Save ¥9 vs. monthly over the same term',
-    'price.perQuarter': '/ quarter',
-    'price.quarterUnit': '90 days · ¥12/mo (3 months of monthly = ¥45, save 20%)',
-    'price.yearly': 'PRO Yearly',
-    'price.perYear': '/ year',
-    'price.yearUnit': '365 days · only ¥9/mo (12 months of monthly = ¥180, save 40%)',
-    'price.best': 'Price locked for the term · Save ¥72 vs. monthly over the same term',
-    // 合规修订：加密口径、已下线能力名（light platform parsing / chat media analysis）同步中文
-    'price.proCta': 'Upgrade to PRO',
-    'price.cmp.feature': 'Feature',
-    // 合规修订：加密口径限定为仅账号字段；能力名改为轻量平台解析
-    'price.cmp.devices': 'Only the account field is end-to-end encrypted (sync)',
-    'price.cmp.bookmarks': 'Bookmarks & categories',
-    'price.cmp.noLimit': 'Unlimited',
-    'price.cmp.linkcheck': 'Daily manual link checks',
-    'price.cmp.patrol': 'Automatic link patrol',
-    'price.cmp.ai': 'AI autofill, page enrichment & chat',
-    'price.cmp.history': 'Cloud version history',
-    'price.cmp.video': 'Daily light platform parses',
-    // EN 定价表：原 price.yes 被「支持 / 不限设备 / 每周巡检」复用，拆成三键避免英文态全塌缩成 Included；
-    // 数值单元补键，避免英文页残留「次 / 万字」等中文量词
-    'price.yes': 'Included',
-    'price.unlimited': 'Unlimited devices',
-    'price.weekly': 'Weekly patrol',
-    'price.cmp.times1': '1 / day',
-    'price.cmp.times3': '3 / day',
-    'price.cmp.times10': '10 / day',
-    'price.cmp.times50': '50 / day',
-    'price.cmp.aiTrial': '30 trial uses (lifetime)',
-    'price.cmp.aiProDaily': '100 / day',
-    'price.cmp.aiProMonthly': '6M chars / month',
-    'price.cmp.days7': '7 days',
-    'price.cmp.days365': '365 days',
-    'price.no': 'Not included',
-    'price.note1': 'No auto-renewal on any plan. Renew on demand.',
-    'price.deepNote':
-      'Chat media analysis is an experimental lab feature: attach video/audio/image files you own or are authorized to use; AI chooses vision or ASR/OCR based on your question; no extension or proxy, files deleted after processing.',
-    'price.note2': 'See our',
-    'price.refundLink': 'refund policy',
-    'price.note3': '.',
-    'foot.slogan': 'Collect · Organize · Share',
+    'price.proSub': 'Monthly, quarterly or yearly — longer terms cost less',
+    'price.f.pro1': 'Everything in Free',
+    'price.f.pro2': 'AI autofill, page enrichment & chat',
+    'price.f.pro3': 'Automatic whole-library link patrol',
+    'price.f.pro4': 'Longer cloud version history',
+    'price.f.pro5': 'More link checks & light platform parses',
+    'price.proCta': 'See prices & upgrade',
+    'price.note': 'Current prices and quotas are shown on the in-app purchase page. No plan renews automatically.',
+
+    'faq.title': 'FAQ',
+    'faq.q1': 'Where does my data live?',
+    'faq.a1': 'By default only in your browser (IndexedDB); nothing is uploaded. With cloud sync on, changes sync incrementally to your account: only the account field is encrypted on your device before upload, while titles, URLs and notes are stored as plain text. Images embedded in notes go to public storage and anyone with the link can open them, so please don\'t put sensitive images there. A full JSON export is available any time.',
+    'faq.q2': 'What about switching devices or browsers?',
+    'faq.a2': 'Sign in to the same account and changes sync automatically; or export everything as JSON and import it offline on any device.',
+    'faq.q3': 'How is this different from browser bookmarks?',
+    'faq.a3': 'Browser bookmarks are tied to one browser and device, with nowhere to write notes. ulink adds nested sub-bookmarks, rich-text notes, instant pinyin search and private link sharing.',
+    'faq.q4': 'What happens when my AI trial runs out?',
+    'faq.a4': 'Only the AI features need PRO to keep going; bookmarks, notes, sync and everything else are unaffected.',
+    'faq.q5': 'What happens to my data when PRO expires?',
+    'faq.a5': 'Your account drops back to Free. Bookmarks, notes and sync keep working and PRO-only features turn off; cloud version history is trimmed to the Free retention period. Nothing is charged automatically.',
+    'faq.q6': 'Can I get a refund?',
+    'faq.a6': 'You can request one — see the <a href="/legal/refund-policy.html">refund policy</a> for the conditions and process.',
+
+    'closing.title': 'Start linking your library today.',
+    'cta.start2': 'Get started',
+    'closing.ext': 'Install the browser extension',
+    'closing.meta': 'No sign-up needed · Free to start · No auto-renewal',
+    'foot.rights': '© 2026 ulink.ren · ulink',
+    'foot.aria': 'Footer links',
     'foot.terms': 'Terms of service',
     'foot.privacy': 'Privacy policy',
     'foot.refund': 'Refund policy',
-    'foot.rights': '© 2026 ulink.ren · ulink',
-    'foot.note': 'Ready to use · Privacy in your control · Cloud sync optional',
-    'lang.aria': 'Switch to 中文',
     'lang.labelFoot': '中文'
   };
-  var EN_TITLE = 'ulink — collect, organize & share, anywhere';
+  var EN_TITLE = 'ulink — turn scattered links into your own knowledge';
 
   function resolveLocale() {
     // 与 functions/s/[gid].ts 的 resolveLocale 顺序一致：?lang= 优先
-    var m = /[?&]lang=(zh|en)/.exec(search);
+    var m = /[?&]lang=(zh|en)/.exec(location.search);
     if (m) return m[1] === 'zh' ? 'zh-CN' : 'en-US';
     try {
       var saved = localStorage.getItem(LOCALE_KEY);
@@ -210,28 +205,40 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     return /^zh/i.test(navigator.language || '') ? 'zh-CN' : 'en-US';
   }
 
+  function each(sel, fn) {
+    var nodes = document.querySelectorAll(sel);
+    for (var i = 0; i < nodes.length; i++) fn(nodes[i]);
+  }
+
   /** 把页面应用到英文（中文是静态默认，无需反操作） */
   function applyEnglish() {
-    var nodes = document.querySelectorAll('[data-i18n]');
-    for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      var text = EN[el.getAttribute('data-i18n')];
-      if (typeof text === 'string') el.textContent = text;
-    }
-    var labelled = document.querySelectorAll('[data-i18n-aria]');
-    for (var j = 0; j < labelled.length; j++) {
-      var aria = EN[labelled[j].getAttribute('data-i18n-aria')];
-      if (typeof aria === 'string') labelled[j].setAttribute('aria-label', aria);
-    }
+    each('[data-i18n]', function (el) {
+      var t = EN[el.getAttribute('data-i18n')];
+      if (typeof t === 'string') el.textContent = t;
+    });
+    each('[data-i18n-html]', function (el) {
+      var t = EN[el.getAttribute('data-i18n-html')];
+      if (typeof t === 'string') el.innerHTML = t;
+    });
+    each('[data-i18n-aria]', function (el) {
+      var t = EN[el.getAttribute('data-i18n-aria')];
+      if (typeof t === 'string') el.setAttribute('aria-label', t);
+    });
+    each('[data-i18n-alt]', function (el) {
+      var t = EN[el.getAttribute('data-i18n-alt')];
+      if (typeof t === 'string') el.setAttribute('alt', t);
+    });
+    each('img[data-src-en]', function (img) {
+      var size = (img.getAttribute('data-size-en') || '').split('x');
+      if (size.length === 2) {
+        img.setAttribute('width', size[0]);
+        img.setAttribute('height', size[1]);
+      }
+      img.setAttribute('src', img.getAttribute('data-src-en'));
+    });
     document.documentElement.lang = 'en-US';
     document.title = EN_TITLE;
     setToggleLabels(false);
-    populateDemo();
-    if (window.__updateDemoGliders) {
-      requestAnimationFrame(function () {
-        window.__updateDemoGliders(true);
-      });
-    }
   }
 
   /** 两个语言切换入口的可见标签 = 目标语言 */
@@ -252,217 +259,137 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
         try { localStorage.setItem(LOCALE_KEY, next); } catch (e) { /* ignore */ }
         if (next === 'en-US') {
           applyEnglish();
+          if (knot) knot.build();
         } else {
-          // 切回中文 = 整页还原为静态原文；reload 后 resolveLocale() 读到 lv_locale=zh-CN
-          // 但 zh 分支为无操作，不会形成循环
+          // 切回中文 = 整页还原为静态原文；reload 后 resolveLocale() 读到 lv_locale=zh-CN，
+          // zh 分支为无操作，不会形成循环
           location.reload();
         }
       });
     });
   }
 
-  /* ── 5：页面增强 ── */
-  var reducedMotion = window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* ── 页面增强 ── */
+  var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-  /** 滚动显现：进入视口一次性加 .in */
+  /** 顶栏吸顶后加分隔线 */
+  function initStick() {
+    var top = document.querySelector('.top');
+    if (!top) return;
+    function onStick() { top.classList.toggle('is-stuck', window.scrollY > 8); }
+    window.addEventListener('scroll', onStick, { passive: true });
+    onStick();
+  }
+
+  /** 入场：轻微上移淡入，进入视口一次性加 .in */
   function initReveal() {
-    var els = document.querySelectorAll('.reveal');
-    if (reducedMotion || !('IntersectionObserver' in window)) {
-      for (var i = 0; i < els.length; i++) els[i].classList.add('in');
-      return;
-    }
+    if (reduce || !('IntersectionObserver' in window)) return;
     var io = new IntersectionObserver(function (entries) {
-      for (var k = 0; k < entries.length; k++) {
-        if (entries[k].isIntersecting) {
-          entries[k].target.classList.add('in');
-          io.unobserve(entries[k].target);
-        }
-      }
-    }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
-    for (var j = 0; j < els.length; j++) io.observe(els[j]);
-  }
-
-  var DEMO_ITEMS = [
-    { title: '工作台', titleEn: 'Workspace', domain: 'workspace.io', tag: '日常', tagEn: 'Daily', icon: '作', iconEn: 'WK', color: '#122E8A', isTheme: true },
-    { title: '设计库', titleEn: 'Design Hub', domain: 'design.assets', tag: '创意', tagEn: 'Design', icon: '设', iconEn: 'DS', color: '#7C3AED' },
-    { title: '阅读清单', titleEn: 'Reading List', domain: 'reading.digest', tag: '知识', tagEn: 'Read', icon: '阅', iconEn: 'RD', color: '#0D9488' },
-    { title: 'AI 助手', titleEn: 'AI Tools', domain: 'ai.models', tag: '智能', tagEn: 'AI', icon: 'AI', iconEn: 'AI', color: '#2563EB' },
-    { title: '灵感集', titleEn: 'Inspirations', domain: 'inspo.gallery', tag: '素材', tagEn: 'Inspo', icon: '灵', iconEn: 'IN', color: '#EA580C' },
-    { title: '云服务', titleEn: 'Cloud Ops', domain: 'cloud.console', tag: '工具', tagEn: 'Ops', icon: '云', iconEn: 'CL', color: '#475569' },
-    { title: '财务账单', titleEn: 'Finance', domain: 'finance.ledger', tag: '资产', tagEn: 'Pay', icon: '财', iconEn: 'FN', color: '#059669' },
-    { title: '学习笔记', titleEn: 'Study Notes', domain: 'notes.study', tag: '资料', tagEn: 'Notes', icon: '学', iconEn: 'ST', color: '#D97706' }
-  ];
-
-  /** 视图演示：填充三种视图的滚动卡片（拟真微缩 UI） */
-  function populateDemo() {
-    var cols = [
-      { id: 'demo-col-grid', type: 'grid' },
-      { id: 'demo-col-list', type: 'list' },
-      { id: 'demo-col-mini', type: 'mini' }
-    ];
-    var isEn = document.documentElement.lang === 'en-US';
-    for (var c = 0; c < cols.length; c++) {
-      var col = document.getElementById(cols[c].id);
-      if (!col) continue;
-      col.innerHTML = '';
-      var type = cols[c].type;
-      // 双份内容 + translateY(-50%) 无缝循环
-      for (var rep = 0; rep < 2; rep++) {
-        for (var i = 0; i < DEMO_ITEMS.length; i++) {
-          var item = DEMO_ITEMS[i];
-          var card = document.createElement('div');
-          card.className = 'mk-card';
-
-          var icon = document.createElement('div');
-          icon.className = 'mk-icon' + (item.isTheme ? ' mk-icon-accent' : '');
-          if (!item.isTheme) {
-            icon.style.background = item.color;
-          }
-          icon.textContent = isEn ? (item.iconEn || item.icon) : item.icon;
-
-          var name = document.createElement('div');
-          name.className = 'mk-name';
-          name.textContent = isEn ? (item.titleEn || item.title) : item.title;
-
-          if (type === 'grid') {
-            var head = document.createElement('div');
-            head.className = 'mk-head';
-            head.appendChild(icon);
-            var titleWrap = document.createElement('div');
-            titleWrap.style.minWidth = '0';
-            titleWrap.style.flex = '1';
-            titleWrap.appendChild(name);
-            var domain = document.createElement('div');
-            domain.className = 'mk-domain';
-            domain.textContent = item.domain;
-            titleWrap.appendChild(domain);
-            head.appendChild(titleWrap);
-            card.appendChild(head);
-
-            var tag = document.createElement('span');
-            tag.className = 'mk-tag';
-            tag.textContent = isEn ? (item.tagEn || item.tag) : item.tag;
-            card.appendChild(tag);
-
-            var foot = document.createElement('div');
-            foot.className = 'mk-foot';
-            foot.innerHTML = '<span><i class="mk-dot"></i>42</span><span class="mk-arrow">↗</span>';
-            card.appendChild(foot);
-          } else if (type === 'list') {
-            var main = document.createElement('div');
-            main.className = 'mk-main';
-            main.appendChild(icon);
-            main.appendChild(name);
-            var tagL = document.createElement('span');
-            tagL.className = 'mk-tag';
-            tagL.textContent = isEn ? (item.tagEn || item.tag) : item.tag;
-            main.appendChild(tagL);
-            card.appendChild(main);
-
-            var hint = document.createElement('span');
-            hint.className = 'mk-hint';
-            hint.textContent = '↗';
-            card.appendChild(hint);
-          } else {
-            // mini
-            card.appendChild(icon);
-            card.appendChild(name);
-          }
-          col.appendChild(card);
-        }
-      }
-    }
-  }
-
-  /** 主题 / 深浅色演示切换（只作用于演示舞台，不写应用偏好） */
-  function initDemoControls() {
-    var looks = document.getElementById('looks');
-    var stage = document.getElementById('demo-stage');
-    if (!stage) return;
-
-    var segs = document.querySelectorAll('.looks .seg');
-
-    function updateGliders(animate) {
-      for (var s = 0; s < segs.length; s++) {
-        var seg = segs[s];
-        var glider = seg.querySelector('.seg-glider');
-        var activeBtn = seg.querySelector('button[aria-pressed="true"]');
-        if (!glider || !activeBtn) continue;
-        if (!animate) {
-          glider.style.transition = 'none';
-        }
-        var left = activeBtn.offsetLeft;
-        var top = activeBtn.offsetTop;
-        var w = activeBtn.offsetWidth;
-        var h = activeBtn.offsetHeight;
-        glider.style.transform = 'translate3d(' + left + 'px,' + top + 'px,0)';
-        glider.style.width = w + 'px';
-        glider.style.height = h + 'px';
-        if (!animate) {
-          glider.offsetHeight; // force reflow
-          glider.style.transition = '';
-        } else {
-          glider.classList.remove('pulse');
-          void glider.offsetWidth; // trigger reflow for pulse animation
-          glider.classList.add('pulse');
-        }
-      }
-    }
-
-    function bindGroup(attr, key) {
-      var btns = document.querySelectorAll('[data-' + attr + ']');
-      for (var i = 0; i < btns.length; i++) {
-        btns[i].addEventListener('click', function (e) {
-          var target = e.currentTarget;
-          var val = target.getAttribute('data-' + attr);
-          if (looks) looks.setAttribute('data-' + key, val);
-          stage.setAttribute('data-' + key, val);
-          if (key === 'mode') {
-            document.documentElement.setAttribute('data-theme', val);
-            try {
-              window.dispatchEvent(new CustomEvent('lv-demo-mode-change', { detail: val }));
-            } catch (err) {}
-          }
-          var group = target.parentElement;
-          var all = group.querySelectorAll('button');
-          for (var k = 0; k < all.length; k++) {
-            all[k].setAttribute('aria-pressed', all[k] === target ? 'true' : 'false');
-          }
-          updateGliders(true);
-        });
-      }
-    }
-
-    bindGroup('demo-style', 'style');
-    bindGroup('demo-mode', 'mode');
-
-    // 初始位置测算（无动效）
-    updateGliders(false);
-
-    // 屏幕尺寸变更 / 旋转重同步
-    window.addEventListener('resize', function () {
-      updateGliders(false);
-    });
-
-    // 字体就绪后重新校验位置（消除 WebFont 导致的宽度差异）
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () {
-        updateGliders(false);
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
       });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    each('.display, .hero-foot, .promises, .hero-shot, .steps, .scene-shot, .organize-stage, .facts, .use-shot, .dialog, .pledges, .plans, .faq', function (el) {
+      el.classList.add('rv');
+      io.observe(el);
+    });
+  }
+
+  /**
+   * 「结」线：把标志里蓝绿两笔的交缠拉成贯穿全页的细线，经过每个 [data-knot] 锚点时交叉一次，
+   * 随滚动逐段描出；窄屏由 CSS 隐藏，减少动效偏好下直接画全。
+   */
+  var knot = null;
+  function initKnot() {
+    var main = document.querySelector('main');
+    var svg = document.querySelector('.knot');
+    if (!main || !svg) return null;
+    var pb = svg.querySelector('.knot-b');
+    var pg = svg.querySelector('.knot-g');
+    var lenB = 0, lenG = 0, span = [0, 1], nodes = [];
+
+    function build() {
+      if (getComputedStyle(svg).display === 'none') return;
+      var anchors = Array.prototype.slice.call(document.querySelectorAll('[data-knot]'));
+      if (anchors.length < 2) return;
+      var mr = main.getBoundingClientRect();
+      // 轴线固定在正文左缘外 54px（取 .wrap 的内容区左缘），不跟随锚点所在列：
+      // 「用」那屏锚点在右栏，跟着走会让线横穿截图
+      var wrap = main.querySelector('.wrap');
+      var wr = wrap.getBoundingClientRect();
+      var axis = wr.left - mr.left + parseFloat(getComputedStyle(wrap).paddingLeft) - 54;
+      var pts = anchors.map(function (el) {
+        var r = el.getBoundingClientRect();
+        return { x: axis, y: r.top - mr.top + r.height / 2 };
+      });
+      var last = pts[pts.length - 1];
+      pts.push({ x: last.x, y: last.y + 120 });
+      function strand(sign) {
+        var d = 'M ' + pts[0].x + ' ' + pts[0].y;
+        for (var i = 0; i < pts.length - 1; i++) {
+          var a = pts[i], b = pts[i + 1], dy = b.y - a.y;
+          var s = sign * (i % 2 === 0 ? 1 : -1);
+          // 两股在每个锚点交叉；鼓起最多 32px，始终留在页边距里，不压正文
+          var bow = Math.min(32, Math.max(12, dy * 0.04));
+          d += ' C ' + (a.x + s * bow) + ' ' + (a.y + dy * 0.25) + ', ' +
+               (b.x + s * bow) + ' ' + (b.y - dy * 0.25) + ', ' + b.x + ' ' + b.y;
+        }
+        return d;
+      }
+      pb.setAttribute('d', strand(1));
+      pg.setAttribute('d', strand(-1));
+      lenB = pb.getTotalLength();
+      lenG = pg.getTotalLength();
+      pb.style.strokeDasharray = lenB + ' ' + lenB;
+      pg.style.strokeDasharray = lenG + ' ' + lenG;
+      // 每个锚点放一个「结点」：线描到这里时点亮
+      Array.prototype.slice.call(svg.querySelectorAll('circle')).forEach(function (c) { svg.removeChild(c); });
+      nodes = pts.slice(0, -1).map(function (pt) {
+        var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', pt.x);
+        c.setAttribute('cy', pt.y);
+        c.setAttribute('r', 4.5);
+        c.setAttribute('class', 'knot-node');
+        svg.appendChild(c);
+        return { el: c, y: pt.y };
+      });
+      span = [pts[0].y, pts[pts.length - 1].y];
+      draw();
     }
 
-    window.__updateDemoGliders = updateGliders;
+    function draw() {
+      if (!lenB) return;
+      var mr = main.getBoundingClientRect();
+      // 视口 65% 处为「笔尖」：笔尖走到哪，线就描到哪
+      var tip = window.innerHeight * 0.65 - mr.top;
+      var p = reduce ? 1 : Math.max(0, Math.min(1, (tip - span[0]) / (span[1] - span[0])));
+      pb.style.strokeDashoffset = String(lenB * (1 - p));
+      pg.style.strokeDashoffset = String(lenG * (1 - Math.max(0, p - 0.02)));
+      var reach = span[0] + p * (span[1] - span[0]);
+      nodes.forEach(function (n) { n.el.classList.toggle('on', reach >= n.y - 2); });
+    }
+
+    var raf = 0;
+    window.addEventListener('scroll', function () {
+      if (raf) return;
+      raf = requestAnimationFrame(function () { raf = 0; draw(); });
+    }, { passive: true });
+    window.addEventListener('resize', build);
+    // 图片与字体加载会改变锚点位置
+    window.addEventListener('load', build);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(build);
+    build();
+    return { build: build };
   }
 
   function boot() {
     if (resolveLocale() === 'en-US') applyEnglish();
     else setToggleLabels(true);
-    bindToggles();
-    populateDemo();
-    initDemoControls();
-    initReveal();
     document.documentElement.removeAttribute('data-lv-boot');
+    initStick();
+    initReveal();
+    knot = initKnot();
+    bindToggles();
   }
 
   if (document.readyState === 'loading') {

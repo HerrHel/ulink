@@ -278,6 +278,11 @@ onMounted(async () => {
     window.history.replaceState(null, '', window.location.origin + window.location.pathname)
     useAuthStore().authModalOpen = true
   }
+  // 宣传页定价区「查看价格并升级」经 /app?upgrade=1 直开购买弹窗（价格与额度由弹窗从 plans 表实时读取；未登录时弹窗自带登录引导）
+  if (params.get('upgrade') === '1') {
+    window.history.replaceState(null, '', window.location.origin + window.location.pathname)
+    useUIStore().openPurchase()
+  }
   // ext_save 优先，share_target 次之
   const incomingUrl = extSaveUrl || shareUrl
   if (incomingUrl) {

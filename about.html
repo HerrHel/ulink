@@ -2,38 +2,36 @@
 <html lang="zh-CN" data-lv-boot>
 <head>
 <meta charset="UTF-8">
-<!-- CSP 与 app.html 同源同款（_headers 生产生效 + meta 兜底）：
-     script-src 'self' → 页面逻辑全部走外链 /landing.js 与 /hero-visual.js，无内联脚本；
-     style-src 'unsafe-inline' → 本页内联 <style> 合法；JSON-LD 为数据块不受 script-src 限制 -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#F5EFEA">
-<!-- 品牌：中文「与链」，英文「ulink」。落地页静态 SEO 默认中文（与全站惯例一致），
-     英文由 /landing.js 按 ?lang= / lv_locale / 浏览器语言 即时切换（同 /s/* 的 resolveLocale 顺序） -->
-<title>与链 ulink — 随时随地收藏、整理、分享</title>
-<!-- 合规修订：description / og / itemprop / twitter 四处 meta 统一改为仅账号字段端到端加密，其余内容云端明文 -->
-<meta name="description" content="与链（ulink）是免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，仅账号字段端到端加密，支持专属私有链接定向分享。">
+<!-- 2026-11-25 改版：「排版考究的产品目录」——纸色底、思源宋体标题、真实应用截图（scripts/capture-landing.mjs 生成），
+     不再使用手绘 canvas 插画；价格与额度不写具体数字（真源 plans 表，应用内购买页实时读取）。
+     CSP：script-src 'self' → 页面逻辑全部在外链 /landing.js，无内联脚本；style-src 'unsafe-inline' → 本页内联 <style> 合法；
+     JSON-LD 为数据块不受 script-src 限制 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F3EFE8">
+<!-- 品牌：中文「与链」，英文「ulink」。静态 SEO 默认中文；英文由 /landing.js 按 ?lang= / lv_locale / 浏览器语言即时切换 -->
+<title>与链 ulink — 把散落的链接，连成你自己的知识</title>
+<!-- 合规口径：description / og / itemprop / twitter 加密说法统一为「仅账号字段端到端加密」 -->
+<meta name="description" content="与链（ulink）把书签、笔记与 AI 整理放在一起：粘贴网址，名称与分类自动补齐；子书签与富文本笔记深度整理，多端云同步，仅账号字段端到端加密。打开即用，无需注册。">
 <link rel="canonical" href="https://ulink.ren/about">
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ulink">
-<meta property="og:title" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta property="og:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，仅账号字段端到端加密，专属私有链接定向分享。">
+<meta property="og:title" content="与链 ulink — 把散落的链接，连成你自己的知识">
+<meta property="og:description" content="书签、笔记与 AI 整理放在一起：粘贴网址自动补齐，子书签与富文本笔记深度整理，多端云同步，仅账号字段端到端加密。">
 <meta property="og:url" content="https://ulink.ren/about">
 <meta property="og:image" content="https://ulink.ren/share-cover.png">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:locale:alternate" content="en_US">
 <!-- QQ / 微信爬虫识别标签（Microdata / itemprop） -->
-<meta itemprop="name" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta itemprop="description" content="与链（ulink）是免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，仅账号字段端到端加密，支持专属私有链接定向分享。">
+<meta itemprop="name" content="与链 ulink — 把散落的链接，连成你自己的知识">
+<meta itemprop="description" content="与链（ulink）把书签、笔记与 AI 整理放在一起：粘贴网址，名称与分类自动补齐；子书签与富文本笔记深度整理，多端云同步，仅账号字段端到端加密。">
 <meta itemprop="image" content="https://ulink.ren/share-cover.png">
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta name="twitter:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，仅账号字段端到端加密，专属私有链接定向分享。">
+<meta name="twitter:title" content="与链 ulink — 把散落的链接，连成你自己的知识">
+<meta name="twitter:description" content="书签、笔记与 AI 整理放在一起：粘贴网址自动补齐，子书签与富文本笔记深度整理，多端云同步，仅账号字段端到端加密。">
 <meta name="twitter:image" content="https://ulink.ren/share-cover.png">
-<!-- 应用级结构化数据（/ 是 SEO 主场） -->
-<!-- 合规修订：JSON-LD description / featureList 同步为仅账号字段加密口径；
-     offers 改用 priceSpecification 列出免费与三档 PRO，不再写死单一 price="0" -->
+<!-- 应用级结构化数据。offers 只声明免费起步价；PRO 具体价格以应用内购买页（plans 表）为准，不在此手抄 -->
 <script type="application/ld+json" data-lv-jsonld="app">
 {
   "@context": "https://schema.org",
@@ -41,765 +39,621 @@
   "name": "与链 ulink",
   "applicationCategory": "ProductivityApplication",
   "operatingSystem": "Web",
-  "description": "免注册即用的个人书签管理器：子书签、分类、属性深度整理，多端云同步，仅账号字段端到端加密，支持专属私有链接定向分享。",
+  "description": "书签、笔记与 AI 整理放在一起的个人书签管理器：粘贴网址自动补齐名称与分类，子书签与富文本笔记深度整理，多端云同步，仅账号字段端到端加密，支持私有链接分享。",
   "url": "https://ulink.ren/",
   "inLanguage": "zh-CN",
   "offers": {
     "@type": "Offer",
+    "price": "0",
     "priceCurrency": "CNY",
-    "priceSpecification": [
-      { "@type": "UnitPriceSpecification", "name": "免费版", "price": "0", "priceCurrency": "CNY", "description": "永久免费起步" },
-      { "@type": "UnitPriceSpecification", "name": "PRO 月付", "price": "15", "priceCurrency": "CNY" },
-      { "@type": "UnitPriceSpecification", "name": "PRO 季付", "price": "36", "priceCurrency": "CNY" },
-      { "@type": "UnitPriceSpecification", "name": "PRO 年付", "price": "108", "priceCurrency": "CNY" }
-    ],
-    "description": "免费起步，另有 PRO 三档付费方案（月付 ¥15 / 季付 ¥36 / 年付 ¥108），均无自动续费"
+    "description": "免费起步，另有 PRO 付费方案（月付 / 季付 / 年付），均无自动续费"
   },
-  "featureList": "子书签与富文本笔记, 自定义属性标签, 多端云同步, 仅账号字段端到端加密, 专属私有链接分享, 浏览器扩展快捷保存, 拼音模糊搜索, 离线 PWA"
+  "featureList": "子书签与富文本笔记, AI 预填名称与分类, AI 对话找站与整理, 自定义属性筛选, 多端云同步, 仅账号字段端到端加密, 私有链接分享, 浏览器扩展快捷保存, 拼音模糊搜索, 离线 PWA"
 }
 </script>
 
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
-<link href="/fonts/fonts.css" rel="stylesheet">
-<!-- 自托管 Noto Sans SC / JetBrains Mono（同域 /fonts/gf/，切片按需加载） -->
+<!-- 正文 / 等宽：站点自托管的 Noto Sans SC + JetBrains Mono（同域 /fonts/gf/，切片按需加载） -->
 <link href="/fonts/gf.css" rel="stylesheet">
-<!-- 双语 / 滚动显现 / 演示切换。阻塞于 head：英文切换先于首帧，避免中英闪烁 -->
+<!-- 标题字体：思源宋体按本页中英文案用字子集化（scripts/subset-landing-font.py 生成），预加载避免标题换字闪动 -->
+<link rel="preload" href="/landing/serif-sub.woff2" as="font" type="font/woff2" crossorigin>
+<!-- 双语 / 入场 / 结线。阻塞于 head：英文切换先于首帧，避免中英闪烁 -->
 <script src="/landing.js"></script>
-<!-- 书签星链（Hero 主视觉）。defer：不阻塞首屏文本渲染 -->
-<script src="/hero-visual.js" defer></script>
-<!-- 深度管理（悬浮透光玻璃书签板）。defer -->
-<script src="/manage-visual.js" defer></script>
-<!-- 多端同频（双端真机悬浮透光舞台 + 零知识加密水晶芯片）。defer -->
-<script src="/sync-visual.js" defer></script>
-<!-- 创作与分享（行星环绕式 · 知识引力系统）。defer -->
-<script src="/share-visual.js" defer></script>
 <style>
-/* ── 设计令牌：与主应用 src/styles/tokens.css :root 块同源 ──
-   ⚠️ 本页为 SEO 静态页、CSS 内联防闪烁，无法 import tokens.css ——
-   radius / shadow / 色板改值时必须先改 tokens.css，再回填此处，两处保持逐字一致。
-   命名映射：--ink=--text、--ink-2=--text-secondary、--ink-3=--text-muted、
-   --brand=--accent、--brand-deep=--accent-dark、--brand-soft=--accent-light、--brand-glow=--accent-glow。 */
-:root {
-  --brand-logo-blue: #122E8A;
-  --brand-logo-green: #10B981;
-}
-.logo path, .foot-logo path {
-  transition: stroke 0.35s ease;
-}
-
-:root{
-  --bg:#F5EFEA;                 /* 主页面背景色 */
-  --bg-alt:#EDE4DA;
-  --surface:#FDFBF9;
-  --surface-hover:#F7F2EC;
-  --border:#E5DDD3;
-  --border-hover:#D5CBBE;
-  --ink:#2C2824;
-  --ink-2:#5E5852;
-  --ink-3:#6A6660;
-  --brand:#122E8A;              /* 主站主题色（效率 · 浅色 accent） */
-  --brand-deep:#0E2270;
-  --brand-soft:rgba(18,46,138,.07);
-  --brand-glow:rgba(18,46,138,.13);
-  /* 品牌生命绿：连接、共创、生长（与应用舒适主题 / 知识生命树 #10B981 / #0D7A6F 同源） */
-  --brand-green:#0D7A6F;
-  --brand-green-bright:#10B981;
-  --brand-green-soft:rgba(16,185,129,.09);
-  --brand-green-glow:rgba(16,185,129,.16);
-  --radius-sm:6px;
-  --radius-md:10px;
-  --radius-lg:14px;
-  --shadow-sm:0 1px 3px rgba(44,40,36,.04),0 1px 2px rgba(44,40,36,.02);
-  --shadow-md:0 4px 16px -2px rgba(44,40,36,.05),0 2px 4px rgba(44,40,36,.02);
-  --shadow-lg:0 12px 32px -4px rgba(44,40,36,.07),0 4px 12px rgba(44,40,36,.025);
-  --shadow-card:0 1px 3px rgba(44,40,36,.04),0 0 0 1px #EFE8DF;
-  --shadow-card-hover:0 8px 24px -4px rgba(44,40,36,.07),0 2px 6px rgba(44,40,36,.025);
-  --font-display:'Clash Display','Noto Sans SC',-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
-  --font-body:'Satoshi','Noto Sans SC',-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
-  --maxw:1120px;
-  --sect-pad:clamp(80px,11vw,140px);
-  --ease:cubic-bezier(.16,1,.3,1);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{
-  scroll-behavior:smooth;
-  touch-action:pan-y;
-  -webkit-text-size-adjust:100%;
-  text-size-adjust:100%;
-}
-body{
-  font-family:var(--font-body);
-  background:var(--bg);
-  color:var(--ink);
-  line-height:1.75;
-  -webkit-font-smoothing:antialiased;
-  text-rendering:optimizeLegibility;
-  overflow-x:hidden;
-  touch-action:pan-y;
-}
 /* 双语无闪烁：landing.js 应用语言后再揭示；JS 禁用时由 <noscript> 解除 */
 html[data-lv-boot] body{visibility:hidden}
-::selection{background:var(--brand);color:#fff}
+@font-face{font-family:'Noto Serif SC Sub';font-style:normal;font-weight:600 900;font-display:swap;src:url(/landing/serif-sub.woff2) format('woff2')}
+/* 宣传页样式 —— 「排版考究的产品目录」：纸色底、宋体标题、等宽注记、只用标志的蓝与绿，不用光晕与渐变 */
+:root{
+  --paper:#F3EFE8;
+  --paper-2:#EBE5DB;
+  --card:#FBF9F5;
+  --ink:#1C1A17;
+  --ink-2:#4A453E;
+  --ink-3:#8A837A;
+  --rule:#D9D2C6;
+  --blue:#122E8A;
+  --green:#10B981;
+  --green-ink:#0B7A57;
+  --serif:'Noto Serif SC Sub','Noto Serif SC','Source Han Serif SC','Songti SC',STSong,serif;
+  --sans:'Noto Sans SC',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --maxw:1200px;
+  --gutter:clamp(16px,4vw,48px);
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.7;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+img{display:block;max-width:100%;height:auto}
 a{color:inherit;text-decoration:none}
-img,svg{display:block}
-button{font:inherit;cursor:pointer}
-:focus-visible{outline:2px solid var(--brand);outline-offset:3px;border-radius:4px}
-.wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(20px,5vw,40px)}
-
-/* 滚动显现：仅 JS 可用时隐藏初始态（.js 由 landing.js 添加） */
-.js .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
-.js .reveal.in{opacity:1;transform:none}
-.js .reveal.d1{transition-delay:.08s}.js .reveal.d2{transition-delay:.16s}.js .reveal.d3{transition-delay:.24s}.js .reveal.d4{transition-delay:.32s}
-
-/* ── 按钮 ── */
-.btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1rem;
-  padding:13px 30px;border-radius:999px;border:1px solid transparent;
-  transition:transform .16s var(--ease),box-shadow .16s var(--ease),background .16s,border-color .16s}
-.btn:hover{transform:translateY(-1px)}
-.btn:active{transform:translateY(0)}
-.btn-solid{background:var(--brand);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 6px 20px var(--brand-glow)}
-.btn-solid:hover{background:var(--brand-deep);box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 10px 28px var(--brand-glow)}
-.btn-ghost{border-color:var(--border-hover);color:var(--ink)}
-.btn-ghost:hover{border-color:var(--brand);color:var(--brand)}
-.btn-sm{padding:8px 20px;font-size:.9rem}
+main{position:relative;overflow-x:clip}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gutter)}
+.mono{font-family:var(--mono);font-size:.78rem;letter-spacing:.02em}
+.skip{position:absolute;left:-9999px;top:8px;background:var(--ink);color:var(--paper);padding:8px 12px;z-index:100}
+.skip:focus{left:8px}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:4px}
 
 /* ── 顶栏 ── */
-.site-head{
-  position:sticky;top:0;z-index:100;
-  padding:14px 0;
-  background:rgba(245,239,234,0.85);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
-  border-bottom:1px solid rgba(229,221,211,0.6);
-  transition:background .25s ease,border-color .25s ease;
-}
-.head-row{display:flex;align-items:center;justify-content:space-between;gap:14px}
-.logo{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:600;font-size:1.18rem;letter-spacing:.02em}
-.logo svg{width:28px;height:28px;flex-shrink:0;transform:translateY(-1px)}
-.logo span{line-height:1}
-.head-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
-.lang{background:none;border:1px solid var(--border-hover);color:var(--ink-2);
-  font-weight:700;font-size:.8rem;letter-spacing:.08em;padding:7px 13px;border-radius:999px;transition:color .16s,border-color .16s}
-.lang:hover{color:var(--brand);border-color:var(--brand)}
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--paper) 88%,transparent);
+  backdrop-filter:saturate(1.2) blur(10px);-webkit-backdrop-filter:saturate(1.2) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}
+.top.is-stuck{border-bottom-color:var(--rule)}
+.top-row{display:flex;align-items:center;gap:24px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-weight:700;font-size:1.15rem}
+.brand-mark{width:26px;height:26px}
+.top-nav{display:flex;gap:4px;margin-left:12px}
+.top-nav a{font-family:var(--serif);font-weight:600;padding:6px 12px;border-radius:999px;color:var(--ink-2);transition:background .2s,color .2s}
+.top-nav a:hover{background:var(--paper-2);color:var(--ink)}
+.top-nav a.is-muted{color:var(--ink-3)}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:16px}
+.link-quiet{color:var(--ink-2);font-size:.92rem}
+.link-quiet:hover{color:var(--ink)}
 
-/* ── Hero：左文右星链 ── */
-.hero{padding:clamp(40px,7vh,84px) 0 clamp(56px,8vh,96px)}
-.hero-grid{display:grid;grid-template-columns:minmax(0,10fr) minmax(0,9fr);gap:clamp(28px,5vw,64px);align-items:center}
-.hero-copy h1{
-  font-family:var(--font-display);font-weight:600;
-  font-size:clamp(2.3rem,5.4vw,3.9rem);
-  line-height:1.22;letter-spacing:.015em;margin-bottom:20px;
-}
-.hero-copy h1 em{font-style:normal;color:var(--brand);display:block}
-/* 英文标题更长，单独收一档字号：实测 hero 文字列宽 514px，
-   'Save, organize & share,' 在 42px 时单行 498px、43px 已到 510px 濒临溢出，
-  故上限压到 40px（余量 8%，兼顾客体回退字体更宽的情况），保证 em/span 各占一行不折行 */
-html[lang="en-US"] .hero-copy h1{font-size:clamp(1.7rem,3.4vw,2.5rem)}
-.hero-sub{color:var(--ink-2);font-size:clamp(1rem,1.5vw,1.13rem);max-width:34em;margin-bottom:30px;line-height:1.75}
-.hero-ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-.hero-visual{position:relative;aspect-ratio:1/0.92;min-height:320px}
-.hero-visual canvas{position:absolute;inset:0;width:100%;height:100%}
-/* 星链后方蓝绿双相自然氛围光 */
-.hero-visual::before{content:"";position:absolute;inset:-4%;border-radius:50%;
-  background:radial-gradient(circle at 35% 35%,rgba(18,46,138,.08) 0%,transparent 55%),
-             radial-gradient(circle at 72% 68%,rgba(16,185,129,.075) 0%,transparent 58%);pointer-events:none}
+/* ── 按钮：方角偏小、墨色实心 / 细线描边，无阴影 ── */
+.btn{display:inline-flex;align-items:center;gap:10px;height:40px;padding:0 18px;border-radius:10px;font-weight:600;font-size:.92rem;
+  transition:transform .15s var(--ease),background .2s,color .2s,border-color .2s;white-space:nowrap}
+.btn-lg{height:52px;padding:0 24px;font-size:1rem;border-radius:12px}
+.btn-ink{background:var(--ink);color:var(--paper)}
+.btn-ink:hover{background:var(--blue)}
+.btn-line{border:1.5px solid var(--ink);color:var(--ink)}
+.btn-line:hover{background:var(--ink);color:var(--paper)}
+.btn:active{transform:translateY(1px)}
+.btn .arrow{font-family:var(--mono);transition:transform .2s var(--ease)}
+.btn:hover .arrow{transform:translateX(3px)}
+.btn-line:hover .arrow{transform:translateY(3px)}
 
-/* ── 分区通用 ── */
-.sect{padding:var(--sect-pad) 0 0;position:relative}
-.sect:last-of-type{padding-bottom:var(--sect-pad)}
-.sect-head{max-width:640px;margin:0 auto clamp(40px,6vw,64px);text-align:center}
-.sect-head h2{font-family:var(--font-display);font-weight:600;font-size:clamp(1.7rem,3.4vw,2.4rem);line-height:1.3;letter-spacing:.01em}
-.sect-head p{color:var(--ink-2);margin-top:12px;font-size:1.02rem}
-.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:.74rem;font-weight:700;letter-spacing:.18em;
-  text-transform:uppercase;color:var(--brand);background:var(--brand-soft);border:1px solid var(--brand-glow);
-  padding:3px 12px;border-radius:999px;margin-bottom:14px}
-.split{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,6vw,72px);align-items:center}
-.copy h3{font-family:var(--font-display);font-weight:600;font-size:clamp(1.4rem,2.6vw,1.9rem);line-height:1.35;margin-bottom:14px;letter-spacing:.01em}
-.copy .lead{color:var(--ink-2);margin-bottom:20px;font-size:1.02rem}
-.copy p{color:var(--ink-2);line-height:1.75}
+/* ── 首屏 ── */
+.hero{padding:clamp(48px,9vw,120px) 0 0}
+.kicker{font-family:var(--mono);font-size:.8rem;color:var(--ink-3);letter-spacing:.06em;margin-bottom:clamp(20px,3vw,32px)}
+.kicker .sep{margin:0 .7em;color:var(--rule)}
+.display{font-family:var(--serif);font-weight:700;letter-spacing:-.01em;line-height:1.16;color:var(--ink)}
+h1.display{font-size:clamp(2.5rem,7.2vw,5.6rem)}
+.mark{color:var(--blue);background:linear-gradient(transparent 82%,color-mix(in srgb,var(--green) 55%,transparent) 82%,color-mix(in srgb,var(--green) 55%,transparent) 94%,transparent 94%)}
+.hero-foot{display:grid;grid-template-columns:minmax(0,1.1fr) auto;gap:32px 48px;align-items:end;margin-top:clamp(28px,4vw,44px);
+  padding-top:clamp(24px,3vw,32px);border-top:1px solid var(--rule)}
+.lede{font-size:clamp(1rem,1.5vw,1.14rem);color:var(--ink-2);max-width:34em}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap}
+.promises{display:flex;gap:22px;flex-wrap:wrap;list-style:none;margin-top:22px;color:var(--ink-3)}
+.promises li::before{content:"✓";color:var(--green-ink);margin-right:.5em}
 
-/* 深度管理：三条能力小行 */
-.cap-row{display:flex;gap:16px;padding:14px 12px;border-top:1px solid var(--border);border-radius:var(--radius-sm);transition:background .2s}
-.cap-row:hover{background:rgba(255,255,255,.5)}
-.cap-row:last-child{border-bottom:1px solid var(--border)}
-.cap-icon{width:36px;height:36px;border-radius:8px;background:var(--brand-soft);border:1px solid var(--brand-glow);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:background .2s,border-color .2s}
-.cap-icon svg{width:18px;height:18px;stroke:var(--brand);transition:stroke .2s}
-.cap-icon.green{background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
-.cap-icon.green svg{stroke:var(--brand-green)}
-.cap-row b{display:block;font-size:.98rem;margin-bottom:3px;color:var(--ink)}
-.cap-row span{font-size:.88rem;color:var(--ink-2);line-height:1.55;display:block}
+/* 首屏截图：真实界面，浏览器框 + 手机框叠放；下沿淡出进入下一屏 */
+.hero-shot{position:relative;margin-top:clamp(40px,6vw,72px)}
+.frame{background:var(--card);border:1px solid var(--rule);overflow:hidden}
+.frame-desk{border-radius:14px 14px 0 0;border-bottom:0;
+  -webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent);
+  max-height:min(62vw,640px)}
+.frame-bar{display:flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-bottom:1px solid var(--rule);background:var(--paper-2)}
+.frame-bar i{width:10px;height:10px;border-radius:50%;background:var(--rule)}
+.frame-url{margin:0 auto;padding:3px 14px;border-radius:6px;background:var(--card);color:var(--ink-3);font-size:.72rem;transform:translateX(-24px)}
+.frame-phone{position:absolute;right:calc(var(--gutter) - 8px);bottom:-28px;width:clamp(150px,19vw,230px);border-radius:28px;padding:7px;
+  background:var(--ink);border:0;box-shadow:0 24px 48px -24px rgba(28,26,23,.45)}
+.frame-phone img{border-radius:22px;aspect-ratio:390/700;object-fit:cover;object-position:top}
+.hero-shot figcaption{margin-top:12px;color:var(--ink-3);text-align:center}
 
-/* ── 视觉 1：深度管理（悬浮透光玻璃书签板 · 树状收纳）── */
-.manage-visual{position:relative;width:100%;aspect-ratio:1/0.92;min-height:340px}
-.manage-visual canvas{position:absolute;inset:0;width:100%;height:100%}
+/* ── 场景 ── */
+.scene{padding:clamp(88px,12vw,168px) 0 clamp(64px,9vw,120px);border-top:1px solid var(--rule);margin-top:clamp(56px,8vw,96px)}
+/* 只有首屏 → 「收」之间需要额外间距；其余各屏首尾相接，否则带底色的屏之间会露出一条页面底色 */
+.scene + .scene{margin-top:0}
+.scene-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(40px,6vw,88px);align-items:center}
+.scene-no{display:flex;align-items:baseline;gap:14px;font-family:var(--serif);font-weight:700;font-size:clamp(3.4rem,7vw,5.4rem);line-height:1;color:var(--blue);margin-bottom:24px;letter-spacing:0}
+.scene-no span{font-family:var(--mono);font-size:.8rem;font-weight:500;color:var(--ink-3);letter-spacing:.08em;transform:translateY(-.4em)}
+.scene h2.display{font-size:clamp(1.9rem,3.6vw,2.9rem);margin-bottom:clamp(24px,3vw,36px)}
+.steps{list-style:none;counter-reset:s;border-top:1px solid var(--rule)}
+.steps li{counter-increment:s;display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:8px;padding:16px 0;border-bottom:1px solid var(--rule)}
+.steps li::before{content:"0" counter(s);grid-row:span 2;font-family:var(--mono);font-size:.78rem;color:var(--green-ink);padding-top:3px}
+.steps b{font-family:var(--serif);font-weight:700;font-size:1.06rem}
+.steps span{color:var(--ink-2);font-size:.94rem}
+kbd{font-family:var(--mono);font-size:.76em;padding:1px 6px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;background:var(--card);color:var(--ink)}
+.fine{margin-top:16px;font-size:.82rem;color:var(--ink-3)}
 
-/* ── 视觉 2：同步与安全（双端悬浮透光舞台 + 零知识加密水晶芯片）── */
-.sect#sync::before{content:"";position:absolute;left:-8%;top:20%;width:440px;height:440px;border-radius:50%;
-  background:radial-gradient(circle,rgba(18,46,138,.045) 0%,transparent 70%);pointer-events:none}
-.sync-visual{position:relative;width:100%;aspect-ratio:1/0.88;min-height:320px}
-.sync-visual canvas{position:absolute;inset:0;width:100%;height:100%}
+/* 「收」截图：纸面卡片 + 右侧手写感注记（细线 + 等宽字），窄屏收为下方图注 */
+.scene-shot{padding-right:clamp(0px,13vw,170px)}
+.paper{position:relative;background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:10px;
+  box-shadow:0 1px 0 var(--rule),0 30px 60px -40px rgba(28,26,23,.35);transform:rotate(-.6deg)}
+.paper img{border-radius:10px}
+.note{position:absolute;left:calc(100% + 18px);display:flex;align-items:center;gap:10px;white-space:nowrap;
+  font-family:var(--mono);font-size:.76rem;color:var(--green-ink);transform:translateY(-50%) rotate(.6deg)}
+.note i{position:absolute;right:calc(100% + 8px);width:clamp(40px,9vw,120px);border-top:1.5px dashed var(--green)}
+.note i::after{content:"";position:absolute;left:-4px;top:-4.5px;width:7px;height:7px;border-radius:50%;background:var(--green)}
+.note-name{top:49%}
+.note-cat{top:67%}
+.scene-shot figcaption{margin-top:18px;color:var(--ink-3)}
 
-/* ── 视觉 3：主题与视图演示（拟真微缩卡片）── */
-/* ── 视觉 3：主题与视图演示（拟真微缩卡片）── */
-.looks{padding:var(--sect-pad) 0 0;
-  /* 演示主题 = 主应用真实 tokens（tokens.css 效率/舒适 × 浅/深） */
-  --d-bg:#F5EFEA;--d-bg-alt:#EDE4DA;--d-surface:#FDFBF9;--d-border:#E5DDD3;--d-border-hover:#D5CBBE;--d-text:#2C2824;--d-muted:#6A6660;--d-accent:#122E8A;--d-accent-soft:rgba(18,46,138,.08);--d-accent-glow:rgba(18,46,138,.20);--d-accent-contrast:#FFFFFF;
-}
-.looks[data-style="comfort"]{
-  --d-bg:#F3F6EF;--d-bg-alt:#E7ECE0;--d-surface:#F9FBF6;--d-border:#D2DAC8;--d-border-hover:#B8C4AC;--d-text:#262E24;--d-muted:#667362;--d-accent:#2C9678;--d-accent-soft:rgba(44,150,120,.10);--d-accent-glow:rgba(44,150,120,.22);--d-accent-contrast:#FFFFFF;
-}
-.looks[data-mode="dark"]{
-  --d-bg:#1A1A1D;--d-bg-alt:#202025;--d-surface:#25252B;--d-border:#2F2F36;--d-border-hover:#3D3D46;--d-text:#EEE9E2;--d-muted:#9B968E;--d-accent:#4A90F7;--d-accent-soft:rgba(74,144,247,.08);--d-accent-glow:rgba(74,144,247,.12);--d-accent-contrast:#FFFFFF;
-}
-.looks[data-style="comfort"][data-mode="dark"]{
-  --d-bg:#2B313F;--d-bg-alt:#333A4A;--d-surface:#363D50;--d-border:#444C5E;--d-border-hover:#525B70;--d-text:#E2E7BF;--d-muted:#B0B692;--d-accent:#E2E7BF;--d-accent-soft:rgba(226,231,191,.14);--d-accent-glow:rgba(226,231,191,.24);--d-accent-contrast:#252B38;
-}
-#looks .eyebrow{color:var(--d-accent);background:var(--d-accent-soft);border-color:var(--d-accent-glow);transition:color .35s var(--ease),background .35s var(--ease),border-color .35s var(--ease)}
-.demo-controls{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:clamp(30px,4vw,44px)}
-.seg{display:inline-flex;position:relative;background:var(--bg-alt);border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px;box-shadow:inset 0 1px 3px rgba(44,40,36,.06),inset 0 0 1px rgba(44,40,36,.04);transition:background .35s var(--ease),border-color .35s var(--ease),box-shadow .35s var(--ease)}
-.seg-glider{position:absolute;top:0;left:0;border-radius:999px;background:var(--d-accent);
-  box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 4px 18px var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08);
-  pointer-events:none;z-index:0;will-change:transform,width,background,box-shadow;
-  transition:transform .44s cubic-bezier(0.25,1.25,0.45,1),width .36s cubic-bezier(0.25,1.25,0.45,1),height .36s cubic-bezier(0.25,1.25,0.45,1),background .38s cubic-bezier(0.16,1,0.3,1),box-shadow .38s cubic-bezier(0.16,1,0.3,1)}
-.seg-glider.pulse{animation:glider-aura .48s cubic-bezier(0.16,1,0.3,1)}
-@keyframes glider-aura{
-  0%{box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 0 0 0 var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08)}
-  50%{box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 0 0 9px transparent,0 6px 24px var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08)}
-  100%{box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 4px 18px var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08)}
-}
-.seg button{position:relative;z-index:1;border:none;background:transparent;padding:8px 22px;border-radius:999px;color:var(--ink-2);font-weight:600;font-size:.88rem;letter-spacing:.02em;cursor:pointer;
-  transition:color .28s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1),letter-spacing .28s ease;user-select:none;-webkit-tap-highlight-color:transparent}
-.seg button:hover{color:var(--ink)}
-.seg button:active{transform:scale(0.93)}
-.seg button[aria-pressed="true"]{color:var(--d-accent-contrast);font-weight:700;letter-spacing:.04em}
-html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
-.seg.icon button{padding:8px 16px;display:flex;align-items:center;justify-content:center}
-.seg.icon svg{width:18px;height:18px;stroke:currentColor;transform-origin:center;
-  transition:transform .44s cubic-bezier(0.25,1.25,0.45,1),opacity .28s ease,stroke-width .28s ease,filter .35s ease}
+/* ── 02 理：标题横跨整行，下面一大一小两张真实截图错位叠放，再接一行三列要点 ── */
+.scene-organize{background:var(--paper);padding-bottom:clamp(56px,8vw,104px)}
+.organize-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:end;margin-bottom:clamp(40px,6vw,72px)}
+.organize-head .scene-no{margin-bottom:0}
+.organize-head h2.display{margin-bottom:0}
+.organize-stage{display:grid;grid-template-columns:minmax(0,8fr) minmax(0,4fr);gap:clamp(24px,4vw,48px);align-items:start}
+.organize-sub{margin-top:clamp(64px,10vw,140px)}
+.organize-sub .paper{transform:rotate(1.2deg);max-width:340px}
+.paper-flat{transform:none}
+.organize-stage figcaption{margin-top:14px;color:var(--ink-3)}
+.tag{position:absolute;font-family:var(--mono);font-size:.74rem;color:var(--paper);background:var(--green-ink);padding:5px 10px;border-radius:6px;white-space:nowrap}
+.tag::after{content:"";position:absolute;width:8px;height:8px;background:inherit;transform:rotate(45deg)}
+/* 标签贴在内嵌卡片那一行的右侧，箭头朝左指向卡片 */
+.tag-note{left:64%;bottom:12.5%}
+.tag-note::after{left:-4px;top:calc(50% - 4px)}
+/* 标签压在卡片下沿，箭头朝上指向子书签 */
+.tag-sub{right:18px;bottom:-12px}
+.tag-sub::after{left:18px;top:-4px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin-top:clamp(56px,8vw,96px);border-top:1px solid var(--ink)}
+.facts > div{padding:20px 24px 0 0}
+.facts > div + div{padding-left:24px;border-left:1px solid var(--rule)}
+.facts dt{font-family:var(--serif);font-weight:700;font-size:1.12rem;margin-bottom:6px}
+.facts dd{color:var(--ink-2);font-size:.92rem}
 
-/* 日夜微动效：太阳旋转升起、月牙优雅倾角 */
-[data-demo-mode="light"] svg{transform:rotate(-45deg) scale(0.9);opacity:.6}
-[data-demo-mode="light"][aria-pressed="true"] svg{transform:rotate(0deg) scale(1.14);opacity:1;stroke-width:2.2;filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}
-[data-demo-mode="dark"] svg{transform:rotate(35deg) scale(0.9);opacity:.6}
-[data-demo-mode="dark"][aria-pressed="true"] svg{transform:rotate(-10deg) scale(1.14);opacity:1;stroke-width:2.2;filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}
-[data-style="comfort"][data-mode="dark"] .seg button[aria-pressed="true"] svg{filter:drop-shadow(0 0 2px rgba(37,43,56,.2))}
-.demo-stage{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,2.4vw,24px)}
-.demo-item{transition:transform .2s var(--ease)}
-.demo-item:hover{transform:translateY(-3px)}
-.demo-frame{height:250px;border-radius:var(--radius-md);border:1px solid var(--d-border);background:var(--d-bg);
-  overflow:hidden;position:relative;box-shadow:var(--shadow-md);transition:background .35s var(--ease),border-color .35s var(--ease)}
-.demo-frame::before{content:"";position:absolute;inset:0 0 auto 0;height:26px;background-color:var(--d-surface);
-  background-image:radial-gradient(circle at 12px 13px,#ED6A5E 3px,transparent 3.5px),radial-gradient(circle at 22px 13px,#F5BF4F 3px,transparent 3.5px),radial-gradient(circle at 32px 13px,#62C554 3px,transparent 3.5px);
-  border-bottom:1px solid var(--d-border);z-index:2;transition:background-color .35s var(--ease),border-color .35s var(--ease)}
-.demo-frame::after{content:"";position:absolute;left:46px;top:9px;width:38px;height:8px;border-radius:4px;background:var(--d-accent);opacity:.9;z-index:2;transition:background .35s var(--ease)}
-/* 滚动内容：双份内容 translateY(-50%) 无缝循环 */
-.demo-scroll{position:absolute;inset:34px 10px 10px;overflow:hidden;
-  mask-image:linear-gradient(to bottom,transparent,#000 10%,#000 90%,transparent);
-  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 10%,#000 90%,transparent)}
-.demo-col{display:flex;flex-direction:column;gap:8px;animation:vscroll 18s linear infinite}
-.demo-col:hover{animation-play-state:paused}
-.demo-col > *{flex-shrink:0}
-@keyframes vscroll{to{transform:translateY(-50%)}}
+/* ── 03 用：全页唯一一次反色 ── */
+.scene-use{background:var(--ink);color:var(--paper);border-top:0}
+.scene-use .display{color:var(--paper)}
+.scene-use .scene-no{color:#7FD9B6}
+.scene-use .scene-no span,.scene-use .fine,.scene-use figcaption{color:#9C958B}
+.use-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:clamp(40px,7vw,104px);align-items:center}
+.use-shot{display:flex;flex-direction:column;align-items:center}
+.frame-panel{width:min(100%,400px);border-radius:18px;border:1px solid #3A362F;background:var(--card);
+  max-height:820px;-webkit-mask-image:linear-gradient(#000 88%,transparent);mask-image:linear-gradient(#000 88%,transparent)}
+.use-shot figcaption{margin-top:14px}
+.dialog{list-style:none;margin:clamp(20px,3vw,32px) 0 18px;border-top:1px solid #3A362F}
+.dialog li{padding:16px 0;border-bottom:1px solid #3A362F;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+.say{font-family:var(--serif);font-weight:700;font-size:1.05rem;color:var(--paper)}
+.does{color:#C9C2B6;font-size:.93rem;padding-left:1.4em;position:relative}
+.does::before{content:"→";position:absolute;left:0;font-family:var(--mono);color:#7FD9B6}
+.btn-paper{background:var(--paper);color:var(--ink);margin-top:20px}
+.btn-paper:hover{background:#7FD9B6}
 
-/* 拟真微缩卡片结构 */
-.mk-card{background:var(--d-surface);border:1px solid var(--d-border);border-radius:8px;padding:8px 10px;
-  box-shadow:0 1px 2px rgba(44,40,36,.03),0 1px 0 rgba(255,255,255,.6) inset;transition:background .35s var(--ease),border-color .35s var(--ease),box-shadow .35s var(--ease)}
-.mk-card:hover{border-color:var(--d-border-hover);box-shadow:0 3px 10px -1px rgba(44,40,36,.08),0 1px 0 rgba(255,255,255,.8) inset}
-.mk-icon{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;
-  font-size:.65rem;font-weight:700;color:#fff;flex-shrink:0;transition:background .35s var(--ease),color .35s var(--ease)}
-.mk-icon-accent{background:var(--d-accent) !important;color:var(--d-accent-contrast) !important}
-.mk-name{font-weight:600;font-size:.76rem;color:var(--d-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .35s var(--ease)}
-.mk-domain{font-size:.64rem;color:var(--d-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;transition:color .35s var(--ease)}
-.mk-tag{display:inline-block;font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:999px;
-  background:var(--d-accent-soft);color:var(--d-accent);white-space:nowrap;transition:background .35s var(--ease),color .35s var(--ease)}
-.mk-foot{display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding-top:4px;
-  border-top:1px solid var(--d-border);font-size:.6rem;color:var(--d-muted);transition:border-color .35s var(--ease),color .35s var(--ease)}
-.mk-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--d-accent);margin-right:4px;vertical-align:middle;transition:background .35s var(--ease)}
-.mk-arrow{color:var(--d-accent);transition:color .35s var(--ease)}
+/* ── 04 诺：大号序号 + 一句话承诺 + 如实限定，两列对齐，不配图 ── */
+.scene-promise{background:var(--paper-2)}
+.promise-head,.pricing-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:end;margin-bottom:clamp(40px,6vw,64px)}
+.promise-head .scene-no,.pricing-head .scene-no,.promise-head h2.display,.pricing-head h2.display{margin-bottom:0}
+.pledges{list-style:none;counter-reset:p;border-top:1px solid var(--ink)}
+.pledges li{counter-increment:p;display:grid;grid-template-columns:72px minmax(0,4fr) minmax(0,6fr);gap:8px clamp(20px,3vw,40px);align-items:baseline;
+  padding:clamp(20px,2.6vw,28px) 0;border-bottom:1px solid var(--rule)}
+.pledges li::before{content:"0" counter(p);font-family:var(--serif);font-weight:700;font-size:clamp(1.6rem,2.6vw,2.1rem);color:var(--blue);line-height:1}
+.pledges h3{font-family:var(--serif);font-weight:700;font-size:clamp(1.15rem,1.9vw,1.4rem);line-height:1.4}
+.pledges p{color:var(--ink-2);font-size:.95rem}
+.pledges a,.faq a{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
 
-/* 宫格布局微卡 */
-.demo-grid .demo-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.demo-grid .mk-card{display:flex;flex-direction:column;gap:5px;padding:9px}
-.demo-grid .mk-head{display:flex;align-items:center;gap:6px}
+/* ── 05 价：两张方案卡（不写数字）+ FAQ ── */
+.plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border:1px solid var(--ink);border-radius:16px;overflow:hidden;background:var(--card)}
+.plan{display:flex;flex-direction:column;padding:clamp(24px,3.4vw,40px)}
+.plan + .plan{border-left:1px solid var(--ink)}
+.plan-pro{background:var(--ink);color:var(--paper)}
+.plan header{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--rule)}
+.plan-pro header{border-bottom-color:#3A362F}
+.plan h3{font-family:var(--serif);font-weight:700;font-size:clamp(1.6rem,3vw,2.2rem);line-height:1.2}
+.plan header p{margin-top:6px;font-size:.9rem;color:var(--ink-3)}
+.plan-pro header p{color:#9C958B}
+.plan ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:28px;font-size:.95rem}
+.plan li{position:relative;padding-left:24px}
+.plan li::before{content:"";position:absolute;left:2px;top:.5em;width:11px;height:6px;border-left:2px solid var(--green-ink);border-bottom:2px solid var(--green-ink);transform:rotate(-45deg)}
+.plan-pro li::before{border-color:#7FD9B6}
+.plan .btn{margin-top:auto;align-self:flex-start}
+.plan-pro .btn-ink{background:var(--paper);color:var(--ink)}
+.plan-pro .btn-ink:hover{background:#7FD9B6}
+.plans-note{text-align:center;margin-top:16px}
+.faq{max-width:820px;margin:clamp(64px,9vw,112px) auto 0}
+.faq-title{font-family:var(--serif);font-weight:700;font-size:clamp(1.5rem,2.6vw,2rem);margin-bottom:16px}
+.faq details{border-top:1px solid var(--rule)}
+.faq details:last-child{border-bottom:1px solid var(--rule)}
+.faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;padding:18px 0;font-weight:600;font-size:1.02rem}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:var(--mono);color:var(--ink-3);transition:transform .2s var(--ease)}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details p{color:var(--ink-2);padding:0 0 20px;max-width:64ch;font-size:.95rem}
 
-/* 列表布局微卡 */
-.demo-list .mk-card{display:flex;align-items:center;gap:9px;padding:7px 10px}
-.demo-list .mk-main{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
-.demo-list .mk-name{flex:0 1 auto}
-.demo-list .mk-domain{display:none}
-.demo-list .mk-hint{font-size:.7rem;color:var(--d-accent);margin-left:auto;transition:color .35s var(--ease)}
-
-/* 小宫格布局微卡 */
-.demo-mini .demo-col{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.demo-mini .mk-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;padding:8px 4px}
-.demo-mini .mk-name{font-size:.64rem;max-width:100%}
-.demo-mini .mk-domain,.demo-mini .mk-tag,.demo-mini .mk-foot{display:none}
-
-.demo-label{text-align:center;margin-top:12px;font-size:.88rem;color:var(--ink-2);font-weight:600}
-
-/* ── 视觉 4：创作与分享（行星环绕式 · 知识引力系统）── */
-.sect#create .eyebrow{color:var(--brand-green);background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
-.share-visual{position:relative;width:100%;aspect-ratio:1/0.92;min-height:360px;cursor:pointer}
-.share-visual::before{content:"";position:absolute;inset:-4%;border-radius:50%;
-  background:radial-gradient(circle at 50% 50%,rgba(16,185,129,.035) 0%,rgba(18,46,138,.018) 40%,transparent 65%);pointer-events:none}
-.share-visual canvas{position:absolute;left:-50%;top:-45%;width:200%;height:190%;pointer-events:none}
-
-/* ── 更多亮点 ── */
-.extras{padding:var(--sect-pad) 0 0}
-.extra-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
-.extra{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:24px 20px;box-shadow:var(--shadow-card);
-  transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s}
-.extra:hover{transform:translateY(-3px);box-shadow:var(--shadow-card-hover);border-color:var(--border-hover)}
-.extra.green:hover{border-color:rgba(16,185,129,.35);box-shadow:0 8px 24px rgba(16,185,129,.08)}
-.extra-icon{width:42px;height:42px;border-radius:10px;background:var(--brand-soft);border:1px solid var(--brand-glow);
-  display:flex;align-items:center;justify-content:center;margin-bottom:14px;transition:background .2s,border-color .2s}
-.extra-icon svg{width:22px;height:22px;stroke:var(--brand);transition:stroke .2s}
-.extra-icon.green{background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
-.extra-icon.green svg{stroke:var(--brand-green)}
-.extra b{display:block;font-size:.98rem;margin-bottom:6px;color:var(--ink)}
-.extra span{font-size:.86rem;color:var(--ink-2);line-height:1.6}
-.extra code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.84em;background:var(--bg-alt);border-radius:5px;padding:2px 6px}
-
-/* ── FAQ ── */
-.faq-list{max-width:760px;margin:0 auto}
-.faq-list details{border-bottom:1px solid var(--border);border-radius:var(--radius-sm);transition:background .2s}
-.faq-list details[open]{background:rgba(255,255,255,.65);box-shadow:var(--shadow-card);border:1px solid var(--border);margin:8px 0}
-.faq-list summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px;
-  font-weight:700;font-size:1.02rem;padding:20px 14px}
-.faq-list summary::-webkit-details-marker{display:none}
-.faq-list summary::after{content:"+";font-family:var(--font-display);font-weight:600;font-size:1.4rem;color:var(--brand);transition:transform .18s var(--ease);flex-shrink:0}
-.faq-list details[open] summary::after{transform:rotate(45deg)}
-.faq-list details p{color:var(--ink-2);padding:0 14px 20px;max-width:64ch;line-height:1.75;font-size:.92rem}
-
-/* ── 尾部 CTA ── */
-.cta-band{padding:var(--sect-pad) 0;text-align:center;position:relative}
-.cta-band::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:540px;height:320px;border-radius:50%;
-  background:radial-gradient(circle at 40% 50%,rgba(18,46,138,.055) 0%,transparent 60%),
-             radial-gradient(circle at 62% 50%,rgba(16,185,129,.05) 0%,transparent 60%);pointer-events:none}
-.cta-band h2{font-family:var(--font-display);font-weight:600;font-size:clamp(1.8rem,4vw,2.8rem);margin-bottom:14px;letter-spacing:.01em}
-.cta-band .btn{padding:15px 42px;font-size:1.05rem}
+/* ── 结尾 ── */
+.closing{padding:clamp(88px,12vw,160px) 0;border-top:1px solid var(--rule);text-align:center}
+.closing-line{font-size:clamp(2rem,5.4vw,4rem);margin-bottom:clamp(28px,4vw,40px)}
+.closing .hero-cta{justify-content:center}
+.closing-meta{margin-top:20px;color:var(--ink-3)}
 
 /* ── 页脚 ── */
-.footer{border-top:1px solid var(--border);padding:38px 0 34px;color:var(--ink-3);font-size:.9rem}
-.foot-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.foot-logo{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:600;color:var(--ink);font-size:1.02rem}
-.foot-logo svg{width:22px;height:22px;flex-shrink:0}
-.foot-links{margin-left:auto;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
-.foot-links a:hover,.foot-links button:hover{color:var(--brand)}
-.foot-links button{background:none;border:none;color:inherit;padding:0}
-.foot-sub{margin-top:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.8rem}
-/* 备案信息（ICP / 公安联网备案）—— 号为空时不渲染，见 landing.js */
-.foot-beian{margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:.78rem;color:var(--ink-3)}
-.foot-beian a{color:inherit;text-decoration:none;opacity:.85}
-.foot-beian a:hover{color:var(--brand);opacity:1;text-decoration:underline}
-.foot-beian img{height:14px;vertical-align:-2px;margin-right:5px}
+.foot{padding:28px 0 calc(28px + env(safe-area-inset-bottom));border-top:1px solid var(--rule);color:var(--ink-3)}
+.foot-row{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;justify-content:space-between}
+.foot-links{display:flex;gap:18px;font-size:.84rem}
+.foot a:hover{color:var(--ink)}
 
-/* ── 响应式 ── */
-@media (max-width:1040px){
-  .extra-grid{grid-template-columns:1fr 1fr}
-  .extra-grid .extra:last-child{grid-column:1/-1;max-width:60%;margin:0 auto;width:100%}
-}
-@media (max-width:960px){
-  .hero-grid{grid-template-columns:1fr;gap:12px}
-  .hero-visual{order:2;max-width:480px;margin:0 auto;width:100%}
-  .split{grid-template-columns:1fr;gap:30px}
-  .split .visual{order:2}
-  .demo-stage{grid-template-columns:1fr 1fr}
-  .demo-item:last-child{grid-column:1/-1;max-width:70%;margin:0 auto;width:100%}
-}
-@media (max-width:640px){
-  .head-cta{display:none}
-  .demo-stage{grid-template-columns:1fr}
-  .demo-item:last-child{max-width:100%}
-  .extra-grid{grid-template-columns:1fr}
-  .extra-grid .extra:last-child{max-width:100%}
-  .demo-body{min-height:0}
-  .demo-rail{display:none}
-}
+/* ── 贯穿的「结」线（仅宽屏）── */
+.knot{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:0}
+.knot path{fill:none;stroke-width:2;stroke-linecap:round}
+.knot-b{stroke:var(--blue)}
+.knot-g{stroke:var(--green)}
+.knot-node{fill:var(--paper);stroke:var(--rule);stroke-width:1.5;transition:fill .3s,stroke .3s}
+.knot-node.on{fill:var(--green);stroke:var(--blue)}
+.hero > *,.scene > *,.closing > *{position:relative;z-index:1}
 
-/* ── 动效偏好：全部降级为静态可见 ── */
+/* ── 入场：只做轻微上移淡入 ── */
+.rv{opacity:0;transform:translateY(16px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.rv.in{opacity:1;transform:none}
+
+/* 页边距不足 ~90px 时结线会压到正文，直接不画 */
+@media (max-width:1279px){
+  .knot{display:none}
+}
+@media (max-width:900px){
+  .top-nav{display:none}
+  .hero-foot{grid-template-columns:minmax(0,1fr)}
+  .scene-grid{grid-template-columns:minmax(0,1fr)}
+  .scene-shot{padding-right:0}
+  .paper{transform:none}
+  /* 注记收进卡片内：贴着字段右侧的小标签 */
+  .note{left:auto;right:18px;transform:translateY(-50%);background:var(--card);padding:2px 8px;border:1px solid color-mix(in srgb,var(--green) 40%,transparent);border-radius:999px;font-size:.68rem}
+  .note i{display:none}
+  .promise-head,.pricing-head{grid-template-columns:minmax(0,1fr)}
+  .pledges li{grid-template-columns:52px minmax(0,1fr)}
+  .pledges li p{grid-column:2}
+  .plans{grid-template-columns:minmax(0,1fr)}
+  .plan + .plan{border-left:0;border-top:1px solid var(--ink)}
+  .organize-head{grid-template-columns:minmax(0,1fr)}
+  .organize-head .scene-no{margin-bottom:0}
+  .organize-stage{grid-template-columns:minmax(0,1fr)}
+  .organize-sub{margin-top:8px}
+  .organize-sub .paper{transform:none;margin:0 auto}
+  .tag-sub{right:12px}
+  .facts{grid-template-columns:minmax(0,1fr)}
+  .facts > div,.facts > div + div{padding:16px 0;border-left:0;border-bottom:1px solid var(--rule)}
+  .use-grid{grid-template-columns:minmax(0,1fr)}
+  .use-shot{order:2}
+}
+@media (max-width:560px){
+  .top-actions{gap:12px}
+  .hero-cta .btn{flex:1 1 100%;justify-content:center}
+  .frame-desk{max-height:none;-webkit-mask-image:none;mask-image:none;border-radius:12px;border-bottom:1px solid var(--rule)}
+  .frame-desk{display:none}
+  .frame-phone{position:relative;right:auto;bottom:auto;margin:0 auto;width:min(78%,300px)}
+  .frame-phone img{aspect-ratio:auto}
+  .plan .btn{align-self:stretch;justify-content:center}
+  .closing .btn{flex:1 1 100%;justify-content:center}
+  .note{right:14px}
+  .tag-note{left:auto;right:12px;bottom:12px}
+  .tag-note::after{display:none}
+  .tag-sub::after{display:none}
+  .btn-paper{width:100%;justify-content:center}
+}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
-  .js .reveal{opacity:1;transform:none;transition:none}
-  .btn,.demo-item,.extra,.seg-glider{transition:none}
-  .btn:hover,.demo-item:hover,.extra:hover{transform:none}
-  .demo-kids,.demo-chips span,.demo-rail span,.flow,.lock-pulse,
-  .demo-col,.cchip.a,.cchip.b,.cchip.c{animation:none}
-  .demo-kids{max-height:120px;opacity:1}
-}
-/* ── 定价区 ── */
-.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:36px}
-.price-card{position:relative;border:1px solid #E8E4DF;border-radius:16px;background:#fff;padding:22px 18px;display:flex;flex-direction:column;gap:8px;transition:transform .15s ease,box-shadow .15s ease}
-.price-card:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(18,46,138,.07)}
-.price-card.price-featured{border:1.5px solid var(--brand);box-shadow:0 10px 30px rgba(18,46,138,.12)}
-.price-badge{position:absolute;top:-10px;right:14px;padding:3px 10px;border-radius:999px;background:var(--brand);color:#fff;font-size:.66rem;font-weight:700;letter-spacing:.05em}
-.price-name{font-weight:600;font-size:.95rem}
-.price-amount{margin-bottom:14px;font-size:1.75rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
-.price-amount span{font-size:.75rem;font-weight:400;color:#888;margin-left:2px}
-.price-period{font-size:.72rem;color:#8A867F;margin-bottom:14px}
-.price-card .btn{margin-top:auto;width:100%;justify-content:center}
-
-.price-compare{border:1px solid #E8E4DF;border-radius:14px;background:#fff;overflow:hidden;font-size:.82rem}
-.price-compare-row{display:grid;grid-template-columns:1.5fr repeat(4,1fr);gap:4px;padding:10px 16px;align-items:center}
-.price-compare-row.head{background:#F7F5F1;font-weight:600}
-.price-compare-row:nth-child(odd):not(.head){background:#FCFBF9}
-.price-compare-row > span:not(:first-child){text-align:center;font-variant-numeric:tabular-nums}
-.price-compare-row > span:first-child{color:#6A655E}
-.price-note{margin-top:16px;text-align:center;font-size:.76rem;color:#8A867F;line-height:1.8}
-.price-note a{color:var(--brand);text-decoration:underline}
-
-@media(max-width:900px){
-  .price-grid{grid-template-columns:1fr;gap:14px}
-  .price-compare-row{grid-template-columns:1.3fr repeat(4,1fr);padding:9px 12px;font-size:.72rem}
+  .rv{opacity:1;transform:none;transition:none}
+  .btn,.btn .arrow{transition:none}
 }
 
+/* ── 语言切换 / 备案 / 场景序号 ── */
+.lang{height:32px;min-width:40px;padding:0 10px;border:1px solid var(--rule);border-radius:999px;background:transparent;color:var(--ink-2);
+  font:500 .76rem/1 var(--mono);letter-spacing:.04em;cursor:pointer;transition:border-color .2s,color .2s}
+.lang:hover{border-color:var(--ink);color:var(--ink)}
+.lang-foot{background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer}
+.lang-foot:hover{color:var(--ink)}
+.foot-beian{display:flex;gap:16px;flex-wrap:wrap}
+.scene-no b{font-weight:700}
+/* 英文下序号是整词（Collect / Organize…），字号收小，免得压过标题 */
+html[lang="en-US"] .scene-no{font-size:clamp(2.2rem,4.4vw,3.4rem)}
+html[lang="en-US"] h1.display{font-size:clamp(2.3rem,6.2vw,5rem);letter-spacing:-.02em}
+html[lang="en-US"] .display{line-height:1.12}
 </style>
-<noscript><style>html[data-lv-boot] body{visibility:visible}</style></noscript>
 </head>
 <body>
-<!-- 微信/QQ 爬虫首图兜底（display:none，优先抓取该图作为分享缩略图，>= 300x300） -->
-<div style="display:none;font-size:0;line-height:0;" aria-hidden="true">
-  <img src="https://ulink.ren/share-cover.png" alt="与链 ulink" width="300" height="300">
-</div>
 
-<!-- ═══ 顶栏 ═══ -->
-<header class="site-head">
-  <div class="wrap head-row">
-    <a class="logo" href="/about" aria-label="与链 ulink">
-      <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <defs>
-          <mask id="hl-mb">
-            <rect width="240" height="240" fill="white" />
-            <line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round" />
-          </mask>
-          <mask id="hl-mg">
-            <rect width="240" height="240" fill="white" />
-            <line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round" />
-          </mask>
-        </defs>
-        <path d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" stroke="var(--brand-logo-blue, #122E8A)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#hl-mb)" />
-        <path d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" stroke="var(--brand-logo-green, #10B981)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#hl-mg)" />
+<a class="skip" href="#main" data-i18n="skip">跳到正文</a>
+
+<header class="top">
+  <div class="wrap top-row">
+    <a class="brand" href="/about" aria-label="与链 ulink" data-i18n-aria="brand.aria">
+      <svg class="brand-mark" viewBox="0 0 240 240" fill="none" aria-hidden="true">
+        <path d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" stroke="var(--blue)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" stroke="var(--green)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <span>与链</span>
+      <span data-i18n="brand.name">与链</span>
     </a>
-    <div class="head-actions">
-      <button id="lang-toggle" class="lang" type="button" data-i18n-aria="lang.aria" aria-label="切换到 English">EN</button>
-      <a class="btn btn-ghost btn-sm" href="/app?login=1" data-i18n="head.login">登录</a>
-      <a class="btn btn-solid btn-sm head-cta" href="/app" data-i18n="head.start">开始使用</a>
+    <nav class="top-nav" aria-label="页面导航" data-i18n-aria="nav.aria">
+      <a href="#collect" data-i18n="nav.collect">收</a>
+      <a href="#organize" data-i18n="nav.organize">理</a>
+      <a href="#use" data-i18n="nav.use">用</a>
+      <a href="#pricing" data-i18n="nav.pricing">价格</a>
+    </nav>
+    <div class="top-actions">
+      <button id="lang-toggle" class="lang" type="button" aria-label="Switch to English" data-i18n-aria="lang.aria">EN</button>
+      <a class="link-quiet" href="/app?login=1" data-i18n="head.login">登录</a>
+      <a class="btn btn-ink" href="/app" data-i18n="head.start">开始使用</a>
     </div>
   </div>
 </header>
 
-<main>
-  <!-- ═══ Hero：左文右星链 ═══ -->
+<main id="main">
+  <!-- 贯穿全页的「结」线：由 landing.js 按各 [data-knot] 锚点生成并随滚动描出（仅宽屏） -->
+  <svg class="knot" aria-hidden="true"><path class="knot-b"/><path class="knot-g"/></svg>
+
+  <!-- ═══ 首屏 ═══ -->
   <section class="hero">
-    <div class="wrap hero-grid">
-      <div class="hero-copy">
-        <h1><em data-i18n="hero.title1">随时随地，</em><span data-i18n="hero.title2">收藏、整理、分享</span></h1>
-        <p class="hero-sub" data-i18n="hero.sub">本地优先的书签管理器。子书签多级嵌套，附富文本笔记，多端同步，随时完整导出。</p>
-        <div class="hero-ctas">
-          <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
-        </div>
-      </div>
-      <div class="hero-visual" aria-hidden="true">
-        <canvas id="constellation"></canvas>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══ 为什么选择与链：深度管理 ═══ -->
-  <section class="sect" id="why">
     <div class="wrap">
-      <div class="split">
-        <div class="copy reveal">
-          <h3 data-i18n="manage.title">层级整理，不再扁平</h3>
-          <p class="lead" data-i18n="manage.sub">把一个站点的文档、控制台和代码仓库收在同一处。</p>
-          <div class="cap-row">
-            <div class="cap-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 10v4M12 10v4M16 10v4"/></svg>
-            </div>
-            <div><b data-i18n="m1.t">子书签嵌套</b><span data-i18n="m1.d">主站点下收纳多级入口。</span></div>
-          </div>
-          <div class="cap-row">
-            <div class="cap-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M9 13h6"/></svg>
-            </div>
-            <div><b data-i18n="m2.t">分类与富文本笔记</b><span data-i18n="m2.d">笔记里用 @ 引用书签卡片。</span></div>
-          </div>
-          <div class="cap-row">
-            <div class="cap-icon green">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7V4h9.6l7.4 7.4a2 2 0 0 1 0 2z"/><circle cx="7.5" cy="7.5" r="1"/></svg>
-            </div>
-            <div><b data-i18n="m3.t">自定义属性</b><span data-i18n="m3.d">按属性组合筛选，收藏再多也能快速定位。</span></div>
-          </div>
-        </div>
-        <div class="visual reveal d1" aria-hidden="true">
-          <div class="manage-visual">
-            <canvas id="manage-canvas"></canvas>
-          </div>
+      <p class="kicker" data-knot><span data-i18n="hero.kicker1">与链 ulink</span><span class="sep">/</span><span data-i18n="hero.kicker2">书签 × 笔记 × AI</span></p>
+      <h1 class="display" data-i18n-html="hero.title">把散落的链接，<br>连成<span class="mark">你自己的</span>知识。</h1>
+      <div class="hero-foot">
+        <p class="lede" data-i18n="hero.lede">收藏网页，顺手写下为什么收藏；网站名称与分类交给 AI 补齐。打开就能用，不必先注册。</p>
+        <div class="hero-cta">
+          <a class="btn btn-ink btn-lg" href="/app"><span data-i18n="cta.start">开始使用</span><span class="arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn-line btn-lg" href="#collect"><span data-i18n="cta.how">看它怎么收藏</span><span class="arrow" aria-hidden="true">↓</span></a>
         </div>
       </div>
+      <ul class="promises mono" aria-label="承诺" data-i18n-aria="promises.aria">
+        <li data-i18n="promises.free">免费起步</li>
+        <li data-i18n="promises.renew">无自动续费</li>
+        <li data-i18n="promises.export">数据可完整导出</li>
+      </ul>
+    </div>
+
+    <figure class="hero-shot wrap">
+      <div class="frame frame-desk">
+        <div class="frame-bar" aria-hidden="true">
+          <i></i><i></i><i></i>
+          <span class="frame-url mono">ulink.ren</span>
+        </div>
+        <img src="/landing/hero-app.webp" data-src-en="/landing/hero-app-en.webp" width="1440" height="900"
+             alt="与链应用界面：左侧分类栏，右侧书签卡片网格，第一张是上手指南笔记" data-i18n-alt="alt.heroApp" fetchpriority="high">
+      </div>
+      <div class="frame frame-phone">
+        <img src="/landing/hero-mobile.webp" data-src-en="/landing/hero-mobile-en.webp" width="390" height="844"
+             alt="与链手机端界面：书签卡片列表" data-i18n-alt="alt.heroMobile" loading="lazy">
+      </div>
+      <figcaption class="mono" data-i18n="cap.hero">新用户第一次打开时看到的样子 · 真实界面截图，非示意图</figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══ 01 收 ═══ -->
+  <section class="scene" id="collect">
+    <div class="wrap scene-grid">
+      <div class="scene-copy">
+        <p class="scene-no mono" data-knot><span>01</span><b data-i18n="no.collect">收</b></p>
+        <h2 class="display" data-i18n-html="collect.title">只粘贴网址，<br>剩下的交给它。</h2>
+        <ol class="steps">
+          <li>
+            <b data-i18n="collect.s1t">随手收</b>
+            <span data-i18n-html="collect.s1d">浏览器扩展里按 <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>S</kbd>，或在应用里按 <kbd>Ctrl</kbd> <kbd>N</kbd>。</span>
+          </li>
+          <li>
+            <b data-i18n="collect.s2t">只填网址</b>
+            <span data-i18n="collect.s2d">其余字段可以全部留空。</span>
+          </li>
+          <li>
+            <b data-i18n="collect.s3t">自动补齐</b>
+            <span data-i18n="collect.s3d">网站名称、分类自动识别；不满意，随手改。</span>
+          </li>
+        </ol>
+        <p class="fine" data-i18n="collect.fine">AI 预填为 PRO 能力，免费版可试用。</p>
+      </div>
+
+      <figure class="scene-shot">
+        <div class="paper">
+          <img src="/landing/collect-add.webp" data-src-en="/landing/collect-add-en.webp" width="500" height="422"
+               alt="新建书签弹窗：只填了网址 https://www.figma.com，网站名称与分类已自动填好" data-i18n-alt="alt.collect" loading="lazy">
+          <span class="note note-name" aria-hidden="true"><i></i><span data-i18n="collect.noteName">名称自动识别</span></span>
+          <span class="note note-cat" aria-hidden="true"><i></i><span data-i18n="collect.noteCat">分类自动归档</span></span>
+        </div>
+        <figcaption class="mono" data-i18n="cap.collect">真实的新建书签弹窗 · 只输入了一行网址</figcaption>
+      </figure>
     </div>
   </section>
 
-  <!-- ═══ 同步与安全 ═══ -->
-  <section class="sect" id="sync">
-    <div class="wrap split">
-      <div class="visual reveal" aria-hidden="true">
-        <div class="sync-visual">
-          <canvas id="sync-canvas"></canvas>
-        </div>
-      </div>
-      <div class="copy reveal d1">
-        <!-- 合规：标题只说「账号密码本机加密」，不做笼统加密宣称；加密范围由 sync.d2 如实说明 -->
-        <h3 data-i18n="sync.title">多端同步，账号密码本机加密</h3>
-        <p class="lead" data-i18n="sync.d1">增量同步，冲突择一保留，历史版本可回溯。</p>
-        <p data-i18n="sync.d2">账号与密码在本机加密后上传：密钥由主密码经 PBKDF2 派生，以 AES-256-GCM 封装，不出设备，服务端无法解密。标题、网址、笔记为明文存储。</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══ 简洁、精致：主题与视图 ═══ -->
-  <section class="looks" id="looks" data-style="eff" data-mode="light">
+  <!-- ═══ 02 理 ═══ -->
+  <section class="scene scene-organize" id="organize">
     <div class="wrap">
-      <div class="sect-head reveal">
-        <h2 data-i18n="looks.title">两套配色，三种视图</h2>
+      <div class="organize-head">
+        <p class="scene-no mono" data-knot><span>02</span><b data-i18n="no.organize">理</b></p>
+        <h2 class="display" data-i18n-html="organize.title">链接不是一行网址，<br>是带着上下文的一张卡。</h2>
       </div>
-      <div class="demo-controls reveal" id="demo-controls">
-        <div class="seg" role="group" data-i18n-aria="theme.aria" aria-label="主题风格">
-          <div class="seg-glider" aria-hidden="true"></div>
-          <button type="button" data-demo-style="eff" aria-pressed="true" data-i18n="theme.eff">效率</button>
-          <button type="button" data-demo-style="comfort" aria-pressed="false" data-i18n="theme.comfort">舒适</button>
-        </div>
-        <div class="seg icon" role="group" data-i18n-aria="mode.aria" aria-label="深浅色模式">
-          <div class="seg-glider" aria-hidden="true"></div>
-          <button type="button" data-demo-mode="light" aria-pressed="true" data-i18n-aria="mode.light" aria-label="浅色模式" title="浅色模式">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19"/></svg>
-          </button>
-          <button type="button" data-demo-mode="dark" aria-pressed="false" data-i18n-aria="mode.dark" aria-label="深色模式" title="深色模式">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 14.2A8.3 8.3 0 0 1 9.8 3.6a8.3 8.3 0 1 0 10.6 10.6z"/></svg>
-          </button>
-        </div>
+
+      <div class="organize-stage">
+        <figure class="organize-note">
+          <div class="paper paper-flat">
+            <img src="/landing/organize-note.webp" data-src-en="/landing/organize-note-en.webp" data-size-en="978x439" width="805" height="439"
+                 alt="全屏笔记：富文本的上手指南，正文末尾内嵌了 GitHub 与 I Love PDF 两张书签卡片" data-i18n-alt="alt.note" loading="lazy">
+            <span class="tag tag-note" aria-hidden="true" data-i18n="organize.tagNote">笔记里嵌书签卡片</span>
+          </div>
+          <figcaption class="mono" data-i18n="cap.note">全屏笔记 · 输入 @ 搜索并嵌入书签</figcaption>
+        </figure>
+        <figure class="organize-sub">
+          <div class="paper">
+            <img src="/landing/organize-sub.webp" data-src-en="/landing/organize-sub-en.webp" width="289" height="232"
+                 alt="DeepSeek 书签卡片，下面挂着两个子书签" data-i18n-alt="alt.sub" loading="lazy">
+            <span class="tag tag-sub" aria-hidden="true" data-i18n="organize.tagSub">一个站点，多个入口</span>
+          </div>
+          <figcaption class="mono" data-i18n="cap.sub">子书签 · 主站下收纳多级入口</figcaption>
+        </figure>
       </div>
-      <div class="demo-stage reveal" id="demo-stage" data-style="eff" data-mode="light">
-        <div class="demo-item">
-          <div class="demo-frame demo-grid" aria-hidden="true">
-            <div class="demo-scroll"><div class="demo-col" id="demo-col-grid"></div></div>
-          </div>
-          <div class="demo-label" data-i18n="view.grid">宫格</div>
+
+      <dl class="facts">
+        <div><dt data-i18n="organize.f1t">子书签嵌套</dt><dd data-i18n="organize.f1d">文档、控制台、代码仓库，收在同一个站点下面。</dd></div>
+        <div><dt data-i18n="organize.f2t">笔记内嵌</dt><dd data-i18n="organize.f2d">为什么收藏、怎么用，写在旁边；书签直接嵌进正文。</dd></div>
+        <div><dt data-i18n="organize.f3t">属性筛选</dt><dd data-i18n="organize.f3d">自定义属性组合筛选，收藏再多也能一下定位。</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ═══ 03 用（深色带：全页唯一一次反色，给 AI 一个明确的舞台）═══ -->
+  <section class="scene scene-use" id="use">
+    <div class="wrap use-grid">
+      <figure class="use-shot">
+        <div class="frame frame-panel">
+          <img src="/landing/use-chat.webp" data-src-en="/landing/use-chat-en.webp" width="400" height="609"
+               alt="AI 对话面板：提问找免费的在线画图工具，回答给出 Excalidraw、tldraw、Figma 三张候选卡，第一张已存入" data-i18n-alt="alt.chat" loading="lazy">
         </div>
-        <div class="demo-item">
-          <div class="demo-frame demo-list" aria-hidden="true">
-            <div class="demo-scroll"><div class="demo-col" id="demo-col-list"></div></div>
-          </div>
-          <div class="demo-label" data-i18n="view.list">列表</div>
-        </div>
-        <div class="demo-item">
-          <div class="demo-frame demo-mini" aria-hidden="true">
-            <div class="demo-scroll"><div class="demo-col" id="demo-col-mini"></div></div>
-          </div>
-          <div class="demo-label" data-i18n="view.mini">小宫格</div>
-        </div>
+        <figcaption class="mono" data-i18n="cap.chat">界面为真实渲染 · 回答为演示脚本</figcaption>
+      </figure>
+
+      <div class="use-copy">
+        <p class="scene-no mono" data-knot><span>03</span><b data-i18n="no.use">用</b></p>
+        <h2 class="display" data-i18n-html="use.title">问一句，<br>它帮你找，也帮你存。</h2>
+        <ol class="dialog">
+          <li>
+            <p class="say" data-i18n="use.q1">「帮我找几个免费的在线画图工具」</p>
+            <p class="does" data-i18n="use.a1">给出候选卡片，看中哪个，点一下存进书签。</p>
+          </li>
+          <li>
+            <p class="say" data-i18n="use.q2">「这几个整理成一组」</p>
+            <p class="does" data-i18n="use.a2">一键装配成主题笔记，书签和说明一起落库。</p>
+          </li>
+          <li>
+            <p class="say" data-i18n="use.q3">粘贴一条视频链接</p>
+            <p class="does" data-i18n="use.a3">提取标题、简介和字幕里提到的网站，整理成笔记。</p>
+          </li>
+        </ol>
+        <p class="fine" data-i18n="use.fine">AI 为 PRO 能力，免费版可终身试用。AI 生成内容仅供整理参考。</p>
+        <a class="btn btn-paper btn-lg" href="/app"><span data-i18n="use.cta">试试 AI 助手</span><span class="arrow" aria-hidden="true">→</span></a>
       </div>
     </div>
   </section>
 
-  <!-- ═══ 创作与分享 ═══ -->
-  <section class="sect" id="create">
-    <div class="wrap split">
-      <div class="copy reveal">
-        <h3 data-i18n="create.title">私有链接分享</h3>
-        <p class="lead" data-i18n="create.d1">不公开，不被搜索引擎收录。对方无需登录即可查看，并可一键保存副本。</p>
-      </div>
-      <div class="visual reveal d1" aria-hidden="true">
-        <div class="share-visual">
-          <canvas id="share-canvas"></canvas>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══ 更多亮点 ═══ -->
-  <section class="extras" id="extras">
+  <!-- ═══ 04 诺：不配图，只靠排版。每条左边是一句话承诺，右边是如实的限定说明 ═══ -->
+  <section class="scene scene-promise" id="promise">
     <div class="wrap">
-      <div class="sect-head reveal">
-        <h2 data-i18n="extra.title">更多细节</h2>
+      <div class="promise-head">
+        <p class="scene-no mono" data-knot><span>04</span><b data-i18n="no.promise">诺</b></p>
+        <h2 class="display" data-i18n-html="promise.title">付钱之前，<br>先把话说清楚。</h2>
       </div>
-      <div class="extra-grid">
-        <article class="extra reveal">
-          <div class="extra-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-          </div>
-          <b data-i18n="x1.t">一键收藏</b><span><span data-i18n="x1.d">在浏览器扩展中按 </span><code>Ctrl+Shift+S</code><span data-i18n="x1.d2">，保存当前页面与选中文本。</span></span></article>
-        <article class="extra reveal d1">
-          <div class="extra-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-          </div>
-          <b data-i18n="x2.t">离线可用，可安装</b><span data-i18n="x2.d">数据存在本机 IndexedDB，断网照常使用。</span></article>
-        <article class="extra green reveal d2">
-          <div class="extra-icon green">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
-          </div>
-          <b data-i18n="x5.t">拖拽排序与归类</b><span data-i18n="x5.d">拖动排序、拖入侧栏归类、拖入笔记引用。</span></article>
-        <article class="extra reveal d3">
-          <div class="extra-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
-          </div>
-          <b data-i18n="x3.t">拼音与模糊搜索</b><span data-i18n="x3.d">输入「js」即可找到「键盘快捷键」。</span></article>
-        <article class="extra green reveal d4">
-          <div class="extra-icon green">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 10.5v6M14 10.5v6"/></svg>
-          </div>
-          <b data-i18n="x4.t">撤销与回收站</b><span data-i18n="x4.d">每步操作都可撤销，删除的内容先进回收站。</span></article>
-      </div>
+      <!-- 合规口径：加密只说「仅账号字段」，明文与公开存储如实写出；价格承诺只到「订阅期内不调价」 -->
+      <ol class="pledges">
+        <li>
+          <h3 data-i18n="promise.p1t">数据先存在你的设备上</h3>
+          <p data-i18n="promise.p1d">默认只保存在本机浏览器，不登录也能完整使用；开启云同步后，才把变更同步到你的账号。</p>
+        </li>
+        <li>
+          <h3 data-i18n="promise.p2t">随时整库带走</h3>
+          <p data-i18n="promise.p2d">任何时候都能导出全量 JSON，在任意设备离线导入还原，不绑定账号。</p>
+        </li>
+        <li>
+          <h3 data-i18n="promise.p3t">账号与密码本机加密</h3>
+          <p data-i18n="promise.p3d">仅账号字段端到端加密：在本机加密后上传，服务端无法解密；标题、网址、笔记为明文存储。笔记里的图片存放在公开存储中，请勿放置敏感图片。</p>
+        </li>
+        <li>
+          <h3 data-i18n="promise.p4t">不自动续费</h3>
+          <p data-i18n-html="promise.p4d">所有付费档位都不自动扣款，到期按需续购；订阅期内价格不变。另有<a href="/legal/refund-policy.html">退款政策</a>。</p>
+        </li>
+        <li>
+          <h3 data-i18n="promise.p5t">到期不锁数据</h3>
+          <p data-i18n="promise.p5d">PRO 到期自动回到免费版：书签、笔记与同步照常可用，只停用 PRO 专属功能。</p>
+        </li>
+      </ol>
     </div>
   </section>
 
-  <!-- ═══ FAQ ═══ -->
-  <!-- ═══ 定价 ═══ -->
-  <section class="sect" id="pricing">
+  <!-- ═══ 05 价格与常见问题（价格不写数字：真源是 plans 表，应用内购买页实时读取）═══ -->
+  <section class="scene scene-pricing" id="pricing">
     <div class="wrap">
-      <div class="sect-head reveal">
-        <h2 data-i18n="price.title">价格</h2>
+      <div class="pricing-head">
+        <p class="scene-no mono" data-knot><span>05</span><b data-i18n="no.pricing">价</b></p>
+        <h2 class="display" data-i18n-html="price.title">免费起步，<br>需要 AI 时再升级。</h2>
       </div>
 
-      <!-- 合规修订：定价区加密口径改为仅账号字段加密；能力名与徽标同步（去早鸟包装、省额注明较按月订阅同周期合计） -->
-      <div class="price-grid reveal">
-        <div class="price-card">
-          <div class="price-name" data-i18n="price.free">免费版</div>
-          <div class="price-amount">¥0<span data-i18n="price.forever">/ 永久</span></div>
-          <a class="btn btn-ghost" href="/app" data-i18n="price.freeCta">免费开始</a>
-        </div>
-
-        <div class="price-card">
-          <div class="price-name" data-i18n="price.monthly">PRO 月付</div>
-          <div class="price-amount">¥15<span data-i18n="price.perMonth">/ 月</span></div>
-          <div class="price-period" data-i18n="price.days30">30 天</div>
-          <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
-        </div>
-
-        <div class="price-card">
-          <span class="price-badge" data-i18n="price.quarterlyBadge" style="background:#5C6B82;">进阶特惠 · 较按月订阅同周期合计省 ¥9</span>
-          <div class="price-name" data-i18n="price.quarterly">PRO 季付</div>
-          <div class="price-amount"><del style="font-size:16px;color:var(--text-sub);margin-right:6px;font-weight:normal;">¥45</del>¥36<span data-i18n="price.perQuarter">/ 季</span></div>
-          <div class="price-period" data-i18n="price.quarterUnit">90 天 · 折合 ¥12/月（按月买 3 个月需 ¥45，省 20%）</div>
-          <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
-        </div>
-
-        <div class="price-card price-featured">
-          <span class="price-badge" data-i18n="price.best">订阅期内价格锁定 · 较按月订阅同周期合计省 ¥72</span>
-          <div class="price-name" data-i18n="price.yearly">PRO 年付</div>
-          <div class="price-amount"><del style="font-size:16px;color:var(--text-sub);margin-right:6px;font-weight:normal;">¥180</del>¥108<span data-i18n="price.perYear">/ 年</span></div>
-          <div class="price-period" data-i18n="price.yearUnit">365 天 · 折合仅 ¥9/月（按月买 12 个月需 ¥180，省 40%）</div>
-          <a class="btn btn-solid" href="/app" data-i18n="price.proCta">升级 PRO</a>
-        </div>
+      <div class="plans">
+        <article class="plan">
+          <header>
+            <h3 data-i18n="price.free">免费版</h3>
+            <p data-i18n="price.freeSub">永久免费，无需付款信息</p>
+          </header>
+          <ul>
+            <li data-i18n="price.f.free1">书签、分类与笔记不限量</li>
+            <li data-i18n="price.f.free2">多端云同步，仅账号字段端到端加密</li>
+            <li data-i18n="price.f.free3">AI 预填与对话整理免费试用</li>
+            <li data-i18n="price.f.free4">基础死链排查与云端历史回溯</li>
+          </ul>
+          <a class="btn btn-line btn-lg" href="/app" data-i18n="price.freeCta">免费开始</a>
+        </article>
+        <article class="plan plan-pro">
+          <header>
+            <h3>PRO</h3>
+            <p data-i18n="price.proSub">月付、季付、年付可选，周期越长越划算</p>
+          </header>
+          <ul>
+            <li data-i18n="price.f.pro1">免费版全部能力</li>
+            <li data-i18n="price.f.pro2">AI 预填、网页补齐与对话整理</li>
+            <li data-i18n="price.f.pro3">全库自动死链巡检</li>
+            <li data-i18n="price.f.pro4">更长的云端历史版本回溯</li>
+            <li data-i18n="price.f.pro5">更多死链排查与轻量平台解析次数</li>
+          </ul>
+          <a class="btn btn-ink btn-lg" href="/app?upgrade=1"><span data-i18n="price.proCta">查看价格并升级</span><span class="arrow" aria-hidden="true">→</span></a>
+        </article>
       </div>
+      <p class="fine plans-note" data-i18n="price.note">具体价格与额度以应用内购买页为准；所有档位均无自动续费。</p>
 
-      <!-- EN 定价表：拆 price.yes / price.unlimited / price.weekly 三键；
-           数值单元补 data-i18n 键 + EN 翻译，避免英文页残留「次 / 万字」等中文量词 -->
-      <div class="price-compare reveal">
-        <div class="price-compare-row head">
-          <span data-i18n="price.cmp.feature">权益</span>
-          <span data-i18n="price.free">免费版</span>
-          <span data-i18n="price.monthly">PRO 月付</span>
-          <span data-i18n="price.quarterly">PRO 季付</span>
-          <span data-i18n="price.yearly">PRO 年付</span>
-        </div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.bookmarks">书签与分类</span><span data-i18n="price.cmp.noLimit">无限</span><span data-i18n="price.cmp.noLimit">无限</span><span data-i18n="price.cmp.noLimit">无限</span><span data-i18n="price.cmp.noLimit">无限</span></div>
-          <div class="price-compare-row"><span data-i18n="price.cmp.devices">仅账号字段端到端加密同步</span><span data-i18n="price.yes">支持</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span></div>
-        <!-- 2026-11-23 与 plans 表对齐：撤下从未执行的「云端存储空间」行；AI 改为 PRO 专属（免费为终身试用 ai.trial.total，
-             PRO 为 ai.requests.daily + ai.tokens.monthly）；补上服务端已执行的 history.days 分档。改额度时先改 plans，再同步此表 -->
-        <div class="price-compare-row"><span data-i18n="price.cmp.ai">AI 预填、网页补齐与对话整理</span><span data-i18n="price.cmp.aiTrial">试用 30 次（累计）</span><span><span data-i18n="price.cmp.aiProDaily">每日 100 次</span><br><span data-i18n="price.cmp.aiProMonthly">每月 600 万字</span></span><span><span data-i18n="price.cmp.aiProDaily">每日 100 次</span><br><span data-i18n="price.cmp.aiProMonthly">每月 600 万字</span></span><span><span data-i18n="price.cmp.aiProDaily">每日 100 次</span><br><span data-i18n="price.cmp.aiProMonthly">每月 600 万字</span></span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.history">云端历史版本回溯</span><span data-i18n="price.cmp.days7">7 天</span><span data-i18n="price.cmp.days365">365 天</span><span data-i18n="price.cmp.days365">365 天</span><span data-i18n="price.cmp.days365">365 天</span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.linkcheck">每日死链排查</span><span data-i18n="price.cmp.times3">3 次</span><span data-i18n="price.cmp.times50">50 次</span><span data-i18n="price.cmp.times50">50 次</span><span data-i18n="price.cmp.times50">50 次</span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.patrol">全库自动死链巡检</span><span data-i18n="price.no">不支持</span><span data-i18n="price.weekly">每周巡检</span><span data-i18n="price.weekly">每周巡检</span><span data-i18n="price.weekly">每周巡检</span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.video">每日轻量平台解析</span><span data-i18n="price.cmp.times1">1 次</span><span data-i18n="price.cmp.times10">10 次</span><span data-i18n="price.cmp.times10">10 次</span><span data-i18n="price.cmp.times10">10 次</span></div>
-      </div>
-
-      <p class="price-note reveal">
-        <span data-i18n="price.note1">所有档位均无自动续费，到期按需续购。</span>
-        <span data-i18n="price.deepNote">聊天媒体解析为实验性实验室功能：在聊天框上传你拥有权利或已获授权的图片/视频/音频，AI 按你的问题自动选择看图或 ASR/OCR；无需扩展、不经过代理，处理完即删除文件。</span>
-        <span data-i18n="price.note2">支持</span>
-        <a href="/legal/refund-policy.html" data-i18n="price.refundLink">退款政策</a>
-        <span data-i18n="price.note3">。</span>
-      </p>
-    </div>
-  </section>
-
-  <section class="sect" id="faq">
-    <div class="wrap">
-      <div class="sect-head reveal">
-        <h2 data-i18n="faq.title">常见问题</h2>
-      </div>
-      <div class="faq-list reveal">
+      <div class="faq">
+        <h3 class="faq-title" data-i18n="faq.title">常见问题</h3>
         <details>
-          <summary data-i18n="q2">我的数据存放在哪里？</summary>
-          <!-- 合规修订：FAQ 加密口径改为仅账号字段本机加密，标题、网址、笔记明文存储 -->
-          <p data-i18n="a2">数据默认仅存储于本机浏览器（IndexedDB），不会主动上传。开启云同步后，变更增量同步至你的账号：仅账号字段于本机加密后上传，标题、网址、笔记为明文存储；笔记内嵌图片写入公开存储桶，持有链接者均可访问，请勿放置敏感图片。如需完整备份，可随时导出全量 JSON。</p>
+          <summary data-i18n="faq.q1">我的数据存放在哪里？</summary>
+          <p data-i18n="faq.a1">默认只存在本机浏览器（IndexedDB），不会主动上传。开启云同步后，变更增量同步到你的账号：仅账号字段在本机加密后上传，标题、网址、笔记为明文存储；笔记内嵌图片写入公开存储，持有链接者均可访问，请勿放置敏感图片。需要完整备份时，可随时导出全量 JSON。</p>
         </details>
         <details>
-          <summary data-i18n="q3">换设备或换浏览器怎么办？</summary>
-          <p data-i18n="a3">登录同一账号即可自动增量同步；亦可随时将全量数据导出为标准 JSON 备份，在任意终端离线导入还原。</p>
+          <summary data-i18n="faq.q2">换设备或换浏览器怎么办？</summary>
+          <p data-i18n="faq.a2">登录同一账号即可自动增量同步；也可以把全量数据导出为 JSON，在任意设备离线导入还原。</p>
         </details>
         <details>
-          <summary data-i18n="q4">与浏览器自带书签有什么根本不同？</summary>
-          <p data-i18n="a4">浏览器收藏夹受限于单一浏览器与设备，且无法附加说明与笔记。与链支持多级子书签嵌套、富文本笔记、拼音即时搜索与专属链接分享。</p>
+          <summary data-i18n="faq.q3">和浏览器自带的书签有什么不同？</summary>
+          <p data-i18n="faq.a3">浏览器收藏夹绑定单一浏览器与设备，也没有地方写说明。与链支持多级子书签、富文本笔记、拼音即时搜索和私有链接分享。</p>
+        </details>
+        <details>
+          <summary data-i18n="faq.q4">AI 试用次数用完了会怎样？</summary>
+          <p data-i18n="faq.a4">只是 AI 相关功能需要升级 PRO 才能继续使用；书签、笔记、同步等其余功能不受影响。</p>
+        </details>
+        <details>
+          <summary data-i18n="faq.q5">PRO 到期后，我的数据会怎样？</summary>
+          <p data-i18n="faq.a5">账号自动回到免费版。书签、笔记与同步照常可用，PRO 专属功能停用；云端历史版本按免费版的保留期清理。到期不会自动扣款。</p>
+        </details>
+        <details>
+          <summary data-i18n="faq.q6">买了不满意，可以退款吗？</summary>
+          <p data-i18n-html="faq.a6">可以申请，具体条件与流程见<a href="/legal/refund-policy.html">退款政策</a>。</p>
         </details>
       </div>
     </div>
   </section>
 
-  <!-- ═══ 尾部 CTA ═══ -->
-  <section class="cta-band">
-    <div class="wrap reveal">
-      <h2 data-i18n="cta.title">现在，把收藏连成链</h2>
-      <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
+  <!-- ═══ 结尾号召：结线在这里收束 ═══ -->
+  <section class="closing">
+    <div class="wrap">
+      <p class="closing-line display" data-knot data-i18n="closing.title">现在，把收藏连起来。</p>
+      <div class="hero-cta">
+        <a class="btn btn-ink btn-lg" href="/app"><span data-i18n="cta.start2">开始使用</span><span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-line btn-lg" href="/extension-guide.html" data-i18n="closing.ext">安装浏览器扩展</a>
+      </div>
+      <p class="mono closing-meta" data-i18n="closing.meta">免注册即用 · 免费起步 · 无自动续费</p>
     </div>
   </section>
 </main>
 
-<!-- ═══ 页脚 ═══ -->
-<footer class="footer">
-  <div class="wrap">
-    <div class="foot-row">
-      <span class="foot-logo">
-        <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <defs>
-            <mask id="fl-mb">
-              <rect width="240" height="240" fill="white" />
-              <line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round" />
-            </mask>
-            <mask id="fl-mg">
-              <rect width="240" height="240" fill="white" />
-              <line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round" />
-            </mask>
-          </defs>
-          <path d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" stroke="var(--brand-logo-blue, #122E8A)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#fl-mb)" />
-          <path d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" stroke="var(--brand-logo-green, #10B981)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#fl-mg)" />
-        </svg>
-        <span>与链 ulink</span>
-      </span>
-      <span data-i18n="foot.slogan">收藏 · 整理 · 分享</span>
-      <nav class="foot-links" aria-label="页脚链接">
-        <a href="/legal/terms-of-service.html" data-i18n="foot.terms">用户协议</a>
-        <a href="/legal/privacy-policy.html" data-i18n="foot.privacy">隐私政策</a>
-        <a href="/legal/refund-policy.html" data-i18n="foot.refund">退款政策</a>
-        <button id="lang-toggle-foot" type="button" data-i18n="lang.labelFoot">English</button>
-      </nav>
-    </div>
-    <div class="foot-sub">
-      <span data-i18n="foot.rights">© 2026 ulink.ren · 与链</span>
-      <span data-i18n="foot.note">开箱即用 · 隐私自主掌控 · 云同步可选</span>
-    </div>
-    <!-- 备案号必须**静态**出现在 HTML 里：核查工具/爬虫不一定执行 JS，
-         靠脚本注入会被判「未在首页底部标明备案号」。
+<footer class="foot">
+  <div class="wrap foot-row">
+    <span class="mono" data-i18n="foot.rights">© 2026 ulink.ren · 与链</span>
+    <nav class="foot-links" aria-label="页脚链接" data-i18n-aria="foot.aria">
+      <a href="/legal/terms-of-service.html" data-i18n="foot.terms">用户协议</a>
+      <a href="/legal/privacy-policy.html" data-i18n="foot.privacy">隐私政策</a>
+      <a href="/legal/refund-policy.html" data-i18n="foot.refund">退款政策</a>
+      <button id="lang-toggle-foot" class="lang-foot" type="button" data-i18n="lang.labelFoot">English</button>
+    </nav>
+    <!-- 备案号必须**静态**出现在 HTML 里：核查工具/爬虫不一定执行 JS，靠脚本注入会被判「未在首页底部标明备案号」。
          ICP 号写死在此；公安联网备案号由 landing.js 在号下发后补入（同样落进静态可读的 DOM）。 -->
-    <div class="foot-beian" id="foot-beian">
+    <div class="foot-beian mono" id="foot-beian">
       <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鄂ICP备2026061718号-1</a>
     </div>
   </div>
 </footer>
 
+<noscript><style>html[data-lv-boot] body{visibility:visible}</style></noscript>
 </body>
 </html>

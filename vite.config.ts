@@ -1549,7 +1549,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,svg,woff2}'],
         // 自托管 Google Fonts 切片（public/fonts/gf/，107 个 / ~4.4MB）不进预缓存：
         // 否则每个用户安装 SW 都被强制下载全部切片。改由下方运行时 CacheFirst 按需缓存。
-        globIgnores: ['fonts/gf/**'],
+        // 宣传页素材（public/landing/：截图 + 标题宋体子集）只给 /about 用，应用的 SW 不必预下载
+        globIgnores: ['fonts/gf/**', 'landing/**'],
         // 必须显式覆盖 VitePWA 默认 navigateFallback:"index.html"——HTML 已不 precache，
         // 默认值会让 workbox 生成指向不存在 precache 条目的 NavigationRoute（SW 顶层抛错失效）。
         // 置 undefined 后导航统一走下方 NetworkFirst（网络优先 + pages-cache 离线兜底）。

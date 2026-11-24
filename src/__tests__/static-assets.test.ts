@@ -41,17 +41,10 @@ describe('public/_headers', () => {
     expect(headers).toContain('/app\n  Cache-Control: no-cache')
   })
 
-  it('落地页核心脚本包含 300s 短缓存', () => {
-    const scripts = [
-      '/landing.js',
-      '/hero-visual.js',
-      '/manage-visual.js',
-      '/sync-visual.js',
-      '/share-visual.js'
-    ]
-    for (const s of scripts) {
-      expect(headers).toContain(s)
-    }
+  it('落地页脚本包含 300s 短缓存', () => {
+    // 2026-11-25 改版后旧的 canvas 插画脚本（hero/manage/sync/share-visual.js）已删除
+    expect(headers).toContain('/landing.js\n  Cache-Control: public, max-age=300')
+    expect(headers).not.toMatch(/-visual\.js/)
   })
 })
 
@@ -91,7 +84,8 @@ describe('落地页国际化字典对称性 (about.html ⇄ landing.js)', () => 
 
     // 提取 index.html 中的所有 data-i18n 与 data-i18n-aria
     const htmlKeys = new Set<string>()
-    const reI18n = /data-i18n(?:-aria)?=["']([^"']+)["']/g
+    // data-i18n（文本）/ -html（含少量标记）/ -aria / -alt（截图说明）共用同一本 EN 词典
+    const reI18n = /data-i18n(?:-aria|-html|-alt)?=["']([^"']+)["']/g
     let m: RegExpExecArray | null
     while ((m = reI18n.exec(html)) !== null) {
       htmlKeys.add(m[1])

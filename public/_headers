@@ -26,16 +26,8 @@
   Cache-Control: no-cache
   Content-Type: text/html; charset=utf-8
 
-# 落地页脚本——返客跳转逻辑常更新，短缓存
+# 宣传页脚本（双语词典常随文案更新）——短缓存
 /landing.js
-  Cache-Control: public, max-age=300
-/hero-visual.js
-  Cache-Control: public, max-age=300
-/manage-visual.js
-  Cache-Control: public, max-age=300
-/sync-visual.js
-  Cache-Control: public, max-age=300
-/share-visual.js
   Cache-Control: public, max-age=300
 
 # PWA Service Worker——必须 no-cache，否则浏览器缓存住旧 SW 永不更新

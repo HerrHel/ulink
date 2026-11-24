@@ -1,15 +1,12 @@
 /**
- * 落地页定价一致性 / 划线价合规守卫（零网络、纯文本解析）。
+ * 落地页「不写具体价格与额度」守卫（零网络、纯文本解析）。
  *
- * 背景：线上 `plans` 表是金额唯一真源，但落地页是静态 HTML（SEO 需要），
- * 中文卡片、JSON-LD description、public/landing.js 的 EN 词典、e2e 断言共四处副本。
- * 历史事故：曾写死 ¥15/¥45/¥168 造成「虚构原价」，main 红了一天并冻结生产。
+ * 背景：线上 `plans` 表是价格与权益的唯一真源。落地页曾把 ¥15/¥36/¥108、划线价、
+ * 「每月 N 万字」「每日 N 次」等手抄进静态 HTML 与 EN 词典，每次调价/调额度都要记得同步，
+ * 漏一次就落后（还出过「虚构原价」事故，main 红了一天并冻结生产）。
+ * 2026-11-25 起落地页只做免费 / PRO 定性对比，具体数字引导到应用内购买弹窗（/app?upgrade=1）。
  *
- * 本测试不锁死具体价格数值（改价是产品决策），只锁**结构关系**：
- *   1. 三档实价在中文卡片 / JSON-LD / EN 词典里一致；
- *   2. 划线价必须等于「按月订满同周期」= 月付 × 3 / × 12（虚构原价即红）；
- *   3. 折扣文案「较按月订阅同周期合计省 ¥N」必须等于 划线价 − 实价；
- *   4. 月付不显示划线价（基准价）。
+ * 本测试锁死这条约定：中文页面、JSON-LD、EN 词典里都不得再出现金额、划线价与额度数字。
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -17,58 +14,39 @@ import { resolve } from 'node:path'
 
 const html = readFileSync(resolve(process.cwd(), 'about.html'), 'utf8')
 const landingJs = readFileSync(resolve(process.cwd(), 'public/landing.js'), 'utf8')
+const body = html.slice(html.indexOf('<body'))
+/** 正文可见文字（去掉标签与注释） */
+const bodyText = body.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, ' ')
+/** EN 词典的全部字符串值 */
+const enBlock = /var EN = \{([\s\S]*?)\};/.exec(landingJs)?.[1] || ''
+const enText = [...enBlock.matchAll(/'((?:[^'\\]|\\.)*)'\s*[,\n]/g)].map((m) => m[1]).join(' ')
 
-/** 卡片里的 `.price-amount` 块（可能含 <del> 划线价） */
-const amountBlocks = [...html.matchAll(/<div class="price-amount">([\s\S]*?)<\/div>/g)]
-  .map((m) => m[1].replace(/<[^>]+>/g, ''))
-/** 每块内所有 ¥数字 */
-const prices = amountBlocks
-  .map((b) => [...b.matchAll(/¥(\d+)/g)].map((m) => Number(m[1])))
-  // 第一张是免费卡（¥0），排除后只留三张付费卡
-  .filter((p) => p.length > 0 && p[0] > 0)
-const nums = (s: string) => [...s.matchAll(/¥(\d+)/g)].map((m) => Number(m[1]))
-
-describe('落地页定价一致性', () => {
-  it('恰好三张付费卡：月付无划线价，季/年各一条划线价', () => {
-    expect(prices).toHaveLength(3)
-    expect(prices[0]).toEqual([expect.any(Number)]) // 月付：只有实价
-    expect(prices[1]).toHaveLength(2) // 季付：划线 + 实价
-    expect(prices[2]).toHaveLength(2) // 年付：划线 + 实价
+describe('落地页不写具体价格与额度', () => {
+  it('正文不出现金额与划线价', () => {
+    expect(bodyText).not.toMatch(/¥\s*\d/)
+    expect(body).not.toContain('<del')
   })
 
-  it('划线价 = 月付实价 × 周期（3 / 12），不得虚构原价', () => {
-    const monthly = prices[0][0]
-    const [quarterStrike, quarterPrice] = prices[1]
-    const [yearStrike, yearPrice] = prices[2]
-    expect(quarterStrike).toBe(monthly * 3)
-    expect(yearStrike).toBe(monthly * 12)
-    expect(quarterPrice).toBeLessThan(quarterStrike)
-    expect(yearPrice).toBeLessThan(yearStrike)
+  it('正文不出现「N 次 / N 天 / N 万字」一类额度数字', () => {
+    expect(bodyText).not.toMatch(/\d+\s*(次|天|万字)/)
   })
 
-  it('折扣文案「省 ¥N」= 划线价 − 实价', () => {
-    const savings = [...html.matchAll(/较按月订阅同周期合计省 ¥(\d+)/g)].map((m) => Number(m[1]))
-    expect(savings).toHaveLength(2)
-    expect(savings[0]).toBe(prices[1][0] - prices[1][1])
-    expect(savings[1]).toBe(prices[2][0] - prices[2][1])
+  it('PRO 入口直达应用内购买弹窗（价格由弹窗从 plans 表实时读取）', () => {
+    expect(body).toContain('href="/app?upgrade=1"')
   })
 
-  it('JSON-LD description 的三档实价与卡片一致', () => {
-    const m = /月付 ¥(\d+) \/ 季付 ¥(\d+) \/ 年付 ¥(\d+)/.exec(html)
+  it('JSON-LD 只声明免费起步价，不列 PRO 金额', () => {
+    const m = /<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/.exec(html)
     expect(m).not.toBeNull()
-    expect([Number(m![1]), Number(m![2]), Number(m![3])])
-      .toEqual([prices[0][0], prices[1][1], prices[2][1]])
+    const ld = JSON.parse(m![1])
+    expect(ld.offers.price).toBe('0')
+    expect(ld.offers.priceSpecification).toBeUndefined()
+    expect(JSON.stringify(ld)).not.toMatch(/¥\s*\d/)
   })
 
-  it('EN 词典的划线价 / 月付基准与中文一致（中英不漂移）', () => {
-    const quarterUnit = /'price\.quarterUnit':\s*'([^']*)'/.exec(landingJs)?.[1] || ''
-    const yearUnit = /'price\.yearUnit':\s*'([^']*)'/.exec(landingJs)?.[1] || ''
-    expect(nums(quarterUnit)).toContain(prices[1][0])
-    expect(nums(yearUnit)).toContain(prices[2][0])
-    // EN 里不得出现与中文不同的划线价
-    expect(nums(quarterUnit + yearUnit).filter((n) => n >= prices[1][0])).toEqual([
-      prices[1][0],
-      prices[2][0],
-    ])
+  it('EN 词典同样不写金额与额度', () => {
+    expect(enText.length).toBeGreaterThan(0)
+    expect(enText).not.toMatch(/[¥$]\s*\d/)
+    expect(enText).not.toMatch(/\d+\s*\/\s*(day|month)|\d+M chars|\d+\s*(days|uses)\b/i)
   })
 })

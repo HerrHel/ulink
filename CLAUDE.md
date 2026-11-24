@@ -70,7 +70,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 - 其余 lib：search（Fuse.js + pinyin-pro）、ai-classify、diffVersions、theme、toast（委托 useToastStore，setup 外可用）、errorReporter（→ report-error 云函数）、stats、head（SEO 注入）、recoveryKeyPDF；工具函数：newId、clone、storageSafe、withLock、boundedCache、dataReady、collectSubIds、download、dragHint、historyMax、preview、supabase（Supabase client 兼容层）
 - **AI 工作台**：`src/lib/ai/`（~45 模块：mimo 主链路、universalAgent/tools、knowledge/localRAG、smartIntake、unifiedMedia 多模态媒体分流等）+ `components/chat/`（AiWorkspace 等 6 个组件）+ `useAiChat*`；云端 `mimo-chat`（SSE，按 uid 限流/额度，线上 `BILLING_MODE=enforce`）与 `ai-api`（AI 候选与元数据提取）
 - **计费会员**：`pay`/`redeem`/`account` 云函数 + `PurchaseModal.vue` + `usePayment`/`usePurchasePlans`/`useRedeem`/`useEntitlement`/`useTransactions`；价格与权益唯一来源 = `plans` 表（`price_cents` + `features`，PRO 月付 ¥15 / 季付 ¥36 / 年付 ¥108），前端不硬编码；微信 Native + 支付宝电脑/手机网站支付自适应收银台；**AI 为 PRO 专属**，免费为终身试用 `ai.trial.total`=30（`consume_ai_access`，mimo-chat 与 ai-api 共用）；**个性化**（原「AI 学习我的习惯」）＝`src/lib/ai/habitProfile.ts`（端侧采集用户对 AI 结果的修正 + 自写内容，按入口切片注入预填 / 发现好站 / 对话，开关 UI 状态 `aiStyleAdapt`，新增注入点必须同步发送摘要；「自定义偏好」（原「你告诉 AI 的」）＝个人记忆 `aiProfile.ts`，作为 `userRules` 发给所有 AI 入口、不受学习开关控制）；额度执行现状见 `docs/QUOTA_ENFORCEMENT.md`（AI token/请求、视频、死链、历史保留期已强制——云端历史 free 7 天 / PRO 365 天；storage.bytes 与 sync.devices 已撤下）
-- **i18n**：`src/i18n/index.ts`（`t`/`tN`/`detect`）+ `src/locales/{zh,en}.ts` + `src/locales/parts/*`；宣传页 `/about`（`about.html` + `public/landing.js`）自带词典（不引用 src），改文案两边同步
+- **i18n**：`src/i18n/index.ts`（`t`/`tN`/`detect`）+ `src/locales/{zh,en}.ts` + `src/locales/parts/*`；宣传页 `/about`（`about.html` + `public/landing.js`）自带词典（不引用 src），改文案两边同步；画面是真实应用截图（`scripts/capture-landing.mjs` 重拍），标题宋体子集改文案后重跑 `scripts/subset-landing-font.py`，价格区不写数字
 
 ### 配置与视图
 
