@@ -322,8 +322,8 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
         var r = el.getBoundingClientRect();
         return { x: axis, y: r.top - mr.top + r.height / 2 };
       });
-      var last = pts[pts.length - 1];
-      pts.push({ x: last.x, y: last.y + 120 });
+      // 两股在最后一个锚点（结尾号召）交汇收束，不再往下延伸：
+      // 延伸出去的那一段只剩单股收不拢，像根垂下来的绳头
       function strand(sign) {
         var d = 'M ' + pts[0].x + ' ' + pts[0].y;
         for (var i = 0; i < pts.length - 1; i++) {
@@ -344,7 +344,7 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
       pg.style.strokeDasharray = lenG + ' ' + lenG;
       // 每个锚点放一个「结点」：线描到这里时点亮
       Array.prototype.slice.call(svg.querySelectorAll('circle')).forEach(function (c) { svg.removeChild(c); });
-      nodes = pts.slice(0, -1).map(function (pt) {
+      nodes = pts.map(function (pt) {
         var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         c.setAttribute('cx', pt.x);
         c.setAttribute('cy', pt.y);
@@ -363,8 +363,12 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
       // 视口 65% 处为「笔尖」：笔尖走到哪，线就描到哪
       var tip = window.innerHeight * 0.65 - mr.top;
       var p = reduce ? 1 : Math.max(0, Math.min(1, (tip - span[0]) / (span[1] - span[0])));
+      // 滚到页底时笔尖可能够不到最后一个锚点（它离页底太近），此时直接画满
+      var doc = document.documentElement;
+      if (window.scrollY + window.innerHeight >= doc.scrollHeight - 4) p = 1;
+      // 两股同步描出：原先绿线故意慢 2%，到底时会差一截收不拢
       pb.style.strokeDashoffset = String(lenB * (1 - p));
-      pg.style.strokeDashoffset = String(lenG * (1 - Math.max(0, p - 0.02)));
+      pg.style.strokeDashoffset = String(lenG * (1 - p));
       var reach = span[0] + p * (span[1] - span[0]);
       nodes.forEach(function (n) { n.el.classList.toggle('on', reach >= n.y - 2); });
     }
