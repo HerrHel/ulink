@@ -27,13 +27,24 @@ const BOOKMARK_HTML = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
   <DT><A HREF="https://drop-import-e2e.example.com/">拖入导入测试站</A>
 </DL><p>`
 
-/** 在 selector 元素上依次派发拖放事件；release 为 false 时只派发到 dragover（不松手） */
+/**
+ * 在 selector 元素上依次派发拖放事件；release 为 false 时只派发到 dragover（不松手）。
+ *
+ * 不松手时在页面里每 100ms 持续补发 dragover，模拟真实拖动：投放提示在最后一次
+ * dragover 后 250ms 自动隐藏（useFileDropImport.keepOverlay），只发一次的话，
+ * CI 慢机上「可见」与「文案」两个断言之间超过 250ms 提示就没了（2026-11-24 CI flaky）。
+ * 下一次调用（松手）时先停掉补发。
+ */
 async function dropFiles(
   page: Page,
   selector: string,
   files: Array<{ name: string; type: string; content: string }>,
   opts: { release?: boolean } = {},
 ) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __lvDragHold?: number }
+    if (w.__lvDragHold) { clearInterval(w.__lvDragHold); w.__lvDragHold = undefined }
+  })
   const dt = await page.evaluateHandle((list) => {
     const d = new DataTransfer()
     for (const f of list) d.items.add(new File([f.content], f.name, { type: f.type }))
@@ -41,7 +52,17 @@ async function dropFiles(
   }, files)
   await page.dispatchEvent(selector, 'dragenter', { dataTransfer: dt })
   await page.dispatchEvent(selector, 'dragover', { dataTransfer: dt })
-  if (opts.release !== false) await page.dispatchEvent(selector, 'drop', { dataTransfer: dt })
+  if (opts.release === false) {
+    await page.evaluate(({ sel, d }) => {
+      const el = document.querySelector(sel)
+      const w = window as unknown as { __lvDragHold?: number }
+      w.__lvDragHold = window.setInterval(() => {
+        el?.dispatchEvent(new DragEvent('dragover', { dataTransfer: d, bubbles: true, cancelable: true }))
+      }, 100)
+    }, { sel: selector, d: dt })
+    return
+  }
+  await page.dispatchEvent(selector, 'drop', { dataTransfer: dt })
 }
 
 async function ready(page: Page) {
