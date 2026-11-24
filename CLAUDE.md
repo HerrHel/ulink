@@ -75,7 +75,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 ### 配置与视图
 
 - `src/config/`：`constants.ts`（存储键名、toast/undo 常量）、`icons.ts`（SVG 图标映射，`getCategoryIcon`）、`welcome-data.ts`（默认示例数据）、`aiProviders.ts`（供应商目录 + `LEGAL_DOC_LINKS`）、`site.ts`（ICP/MPS 备案号）、`urls.ts`（域名常量）、`videoPlatforms.json`（视频平台真源）
-- **首页 = 应用（2026-11-25）**：`/` 与 `/app` 都是 `app.html`（构建后 `rootAppCopyPlugin` 复制为 `dist/index.html` 并去掉 noindex），宣传页在 `/about`，`landing.js` 不再跳转；首页备案号静态写在 `app.html` 的 `#app` 内 + 侧栏 `.rail-beian` 常驻展示。详见 AGENTS.md「双入口 MPA」
+- **首页 = 应用（2026-11-25）**：`/` 与 `/app` 都是 `app.html`（构建后 `rootAppCopyPlugin` 复制为 `dist/index.html` 并去掉 noindex），宣传页在 `/about`，`landing.js` 不再跳转；首页备案号静态写在 `app.html` 的 `#app` 内 + 书签列表末尾居中的 `SiteBeian.vue`。详见 AGENTS.md「双入口 MPA」
 - `src/views/` 仅存分享页纯函数模块；**`ShareView.vue` 已于 2026-08-31 删除**，分享页是主应用内只读态（`stores/share.ts` + CloudBase `share-ssr` 渲染 `/s/*`）
 
 ### 构建 / 扩展 / 样式

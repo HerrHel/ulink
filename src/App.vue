@@ -31,6 +31,7 @@
             <ErrorBoundary name="CardGrid" v-else>
               <ExtPanelCurrentPage v-if="extPanelActive && !uiStore.shareMode" />
               <CardGrid />
+              <SiteBeian v-if="!uiStore.shareMode && !extPanelActive" />
               <footer v-if="uiStore.shareMode" class="share-footer">
                 <div class="share-footer-inner">
                   <div class="share-footer-brand">
@@ -136,6 +137,7 @@ import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
 import BatchBottom from './components/shell/BatchBottom.vue'
 import CardGrid from './components/cards/CardGrid.vue'
+import SiteBeian from './components/shell/SiteBeian.vue'
 import AppNav from './components/shell/AppNav.vue'
 import ErrorBoundary from './components/ui/ErrorBoundary.vue'
 import { useExtPanel } from './composables/useExtPanel.js'

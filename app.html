@@ -50,7 +50,7 @@
 <div id="app">
   <!-- 首页底部备案号（合规：《非经营性互联网信息服务备案管理办法》第十三条要求在网站首页标明）。
        必须**静态**写在 HTML 里：核查工具/爬虫不一定执行 JS。Vue 挂载后整块被替换，
-       运行时由 AppNav 侧栏底部的 .rail-beian 接替展示。号与 src/config/site.ts 保持一致；
+       运行时由书签列表末尾居中的 SiteBeian 组件接替展示。号与 src/config/site.ts 保持一致；
        公安联网备案号下发后同样在此静态补上。 -->
   <footer style="position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#8a8580">
     <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit">鄂ICP备2026061718号-1</a>

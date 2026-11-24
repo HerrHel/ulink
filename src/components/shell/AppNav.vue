@@ -90,11 +90,6 @@
           <span class="rail-user-sub">{{ auth.isLoggedIn ? syncState.label : t('nav.loginSubtitle') }}</span>
         </div>
       </div>
-      <!-- 首页底部备案号：/ 直接是应用后，这里是运行时唯一常驻可见的备案号位置
-           （静态 HTML 兜底见 app.html #app 内的 footer）。号为空不渲染，见 config/site.ts -->
-      <div v-if="beianLinks.length" class="rail-beian" data-testid="rail-beian">
-        <a v-for="b in beianLinks" :key="b.text" :href="b.href" target="_blank" rel="noopener noreferrer">{{ b.text }}</a>
-      </div>
     </div>
   </nav>
 </template>
@@ -113,7 +108,6 @@ import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { t } from '../../i18n/index.js'
 import { displayText } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
-import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
 
 const dataStore = useDataStore()
 const uiStore = useUIStore()
@@ -122,14 +116,6 @@ const vault = useVault()
 const auth = useAuth()
 const syncState = useSyncState()
 const railUserRef = ref<HTMLElement | null>(null)
-
-/** 备案号链接（ICP 必有；公安联网备案号下发后自动出现） */
-const beianLinks = computed(() => {
-  const out: { text: string; href: string }[] = []
-  if (ICP_NUMBER) out.push({ text: ICP_NUMBER, href: MIIT_URL })
-  if (MPS_NUMBER) out.push({ text: MPS_NUMBER, href: mpsQueryUrl() })
-  return out
-})
 
 /* ── 选中态滑块：量出当前条目，把位置写进 transform ────────────────────
  * 坐标用「内容坐标系」（rect 差值 + 容器 scrollTop），这样导航自身滚动时

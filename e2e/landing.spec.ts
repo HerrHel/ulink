@@ -64,8 +64,8 @@ test.describe('宣传落地页', () => {
     await page.goto('/')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 15000 })
     expect(new URL(page.url()).pathname).toBe('/')
-    // 首页底部备案号：运行时由侧栏常驻展示
-    await expect(page.getByTestId('rail-beian')).toContainText('ICP备')
+    // 首页底部备案号：书签列表末尾居中展示
+    await expect(page.getByTestId('site-beian')).toContainText('ICP备')
   })
 
   test('/about：正常展示宣传页与星链画布', async ({ page }) => {

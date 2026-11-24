@@ -150,14 +150,6 @@
   border-top:1px solid var(--border-light);
 }
 
-/* 首页备案号：侧栏底部一行小字，不抢视觉；窄条折叠态隐藏（见 responsive.css） */
-.rail-beian{
-  display:flex;flex-wrap:wrap;justify-content:center;gap:2px 10px;
-  padding:4px 4px 0;font-size:11px;line-height:1.5;
-}
-.rail-beian a{color:var(--text-muted);text-decoration:none;opacity:.8}
-.rail-beian a:hover{opacity:1;text-decoration:underline}
-
 .rail-action-row{
   display:flex;align-items:center;gap:4px;
   width:100%;
