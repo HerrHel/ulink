@@ -19,19 +19,17 @@ if (MPS_NUMBER) links.push({ text: MPS_NUMBER, href: mpsQueryUrl() })
 <style scoped>
 /* 粘底页脚：#panelContent 是纵向 flex 容器（layout.css），margin-top:auto 吃掉剩余空间——
    书签不满一屏时固定在内容区底部，超过一屏时被列表顶到末尾。
-   负 margin-bottom 抵消 .panel-content 底部 80px 留白中的 56px（那段留白是给移动端
-   悬浮按钮/批量底栏避让卡片用的，备案号是居中小字，不会与右下角悬浮按钮重叠）。 */
+   底部留白由本组件自己提供：layout.css 在本组件存在时把 .panel-content 的 80px
+   padding-bottom 归零（批量底栏显示时恢复）。不用负 margin 抵消——负 margin 依赖
+   自身高度精确计算，换屏宽/字体就会多出几像素空滚动。 */
 .site-beian {
   margin-top: auto;
-  margin-bottom: -56px;
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 4px 16px;
-  /* 自身高度（24 + 行高约 19 + 20 ≈ 63px）必须大于上面的 56px 负 margin：
-     负 margin 超过自身高度时 Chrome 会多出几像素可滚动空间，书签很少时页面也能被拖动 */
-  padding: 24px 12px 20px;
+  padding: 20px 12px calc(14px + env(safe-area-inset-bottom, 0px));
   font-size: 12px;
   line-height: 1.6;
   text-align: center;

@@ -36,6 +36,12 @@
   padding:16px 20px 80px;
   overscroll-behavior-y:contain;
 }
+/* 首页备案号页脚（SiteBeian.vue）存在时由它提供底部留白，内容区自身不再留 80px，
+   否则「书签不满一屏」也会被页脚 + 80px 撑出可滚动空间。:has 特异性高于
+   responsive.css 各断点的 .panel-content padding，无需逐个断点覆盖。
+   批量底栏（.batch-bottom 绝对定位压在底部）显示时恢复 80px，避免末尾卡片被盖住。 */
+.panel-content:has(> .site-beian){padding-bottom:0}
+.panel-main-inner:has(.batch-bottom.show) .panel-content:has(> .site-beian){padding-bottom:80px}
 .card-grid{
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
