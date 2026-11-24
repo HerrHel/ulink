@@ -32,6 +32,7 @@ import {
   ACTIONS,
   DEFAULTS,
   WELCOME_NOTES,
+  buildSeedDefaults,
 } from '../../config/constants.js'
 
 describe('config/constants.ts — 应用层常量快照护栏（精简版）', () => {
@@ -112,14 +113,15 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     }
   })
 
-  it('DEFAULTS.bookmarks 15 项 id 唯一 + 父子结构(parentId=null 顶层, sb1/sb2→b3) + categoryId 无悬空', () => {
+  it('DEFAULTS.bookmarks 8 项 id 唯一 + 父子结构(parentId=null 顶层, sb1/sb2→b3) + categoryId 无悬空', () => {
     const bms = DEFAULTS.bookmarks
-    expect(bms.length).toBe(15)
+    expect(bms.length).toBe(8)
     const ids = bms.map((b) => b.id)
     expect(new Set(ids).size).toBe(ids.length)
     const top = bms.filter((b) => b.parentId === null).map((b) => b.id).sort()
     const sub = bms.filter((b) => b.parentId !== null)
-    expect(top).toEqual(['b1', 'b10', 'b11', 'b12', 'b13', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9'])
+    // 每个分类一个代表（2026-11-25 精简），且上手指南内嵌引用的 b1 / b6 必须在
+    expect(top).toEqual(['b1', 'b2', 'b3', 'b4', 'b5', 'b6'])
     expect(sub.map((b) => b.parentId)).toEqual(['b3', 'b3'])
     expect(sub.map((b) => b.id).sort()).toEqual(['sb1', 'sb2'])
     const catIds = new Set(DEFAULTS.categories.map((c) => c.id))
@@ -150,5 +152,50 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     expect(welcome.name).toBe('上手指南')
     expect(welcome.notes).toBe(WELCOME_NOTES)
     expect(welcome.bookmarkIds).toEqual(['b1', 'b6'])
+  })
+
+  describe('buildSeedDefaults：初始书签按界面语言出两套（2026-11-25）', () => {
+    const zh = buildSeedDefaults('zh-CN')
+    const en = buildSeedDefaults('en-US')
+    const top = (d: typeof zh) => d.bookmarks.filter((b) => b.parentId === null)
+
+    it('中文：QQ邮箱 / 抖音；英文：Gmail / YouTube，其余共用', () => {
+      const zhUrls = top(zh).map((b) => b.url)
+      const enUrls = top(en).map((b) => b.url)
+      expect(zhUrls).toEqual(expect.arrayContaining(['https://mail.qq.com', 'https://www.douyin.com']))
+      expect(enUrls).toEqual(expect.arrayContaining(['https://mail.google.com/', 'https://www.youtube.com/']))
+      expect(zhUrls.some((u) => /google|youtube/.test(u))).toBe(false)
+      expect(enUrls.some((u) => /qq\.com|douyin/.test(u))).toBe(false)
+      // 两套各 6 条顶层，DeepSeek 子书签结构一致
+      expect(top(zh)).toHaveLength(6)
+      expect(top(en)).toHaveLength(6)
+      for (const d of [zh, en]) {
+        expect(d.bookmarks.filter((b) => b.parentId === 'b3').map((b) => b.id).sort()).toEqual(['sb1', 'sb2'])
+      }
+    })
+
+    it('★语言专属条目用不同 id、共用条目 id 一致：跨语言设备首次同步只会多出示例，不会互相覆盖', () => {
+      const zhById = new Map(zh.bookmarks.map((b) => [b.id, b.url]))
+      const enById = new Map(en.bookmarks.map((b) => [b.id, b.url]))
+      for (const [id, url] of zhById) {
+        if (enById.has(id)) expect(enById.get(id), `id ${id} 在中英两套里必须指向同一网站`).toBe(url)
+      }
+      expect(zhById.has('b2') && zhById.has('b4')).toBe(true)
+      expect(enById.has('b8') && enById.has('b14')).toBe(true)
+      expect(enById.has('b2') || enById.has('b4') || zhById.has('b8') || zhById.has('b14')).toBe(false)
+    })
+
+    it('首屏顺序（按 order 倒序显示）：邮箱 → 视频 → DeepSeek → Steam → GitHub → I Love PDF', () => {
+      const firstScreen = (d: typeof zh) => top(d).sort((a, b) => b.order - a.order).map((b) => b.categoryId)
+      expect(firstScreen(zh)).toEqual(['email', 'social', 'ai', 'game', 'tools', 'tools'])
+      expect(firstScreen(en)).toEqual(['email', 'social', 'ai', 'game', 'tools', 'tools'])
+    })
+
+    it('上手指南内嵌引用的 b1 / b6 两套都在', () => {
+      for (const d of [zh, en]) {
+        const ids = new Set(d.bookmarks.map((b) => b.id))
+        for (const ref of d.siblingGroups[0].bookmarkIds) expect(ids.has(ref)).toBe(true)
+      }
+    })
   })
 })

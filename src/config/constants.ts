@@ -73,22 +73,15 @@ export const DEFAULTS: AppData = {
     { id: 'game', name: '游戏平台', icon: 'game-icon', color: '#16a34a', order: 6 }
   ],
   bookmarks: [
-    { id: 'b1', title: 'GitHub', url: 'https://github.com', username: '', password: '', notes: '代码托管平台', icon: '', categoryId: 'tools', parentId: null, order: 0, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 86400000, updatedAt: Date.now() - 86400000 },
+    { id: 'b1', title: 'GitHub', url: 'https://github.com', username: '', password: '', notes: '代码托管平台', icon: '', categoryId: 'tools', parentId: null, order: 2, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 86400000, updatedAt: Date.now() - 86400000 },
     // D2-007：示例数据不放任何伪密码（原 base64「123」易被误用/误导）
-    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: '', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 172800000, updatedAt: Date.now() - 172800000 },
-    { id: 'b3', title: 'DeepSeek', url: 'https://www.deepseek.com/', username: '', password: '', notes: 'API key:', icon: '', categoryId: 'ai', parentId: null, order: 2, useCount: 5, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 40000000, updatedAt: Date.now() - 40000000 },
+    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: '', notes: '', icon: '', categoryId: 'email', parentId: null, order: 6, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 172800000, updatedAt: Date.now() - 172800000 },
+    { id: 'b3', title: 'DeepSeek', url: 'https://www.deepseek.com/', username: '', password: '', notes: 'API key:', icon: '', categoryId: 'ai', parentId: null, order: 4, useCount: 5, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 40000000, updatedAt: Date.now() - 40000000 },
     { id: 'sb1', title: '开始对话', url: 'https://chat.deepseek.com/', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 0, useCount: 3, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 30000000, updatedAt: Date.now() - 30000000 },
     { id: 'sb2', title: 'API开发平台', url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 20000000, updatedAt: Date.now() - 20000000 },
-    { id: 'b4', title: '抖音', url: 'https://www.douyin.com', username: '', password: '', notes: '短视频平台', icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 345600000, updatedAt: Date.now() - 345600000 },
-    { id: 'b5', title: 'Steam', url: 'https://store.steampowered.com', username: '', password: '', notes: '游戏平台', icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 100000, updatedAt: Date.now() - 100000 },
-    { id: 'b6', title: 'I Love PDF', url: 'https://www.ilovepdf.com/', username: '', password: '', notes: '在线PDF工具', icon: '', categoryId: 'tools', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
-    { id: 'b7', title: '163邮箱', url: 'https://mail.163.com/', username: '@163.com', password: '', notes: '网易邮箱', icon: '', categoryId: 'email', parentId: null, order: 6, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
-    { id: 'b8', title: 'Gmail', url: 'https://mail.google.com/', username: '@gmail.com', password: '', notes: '谷歌邮箱', icon: '', categoryId: 'email', parentId: null, order: 7, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
-    { id: 'b9', title: '豆包', url: 'https://www.doubao.com/', username: '', password: '', notes: '字节跳动 AI 助手', icon: '', categoryId: 'ai', parentId: null, order: 8, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
-    { id: 'b10', title: 'WorkBuddy', url: 'https://www.workbuddy.ai/', username: '', password: '', notes: 'AI 智能体工作台', icon: '', categoryId: 'ai', parentId: null, order: 9, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
-    { id: 'b11', title: 'ChatGPT', url: 'https://chatgpt.com/', username: '', password: '', notes: 'OpenAI 对话助手', icon: '', categoryId: 'ai', parentId: null, order: 10, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
-    { id: 'b12', title: 'Claude', url: 'https://claude.ai/', username: '', password: '', notes: 'Anthropic AI 助手', icon: '', categoryId: 'ai', parentId: null, order: 11, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
-    { id: 'b13', title: 'Gemini', url: 'https://gemini.google.com/', username: '', password: '', notes: 'Google AI 助手', icon: '', categoryId: 'ai', parentId: null, order: 12, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 }
+    { id: 'b4', title: '抖音', url: 'https://www.douyin.com', username: '', password: '', notes: '短视频平台', icon: '', categoryId: 'social', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 345600000, updatedAt: Date.now() - 345600000 },
+    { id: 'b5', title: 'Steam', url: 'https://store.steampowered.com', username: '', password: '', notes: '游戏平台', icon: '', categoryId: 'game', parentId: null, order: 3, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 100000, updatedAt: Date.now() - 100000 },
+    { id: 'b6', title: 'I Love PDF', url: 'https://www.ilovepdf.com/', username: '', password: '', notes: '在线PDF工具', icon: '', categoryId: 'tools', parentId: null, order: 1, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
   ],
   customAttributes: [
     { id: 'requires-login', name: '需要登录', type: 'boolean' },
@@ -133,16 +126,10 @@ export function buildSeedDefaults(locale?: Locale): AppData {
     ? {
         b1: 'Code hosting platform',
         b3: 'API key:',
-        b4: 'Short video platform',
         b5: 'Gaming platform',
-        b6: 'Online PDF tools',
-        b7: 'NetEase Mail',
         b8: 'Google Mail',
-        b9: 'ByteDance AI assistant',
-        b10: 'AI agent workspace',
-        b11: 'OpenAI conversational assistant',
-        b12: 'Anthropic AI assistant',
-        b13: 'Google AI assistant',
+        b14: 'Video platform',
+        b6: 'Online PDF tools',
       }
     : {
         b1: '代码托管平台',
@@ -150,13 +137,6 @@ export function buildSeedDefaults(locale?: Locale): AppData {
         b4: '短视频平台',
         b5: '游戏平台',
         b6: '在线PDF工具',
-        b7: '网易邮箱',
-        b8: '谷歌邮箱',
-        b9: '字节跳动 AI 助手',
-        b10: 'AI 智能体工作台',
-        b11: 'OpenAI 对话助手',
-        b12: 'Anthropic AI 助手',
-        b13: 'Google AI 助手',
       }
   const attrName = (id: string, zh: string, en: string): string => isEn ? en : zh
   const bmTitle = (id: string, zh: string, en: string): string => isEn ? en : zh
@@ -172,23 +152,30 @@ export function buildSeedDefaults(locale?: Locale): AppData {
       { id: 'social', name: catName('social'), icon: 'social-icon', color: '#1d9bf0', order: 5 },
       { id: 'game', name: catName('game'), icon: 'game-icon', color: '#16a34a', order: 6 },
     ],
+    // 示例书签只为演示功能，每个分类留一个代表（2026-11-25 精简：去掉重复演示同一功能的
+    // 163/豆包/WorkBuddy/ChatGPT/Claude/Gemini）。列表按 order 倒序显示，order 决定首屏：
+    // 邮箱 → 视频 → DeepSeek → Steam → GitHub → I Love PDF，与链官网书签 order 0 垫底。
+    // GitHub 与 I Love PDF 被上手指南正文内嵌引用（bookmarkIds），不可删。
+    //
+    // 邮箱与视频两条按首次打开时的界面语言出不同网站：中文 QQ邮箱(b2) / 抖音(b4)，英文 Gmail(b8) / YouTube(b14)。
+    // 这两条刻意用不同 id：同一账号在另一种语言的新设备上首次登录时，示例书签与云端按 id 合并，
+    // 共用 id 会让新设备那份（修改时间更新）把云端的 QQ邮箱 覆盖成 Gmail，等于悄悄改了用户数据；
+    // 不同 id 最坏只是多出两条另一语言的示例，删掉即可。b8 沿用旧版 Gmail 的 id，云端已删的墓地照常拦截复活。
+    // 初始书签只在首次打开 / 重置数据时按当时语言生成一次，之后切换界面语言不改动任何书签。
     bookmarks: [
-      { id: 'b1', title: bmTitle('b1', 'GitHub', 'GitHub'), url: 'https://github.com', username: '', password: '', notes: seedNotes.b1, icon: '', categoryId: 'tools', parentId: null, order: 0, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 86400000, updatedAt: now - 86400000 },
+      { id: 'b1', title: bmTitle('b1', 'GitHub', 'GitHub'), url: 'https://github.com', username: '', password: '', notes: seedNotes.b1, icon: '', categoryId: 'tools', parentId: null, order: 2, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 86400000, updatedAt: now - 86400000 },
       // D2-007：示例数据不放任何伪密码（原 base64「123」易被误用/误导）
-      { id: 'b2', title: bmTitle('b2', 'QQ邮箱', 'QQ Mail'), url: 'https://mail.qq.com', username: '@qq.com', password: '', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 172800000, updatedAt: now - 172800000 },
-      { id: 'b3', title: bmTitle('b3', 'DeepSeek', 'DeepSeek'), url: 'https://www.deepseek.com/', username: '', password: '', notes: seedNotes.b3, icon: '', categoryId: 'ai', parentId: null, order: 2, useCount: 5, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 40000000, updatedAt: now - 40000000 },
+      isEn
+        ? { id: 'b8', title: 'Gmail', url: 'https://mail.google.com/', username: '@gmail.com', password: '', notes: seedNotes.b8, icon: '', categoryId: 'email', parentId: null, order: 6, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 172800000, updatedAt: now - 172800000 }
+        : { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: '', notes: '', icon: '', categoryId: 'email', parentId: null, order: 6, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 172800000, updatedAt: now - 172800000 },
+      { id: 'b3', title: bmTitle('b3', 'DeepSeek', 'DeepSeek'), url: 'https://www.deepseek.com/', username: '', password: '', notes: seedNotes.b3, icon: '', categoryId: 'ai', parentId: null, order: 4, useCount: 5, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 40000000, updatedAt: now - 40000000 },
       { id: 'sb1', title: bmTitle('sb1', '开始对话', 'Start chat'), url: 'https://chat.deepseek.com/', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 0, useCount: 3, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 30000000, updatedAt: now - 30000000 },
       { id: 'sb2', title: bmTitle('sb2', 'API开发平台', 'API platform'), url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 20000000, updatedAt: now - 20000000 },
-      { id: 'b4', title: bmTitle('b4', '抖音', 'Douyin'), url: 'https://www.douyin.com', username: '', password: '', notes: seedNotes.b4, icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 345600000, updatedAt: now - 345600000 },
-      { id: 'b5', title: bmTitle('b5', 'Steam', 'Steam'), url: 'https://store.steampowered.com', username: '', password: '', notes: seedNotes.b5, icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 100000, updatedAt: now - 100000 },
-      { id: 'b6', title: bmTitle('b6', 'I Love PDF', 'I Love PDF'), url: 'https://www.ilovepdf.com/', username: '', password: '', notes: seedNotes.b6, icon: '', categoryId: 'tools', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
-      { id: 'b7', title: bmTitle('b7', '163邮箱', '163 Mail'), url: 'https://mail.163.com/', username: '@163.com', password: '', notes: seedNotes.b7, icon: '', categoryId: 'email', parentId: null, order: 6, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
-      { id: 'b8', title: bmTitle('b8', 'Gmail', 'Gmail'), url: 'https://mail.google.com/', username: '@gmail.com', password: '', notes: seedNotes.b8, icon: '', categoryId: 'email', parentId: null, order: 7, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
-      { id: 'b9', title: bmTitle('b9', '豆包', 'Doubao'), url: 'https://www.doubao.com/', username: '', password: '', notes: seedNotes.b9, icon: '', categoryId: 'ai', parentId: null, order: 8, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
-      { id: 'b10', title: bmTitle('b10', 'WorkBuddy', 'WorkBuddy'), url: 'https://www.workbuddy.ai/', username: '', password: '', notes: seedNotes.b10, icon: '', categoryId: 'ai', parentId: null, order: 9, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
-      { id: 'b11', title: bmTitle('b11', 'ChatGPT', 'ChatGPT'), url: 'https://chatgpt.com/', username: '', password: '', notes: seedNotes.b11, icon: '', categoryId: 'ai', parentId: null, order: 10, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
-      { id: 'b12', title: bmTitle('b12', 'Claude', 'Claude'), url: 'https://claude.ai/', username: '', password: '', notes: seedNotes.b12, icon: '', categoryId: 'ai', parentId: null, order: 11, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
-      { id: 'b13', title: bmTitle('b13', 'Gemini', 'Gemini'), url: 'https://gemini.google.com/', username: '', password: '', notes: seedNotes.b13, icon: '', categoryId: 'ai', parentId: null, order: 12, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      isEn
+        ? { id: 'b14', title: 'YouTube', url: 'https://www.youtube.com/', username: '', password: '', notes: seedNotes.b14, icon: '', categoryId: 'social', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 345600000, updatedAt: now - 345600000 }
+        : { id: 'b4', title: '抖音', url: 'https://www.douyin.com', username: '', password: '', notes: seedNotes.b4, icon: '', categoryId: 'social', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 345600000, updatedAt: now - 345600000 },
+      { id: 'b5', title: bmTitle('b5', 'Steam', 'Steam'), url: 'https://store.steampowered.com', username: '', password: '', notes: seedNotes.b5, icon: '', categoryId: 'game', parentId: null, order: 3, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 100000, updatedAt: now - 100000 },
+      { id: 'b6', title: bmTitle('b6', 'I Love PDF', 'I Love PDF'), url: 'https://www.ilovepdf.com/', username: '', password: '', notes: seedNotes.b6, icon: '', categoryId: 'tools', parentId: null, order: 1, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
     ],
     customAttributes: [
       { id: 'requires-login', name: attrName('requires-login', '需要登录', 'Requires login'), type: 'boolean' },

@@ -32,7 +32,7 @@ test.describe('LinkVault 核心功能', () => {
     // 默认数据至少有一张卡
     await expect(page.locator('.bookmark-card, .group-card, .card').first()).toBeVisible({ timeout: 10000 })
     // 内容断言：默认种子书签确实渲染出标题（不是空壳卡片）；正则覆盖多张默认卡更抗数据微调
-    await expect(page.getByTestId('lv-card-grid')).toContainText(/Steam|抖音|DeepSeek|Gmail/)
+    await expect(page.getByTestId('lv-card-grid')).toContainText(/Steam|抖音|DeepSeek|QQ邮箱/)
   })
 
   test('分类导航工作', async ({ page }) => {
