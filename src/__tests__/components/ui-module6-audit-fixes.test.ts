@@ -1097,7 +1097,7 @@ describe('模块 6：界面交互、组件体系与 TipTap 编辑器深度审计
     ds.bookmarks = [bm]
 
     const bmWrapper = mount(BookmarkCard, {
-      props: { bookmark: bm },
+      props: { bookmark: bm, detailMode: true },
     })
     await nextTick()
 
@@ -1124,7 +1124,7 @@ describe('模块 6：界面交互、组件体系与 TipTap 编辑器深度审计
     ds.siblingGroups = [grp]
 
     const grpWrapper = mount(GroupCard, {
-      props: { group: grp },
+      props: { group: grp, detailMode: true },
     })
     await nextTick()
 

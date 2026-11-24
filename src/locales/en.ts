@@ -71,7 +71,6 @@ export const en = {
     bookmark: 'Bookmark',
     note: 'Note',
     emptyTitle: 'No bookmarks yet',
-    emptyHint: 'Click the + button to start collecting',
     virtualSwitchToast: 'Too many items — switched to list view',
     group: 'Note',
     unnamedGroup: 'Untitled note',

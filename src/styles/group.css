@@ -585,6 +585,7 @@
 .empty-icon svg{width:56px;height:56px}
 .empty h3{font-family:var(--font-display);font-size:var(--fs-lg);font-weight:600;margin-bottom:6px;color:var(--text-secondary)}
 .empty p{font-size:var(--fs-sm);color:var(--text-muted);max-width:280px;line-height:1.6}
+.empty-actions{display:flex;gap:8px;margin-top:8px}
 
 /* ==================== SHARE MODE FOCUS CARD ==================== */
 .share-mode-layout .focus-card-wrap{

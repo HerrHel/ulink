@@ -25,10 +25,16 @@
         </template>
       </div>
     </template>
-    <div v-else class="empty">
+    <div v-else-if="isFiltered" class="empty" data-testid="lv-empty-filtered">
+      <h3>{{ t('common.noResults') }}</h3>
+    </div>
+    <div v-else class="empty" data-testid="lv-empty">
       <div class="empty-icon" v-html="bookmarkIcon"></div>
       <h3>{{ t('cards.emptyTitle') }}</h3>
-      <p>{{ t('cards.emptyHint') }}</p>
+      <div v-if="!ui.shareMode" class="empty-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-testid="lv-empty-add" @click="openBmModal()">{{ t('common.add') }}</button>
+        <button type="button" class="btn btn-sm" data-testid="lv-empty-import" @click="openImport">{{ t('cards.importBookmarks') }}</button>
+      </div>
     </div>
   </div>
 </template>
@@ -45,10 +51,17 @@ import BookmarkCard from './BookmarkCard.vue'
 import GroupCard from './GroupCard.vue'
 import { provideListNav, type ListNav, type ListNavTarget } from '../../composables/useListNav.js'
 import { t } from '../../i18n/index.js'
+import { openBmModal } from '../../composables/domain/useBookmark.js'
 import { provideTileLayout } from './tileLayout.js'
 
 const ui = useUIStore()
 const bookmarkIcon = I.emptyBookmark
+// 搜索/属性筛选无结果与「真的没有内容」分开：前者只说无匹配，后者直接给新建与导入入口
+const isFiltered = computed(() => !!ui.searchQuery?.trim() || ui.activeAttrs.length > 0)
+function openImport() {
+  const el = document.getElementById('importFile') as HTMLInputElement | null
+  if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() }
+}
 const gridRef = ref(null)
 const normalGridRef = ref(null)
 const { combinedList } = useCombinedList()

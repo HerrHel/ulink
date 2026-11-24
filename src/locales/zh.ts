@@ -74,7 +74,6 @@ export const zh = {
     bookmark: '书签',
     note: '笔记',
     emptyTitle: '暂无书签',
-    emptyHint: '点击 + 按钮开始收藏',
     virtualSwitchToast: '条目较多，已切换为列表视图',
     group: '笔记',
     unnamedGroup: '未命名笔记',
