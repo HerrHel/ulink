@@ -783,7 +783,8 @@ const server = http.createServer(async (req, res) => {
           logEvent('warn', 'quota_exceeded', { status: 429, tokens: reserveAmount, errorKind: r.data.reason || 'quota_exceeded' })
           sendJson(res, 429, {
             error: 'quota_exceeded',
-            message: '本月 AI 额度已用完。升级 PRO 解锁 20 万 tokens/月（年付折合 ¥9/月）。',
+            // 只有 PRO 走 token 预扣（免费试用不预扣），文案不能再引导「升级 PRO」
+            message: '本月 AI 额度已用完，将于下月 1 日自动恢复。',
           }, cors)
           return
         } else {

@@ -214,7 +214,7 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     'price.cmp.times50': '50 / day',
     'price.cmp.aiTrial': '30 trial uses (lifetime)',
     'price.cmp.aiProDaily': '100 / day',
-    'price.cmp.aiProMonthly': '400k chars / month',
+    'price.cmp.aiProMonthly': '6M chars / month',
     'price.cmp.days7': '7 days',
     'price.cmp.days365': '365 days',
     'price.no': 'Not included',

@@ -296,6 +296,22 @@ describe('PurchaseModal.vue（图2新格局）', () => {
       saved.forEach((p, i) => { mockPlans[i].features = p.features })
     }
   })
+  it('9b. PRO 月度 AI 额度按 ai.tokens.monthly 展示：300 万 token → 每月 600 万字', async () => {
+    const yearly = mockPlans.find((p) => p.planId === 'plus_yearly')!
+    const saved = { ...yearly.features }
+    ;(yearly.features as Record<string, number>)['ai.tokens.monthly'] = 3_000_000
+    try {
+      const wrapper = mount(PurchaseModal, { props: { visible: true, currentPlanId: 'free' }, attachTo: document.body })
+      await nextTick()
+      const text = wrapper.find('[data-testid="plan-plus_yearly"]').text()
+      expect(text).toContain('每月 600 万高阶 AI 智能额度')
+      expect(text).not.toContain('每月 40 万')
+      wrapper.unmount()
+    } finally {
+      yearly.features = saved
+    }
+  })
+
   describe('续费：顺延说明与年付优先', () => {
     function setPro(expiresAt: string | null) {
       useEntitlement().entitlement.value = {

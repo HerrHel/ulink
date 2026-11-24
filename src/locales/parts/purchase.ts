@@ -121,7 +121,7 @@ export const purchaseZh = {
       savingSuffix: ' · 省 {price}',
       testBadge: '测试',
       aiChars: '{n} 万',
-      aiCharsFallback: '40',
+      aiCharsFallback: '600',
       b1: '轻量平台解析（每日 10 次）',
       b1Sub: '解析视频公开标题、简介与字幕，生成 AI 摘要与工具网址；不抓取播放地址',
       b2: 'AI 网页深度阅读与自动补齐',

@@ -698,7 +698,8 @@ const displayCards = computed<TierCardView[]>(() => {
         highlight: true,
       },
       {
-        text: t('purchase.card.b3', { n: aiCharsNum }),
+        // n 按语言格式化：中文「600」（万字），英文「6M」（百万字，避免「6000k」）
+        text: t('purchase.card.b3', { n: isZh.value ? aiCharsNum : `${aiCharsNum / 100}M` }),
         sub: t('purchase.card.b3Sub'),
         highlight: true,
       },
