@@ -40,6 +40,25 @@ export function _readSchemaVersion(d: Partial<AppData>): number {
  * @param result - 包含 { categories, bookmarks, customAttributes, siblingGroups }
  * @returns 是否需要持久化
  */
+/**
+ * 历代官方「上手指南」正文（去标签、压空白后）的 FNV-1a 哈希，由 git 历史中 welcome-data.ts 各版本算出。
+ * 用户笔记与其中任一完全一致 = 没动过，可安全换成当前版本；改过一个字就不碰。
+ * 不含当前版本；以后改指南文案时，把改前版本的哈希追加进来。
+ */
+const OLD_GUIDE_HASHES = new Set([
+  '1u99euv', 'yuciku', 'sn7ewv', '1t615x5', '1s7142a', '86sex1', '1z0s2ct', '1jyv2lv',
+  '1z02pcm', 'rao7u5', '98hhn3', 'hwl9v1', 'rsjtsq', '19y4yqb', '1lv4jb0',
+])
+function guideTextHash(html: string): string {
+  const s = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+  return h.toString(36)
+}
+export function isUneditedOldGuide(html: string): boolean {
+  return OLD_GUIDE_HASHES.has(guideTextHash(html))
+}
+
 export function runMigrations(d: Partial<AppData>, result: MigrationResult): boolean {
   const from = _readSchemaVersion(d)
   if (from >= CURRENT_SCHEMA_VERSION) {
@@ -168,6 +187,7 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   if (welcomeGroup && typeof welcomeGroup.notes === 'string') {
     const n = welcomeGroup.notes
     if (
+      isUneditedOldGuide(n) ||
       n.includes('导入导出在侧边栏底部') ||
       n.includes('点详按钮') ||
       n.includes('组功能详解') ||

@@ -2,14 +2,6 @@
   <div class="search-suggest" v-show="visible && results.length > 0" role="listbox" :aria-label="t('search.suggestions')">
     <template v-for="(item, idx) in results" :key="item.id">
       <div v-if="item._divider" class="ss-divider">{{ item._divider }}</div>
-      <!-- AI 全网寻站推荐项 -->
-      <div v-else-if="item._isAiAction" class="search-suggest-item ss-ai-action-item" :class="{ active: selectableIdxAt[idx] === activeIdx }"
-           role="option" :aria-selected="selectableIdxAt[idx] === activeIdx"
-           @click="select(item)" @mouseenter="activeIdx = selectableIdxAt[idx]">
-        <span class="ss-ai-sparkle" v-html="I.sparkle"></span>
-        <span class="ss-name ss-ai-text">{{ item.title }}</span>
-        <span class="ss-url ss-ai-badge">{{ t('ai.intentSearch') }}</span>
-      </div>
       <!-- A3-002：active 用 selectable 下标，避免分隔线与键盘 activeIdx 错位 -->
       <div v-else class="search-suggest-item" :class="{ active: selectableIdxAt[idx] === activeIdx }"
            role="option" :aria-selected="selectableIdxAt[idx] === activeIdx"
@@ -74,14 +66,8 @@ const results = computed<SearchResultItem[]>(() => {
   // 在组和书签之间插入分隔线
   const firstBmIdx = items.findIndex(i => !i._isGroup)
   if (firstBmIdx > 0) items.splice(firstBmIdx, 0, { id: '__divider', _divider: t('search.bookmarks'), _highlights: {} })
-  const list = items.slice(0, MAX_SUGGESTIONS + 1)
-  list.push({
-    id: '__ai_search',
-    title: t('ai.searchSuggestPrompt', { q }),
-    _isAiAction: true,
-    _highlights: {},
-  })
-  return list
+  // 全网找站入口改放在「无匹配结果」空状态里，下拉只列本地结果，不再常驻打扰
+  return items.slice(0, MAX_SUGGESTIONS + 1)
 })
 
 // A3-002：可选项与 results 下标解耦
@@ -102,12 +88,7 @@ watch(() => ui.searchQuery, updateVisibility)
 
 function select(item: SearchResultItem) {
   visible.value = false
-  const q = ui.searchQuery
   ui.searchQuery = ''
-  if (item._isAiAction) {
-    ui.openAiAssistant(q)
-    return
-  }
   if (item._isGroup) {
     toggleGroupFocus(item.id)
   } else {
@@ -179,50 +160,3 @@ function onFaviconError(e: Event, name?: string) {
 
 defineExpose({ hide, visible })
 </script>
-
-<style scoped>
-.ss-ai-action-item {
-  border-top: 1px dashed var(--border, #e5e5e5);
-  background: var(--surface, #fff);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ss-ai-action-item:hover,
-.ss-ai-action-item.active {
-  background: var(--surface-hover, #f8f9fa);
-}
-.ss-ai-sparkle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  color: var(--accent, #e65c00);
-}
-.ss-ai-sparkle :deep(svg),
-.ss-ai-sparkle svg {
-  width: 14px;
-  height: 14px;
-  fill: currentColor;
-}
-.ss-ai-text {
-  font-weight: 500;
-  color: var(--accent, #e65c00);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ss-ai-badge {
-  background: var(--accent-light, rgba(230, 92, 0, 0.1));
-  color: var(--accent, #e65c00);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-</style>

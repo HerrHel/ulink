@@ -27,6 +27,7 @@
     </template>
     <div v-else-if="isFiltered" class="empty" data-testid="lv-empty-filtered">
       <h3>{{ t('common.noResults') }}</h3>
+      <button v-if="aiSearchQ" type="button" class="empty-ai-link" data-testid="lv-empty-ai" @click="onAiSearch">{{ t('ai.searchSuggestPrompt', { q: aiSearchQ }) }}</button>
     </div>
     <div v-else class="empty" data-testid="lv-empty">
       <div class="empty-icon" v-html="bookmarkIcon"></div>
@@ -58,6 +59,13 @@ const ui = useUIStore()
 const bookmarkIcon = I.emptyBookmark
 // 搜索/属性筛选无结果与「真的没有内容」分开：前者只说无匹配，后者直接给新建与导入入口
 const isFiltered = computed(() => !!ui.searchQuery?.trim() || ui.activeAttrs.length > 0)
+// 无匹配时才给全网找站入口（搜索下拉不再常驻），分享态 / 关闭 AI 时不显示
+const aiSearchQ = computed(() => (!ui.shareMode && ui.aiEnabled ? (ui.searchQuery || '').trim() : ''))
+function onAiSearch() {
+  const q = aiSearchQ.value
+  ui.searchQuery = ''
+  ui.openAiAssistant(q)
+}
 function openImport() {
   const el = document.getElementById('importFile') as HTMLInputElement | null
   if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() }

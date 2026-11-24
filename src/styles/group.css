@@ -586,6 +586,8 @@
 .empty h3{font-family:var(--font-display);font-size:var(--fs-lg);font-weight:600;margin-bottom:6px;color:var(--text-secondary)}
 .empty p{font-size:var(--fs-sm);color:var(--text-muted);max-width:280px;line-height:1.6}
 .empty-actions{display:flex;gap:8px;margin-top:8px}
+.empty-ai-link{margin-top:6px;padding:4px 8px;border:0;background:none;color:var(--text-muted);font-size:var(--fs-sm);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty-ai-link:hover{color:var(--accent)}
 
 /* ==================== SHARE MODE FOCUS CARD ==================== */
 .share-mode-layout .focus-card-wrap{

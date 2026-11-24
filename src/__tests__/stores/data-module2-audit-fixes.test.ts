@@ -1081,15 +1081,15 @@ describe('模块 2 补漏第五阶段：QuickLook 联动关闭、历史栈清理
 
     const raw = safeGetItem(UI_STATE_KEY)
     const parsed = safeJsonParse<{ searchQuery?: string } | null>(raw, null)
-    expect(parsed?.searchQuery).toBe('')
+    expect(parsed?.searchQuery).toBeUndefined()
 
-    // 切回 main 空间后，正常允许保存公共搜索词
+    // 搜索词在任何空间都不再落盘
     ui.curSpace = 'main'
     ui.searchQuery = 'public dev tools'
     ui.saveUIState()
 
     const parsedMain = safeJsonParse<{ searchQuery?: string } | null>(safeGetItem(UI_STATE_KEY), null)
-    expect(parsedMain?.searchQuery).toBe('public dev tools')
+    expect(parsedMain?.searchQuery).toBeUndefined()
   })
 
   it('appStore.save 立即清理在途的 _saveTimer 避免无意义重复执行', async () => {

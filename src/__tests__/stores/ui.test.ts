@@ -112,7 +112,7 @@ describe('UIStore', () => {
       const savedData = JSON.parse((localStorage.setItem as any).mock.calls[0][1])
       expect(savedData.curCat).toBe('cat1')
       expect(savedData.layoutMode).toBe('list')
-      expect(savedData.searchQuery).toBe('test')
+      expect(savedData.searchQuery).toBeUndefined()
     })
 
     it('restoreUIState - 应该从 localStorage 恢复状态', () => {
@@ -139,7 +139,7 @@ describe('UIStore', () => {
       expect(store.curCat).toBe('cat1')
       expect(store.layoutMode).toBe('list')
       expect(store.sortMode).toBe('title')
-      expect(store.searchQuery).toBe('test')
+      expect(store.searchQuery).toBe('') // 搜索词不跨刷新恢复
       expect(store.activeAttrs).toEqual(['attr1'])
       expect(store.excludedAttrs).toEqual(['attr2'])
     })

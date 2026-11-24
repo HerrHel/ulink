@@ -50,6 +50,28 @@ describe('CardGrid 空状态', () => {
     w.unmount()
   })
 
+  it('搜索无结果：给出低调的全网找站入口，点击清空搜索并打开 AI 助手', async () => {
+    const ui = useUIStore()
+    ui.searchQuery = 'zzz'
+    const spy = vi.spyOn(ui, 'openAiAssistant').mockImplementation(() => {})
+    const w = mount(CardGrid)
+    await nextTick()
+    await w.find('[data-testid="lv-empty-ai"]').trigger('click')
+    expect(spy).toHaveBeenCalledWith('zzz')
+    expect(ui.searchQuery).toBe('')
+    w.unmount()
+  })
+
+  it('关闭 AI：不显示全网找站入口', async () => {
+    const ui = useUIStore()
+    ui.aiEnabled = false
+    ui.searchQuery = 'zzz'
+    const w = mount(CardGrid)
+    await nextTick()
+    expect(w.find('[data-testid="lv-empty-ai"]').exists()).toBe(false)
+    w.unmount()
+  })
+
   it('分享只读态：空列表不给新建/导入', async () => {
     ;(useUIStore() as unknown as { shareMode: unknown }).shareMode = { id: 'x' }
     const w = mount(CardGrid)

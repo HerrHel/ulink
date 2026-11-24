@@ -473,7 +473,7 @@ export const useUIStore = defineStore('ui', {
           aiEnabled: this.aiEnabled,
           aiStyleAdapt: this.aiStyleAdapt,
           aiRailEnabled: this.aiRailEnabled,
-          searchQuery: this.curSpace === 'vault' ? '' : (this.searchQuery || ''),
+          // 搜索词不跨刷新保留：刷新后残留的旧词会让列表显示「无匹配结果」，像是数据丢了
           sortMode: this.sortMode || 'order',
           sortDir: this.sortDir || 'desc',
           groupsOnTop: this.groupsOnTop,
@@ -537,7 +537,6 @@ export const useUIStore = defineStore('ui', {
               this.curCat = CAT_ALL
             }
           }
-          if (s.searchQuery) this.searchQuery = s.searchQuery
           const attrMap = ds.attributeMap
           const filterValidAttrs = (ids: string[]) =>
             ids.filter((id: string) => !!attrMap[id] && !attrMap[id].deletedAt)
