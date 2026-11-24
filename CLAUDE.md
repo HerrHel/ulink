@@ -90,7 +90,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 ## 安全与运维
 
-- CSP / 安全头：规则定义在 `vite.config.ts`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，**勿私自收紧**）。生产形态（2026-11-12 起）：`/`、`/app`、`/legal/*` 均为静态托管直连，XCTO / XFO / HSTS / Referrer 由**网关「自定义域名 → Headers 设置」统一注入**，CSP 只在构建期注入的页面 `<meta>`（`securityMetaPlugin`）；`edge-headers` 云函数仍保留但已不在入口路径上；分享页由 `share-ssr` 下发 XCTO/XFO。`npm run check:prod` 探测 `/app`、`/legal`，缺失退出码 4
+- CSP / 安全头：规则定义在 `vite.config.ts`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，**勿私自收紧**）。生产形态（2026-11-12 起）：`/`、`/app`、`/legal/*` 均为静态托管直连，XCTO / XFO / HSTS / Referrer 由**网关「自定义域名 → Headers 设置」统一注入**，CSP 只在构建期注入的页面 `<meta>`（`securityMetaPlugin`）；`edge-headers` 云函数仍保留但已不在入口路径上；分享页由 `share-ssr` 下发 XCTO/XFO。`npm run check:prod` 探测 `/app`、`/legal` 与分享页 `/s/*`（校验 share-ssr 严格 CSP 特征指令 + XFO/XCTO/noindex，防网关覆盖），缺失退出码 4
 - 云函数 check-link（生产 `cloudbase/functions/check-link/`）：私有 IP 黑名单防 SSRF；CORS/超时/限流由云函数环境变量控制
 - 错误追踪：errorHandler → `src/lib/errorReporter.ts` → `report-error` 云函数 → CloudBase `error_logs`（5s 节流）
 - 公开分享：RLS 允许匿名 SELECT `is_public = true` 的组及其书签；分享页由 `share-ssr` 云函数渲染

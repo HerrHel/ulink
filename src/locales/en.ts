@@ -24,7 +24,7 @@ export const en = {
     brand: 'ulink',
     brandEn: 'ulink',
     fullName: '与链 · ulink',
-    description: 'ulink is a personal bookmark manager with cloud sync and end-to-end encryption. Share bookmark notes publicly for anyone to view and save.',
+    description: 'ulink is a personal bookmark manager with cloud sync; only account fields are end-to-end encrypted. Share bookmark notes via private links for others to view and save.',
   },
   common: {
     appName: 'ulink',
@@ -485,7 +485,7 @@ export const en = {
     e2eUnlocked: 'Unlocked',
     e2eLocked: 'Locked',
     e2eDisabled: 'Disabled',
-    e2eHint: 'Sensitive data such as passwords and accounts will be encrypted when enabled',
+    e2eHint: 'When enabled, username and password fields are encrypted; titles, URLs, notes and other content still sync as plain text',
     e2eHintLocalOnly: ' (stored locally; available across devices after signing in)',
     enableEncryption: 'Enable encryption',
     biometricUnlock: 'Fingerprint unlock',
@@ -546,7 +546,7 @@ export const en = {
     deleteAccount: 'Delete account',
     deleteAccountDoing: 'Deleting…',
     deleteAccountConfirm:
-      'Deleting your account will immediately erase all cloud data (bookmarks, notes, images, orders and usage records). This cannot be undone. Continue?',
+      'Deleting your account will immediately erase all cloud data (bookmarks, notes, images, usage records). This cannot be undone. Order records are de-identified and kept for 3 years as required by law, then deleted. Continue?',
     deleteAccountDone: 'Cloud data deleted. The account record will be removed by us after verification.',
     deleteAccountFailed: 'Deletion failed. Please try again later, or email herr@ulink.ren if it persists.',
     membership: 'Membership',

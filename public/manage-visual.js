@@ -368,8 +368,8 @@
     ctx.fillStyle = '#0d7a6f'; ctx.textAlign = 'center';
     ctx.fillText(t1Text, -pw / 2 + 16 + t1W / 2, tagsY + 12);
 
-    // 标签 2：「端到端加密」/「E2E Encrypted」
-    var t2Text = isEn ? 'E2E Encrypted' : '端到端加密';
+    // 标签 2：「账号加密」/「Encrypted logins」（合规口径：仅账号字段端到端加密，不用无限定措辞）
+    var t2Text = isEn ? 'Encrypted logins' : '账号加密';
     var t2X = -pw / 2 + 16 + t1W + 6;
     var t2W = ctx.measureText(t2Text).width + 16;
     ctx.fillStyle = 'rgba(30, 64, 175, 0.08)';

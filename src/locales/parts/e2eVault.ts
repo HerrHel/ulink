@@ -3,7 +3,7 @@ export const e2eVaultZh = {
   e2e: {
     // ── E2ESetupModal ──
     setupTitle: '开启端到端加密',
-    intro1: '端到端加密确保你的密码和敏感数据在上传到云端前已在本地加密。',
+    intro1: '开启后，书签的账号与密码字段会在上传到云端前于本地加密；标题、网址、笔记等其余内容仍以明文同步。',
     intro2: '服务器永远无法读取你的加密内容。',
     legacyDetected: '检测到已有加密数据',
     legacyBody: '当前数据中包含由<strong>其他设备的主密码</strong>加密的内容。在此重新设置主密码会生成全新密钥，这些历史数据将<strong>永久无法解密</strong>。',
@@ -20,7 +20,7 @@ export const e2eVaultZh = {
     iSavedRecoveryKey: '我已保存恢复密钥',
     recoveryKeyLabel: '恢复密钥',
     enabledTitle: '端到端加密已开启',
-    enabledIntro1: '你的密码和敏感数据现在已加密存储。',
+    enabledIntro1: '你的账号与密码字段现在已加密存储。',
     enabledIntro2: '每次使用需要输入主密码解锁。',
     bioHint: '启用指纹快速解锁，免去每次输入主密码',
     enrolling: '录入中…',

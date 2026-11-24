@@ -92,7 +92,33 @@ async function probePage(url) {
     referrer: res.headers.get('referrer-policy'),
     referrerMeta: /<meta[^>]+name=["']?referrer["']?/i.test(html),
     hsts: res.headers.get('strict-transport-security'),
+    cspValue: csp,
+    robotsTag: res.headers.get('x-robots-tag') || '',
+    shareRender: res.headers.get('x-share-render') || '',
   }
+}
+
+// 分享页 /s/* 探针：用一个必然不存在的 slug，share-ssr 会回 404 + 完整安全头（404 不是失败）。
+// 分享页的安全头**只由 share-ssr 自己下发**、页面无 <meta> CSP 兜底，是唯一一道 XSS 防线；
+// 2026-11-23 曾因网关 Headers 动作选成「覆盖」把整条 CSP 换掉。故这里校验的是 share-ssr
+// 严格 CSP 的特征指令，而不只是「有 CSP 头」——被网关换成别的 CSP 也要报红。
+const SHARE_PROBE_PATH = '/s/__check_prod_probe__'
+const SHARE_CSP_MARKERS = ["frame-ancestors 'none'", "object-src 'none'", "script-src-attr 'none'", "base-uri 'none'"]
+
+/** 返回分享页缺失项（纯函数）；probe 为 null（探测失败）按 fail-closed 记缺失 */
+function shareMissing(probe) {
+  if (!probe) return ['探测失败(/s/*)']
+  const missing = []
+  // x-share-render 缺失说明请求没打到 share-ssr（路由被改成静态托管 404 等），其余头也就不可信
+  if (probe.shareRender !== 'v2') missing.push('share-ssr 路由(/s/*)')
+  const csp = probe.cspValue || ''
+  const lost = SHARE_CSP_MARKERS.filter((m) => !csp.includes(m))
+  if (!csp) missing.push('CSP(/s/*)')
+  else if (lost.length) missing.push(`CSP 被替换(/s/*，缺 ${lost.join(' / ')})`)
+  if (!probe.xfo) missing.push('X-Frame-Options(/s/*)')
+  if (!probe.xcto) missing.push('X-Content-Type-Options(/s/*)')
+  if (!/noindex/i.test(probe.robotsTag || '')) missing.push('X-Robots-Tag noindex(/s/*)')
+  return missing
 }
 
 // 探测失败哨兵：网络/解析异常时用它代替 null，main 见到它返回 3；
@@ -139,7 +165,14 @@ async function checkSecurity(base) {
     extraPages.push({ ...p, probe: await probeOne(p.path) })
   }
   if (probeError) return { ...SEC_PROBE_FAILED, error: `入口页探测失败：${probeError}` }
-  return { root, app, legal, extraPages }
+  // 分享页单独探测：失败不归为「无法判定」(3)，而是按缺失计入 (4)——它是唯一防线，宁可误报
+  let share = null
+  try {
+    share = await probePage(`${base}${SHARE_PROBE_PATH}?t=${Date.now()}`)
+  } catch {
+    share = null
+  }
+  return { root, app, legal, extraPages, share }
 }
 
 function printSecurity(sec) {
@@ -148,7 +181,7 @@ function printSecurity(sec) {
     console.log(`\n安全防护：⚠ 探测失败${sec && sec.error ? `（${sec.error}）` : '（网络错误）'}`)
     return SEC_PROBE_FAILED
   }
-  const { root, app, legal, extraPages = [] } = sec
+  const { root, app, legal, extraPages = [], share = null } = sec
   const fmt = (v) => (v ? '✓' : '✗')
   console.log('\n安全防护：')
   console.log(`  首页 /        CSP  ${root.cspMeta ? '<meta>' : fmt(root.cspHeader)}   Referrer ${fmt(root.referrer || root.referrerMeta)}`)
@@ -172,6 +205,9 @@ function printSecurity(sec) {
     console.log(`  ${p.label}  CSP  ${fmt(hasCsp)}`)
     if (!hasCsp) missing.push(`CSP(${p.key})`)
   }
+  const shareLost = shareMissing(share)
+  console.log(`  分享 /s/*     ${shareLost.length ? '✗ ' + shareLost.join('、') : 'CSP(严格) ✓  XFO ✓  XCTO ✓  noindex ✓'}`)
+  missing.push(...shareLost)
   return missing
 }
 

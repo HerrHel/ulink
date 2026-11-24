@@ -27,7 +27,7 @@ export const zh = {
     brand: '与链',
     brandEn: 'ulink',
     fullName: '与链 · ulink',
-    description: '与链（ulink）是支持云同步与端到端加密的个人书签管理器，支持私有链接定向分享书签笔记供他人查看与收藏。',
+    description: '与链（ulink）是支持云同步的个人书签管理器，仅账号字段端到端加密，支持私有链接定向分享书签笔记供他人查看与收藏。',
   },
   common: {
     appName: '与链',
@@ -478,7 +478,7 @@ export const zh = {
     e2eUnlocked: '已解锁',
     e2eLocked: '已锁定',
     e2eDisabled: '未开启',
-    e2eHint: '开启后密码、账户等敏感数据将加密存储',
+    e2eHint: '开启后账号与密码字段将加密存储，标题、网址、笔记等其余内容仍以明文同步',
     e2eHintLocalOnly: '（本机存储，登录云端后可跨设备）',
     enableEncryption: '开启加密',
     biometricUnlock: '指纹解锁',
@@ -536,7 +536,7 @@ export const zh = {
     deleteAccount: '注销账号',
     deleteAccountDoing: '正在注销…',
     deleteAccountConfirm:
-      '注销将立即删除云端的全部数据（书签、笔记、图片、订单与用量记录），且无法恢复。确定要注销吗？',
+      '注销将立即删除云端的全部数据（书签、笔记、图片、用量记录），且无法恢复；订单记录依法去标识化保留 3 年后删除。确定要注销吗？',
     deleteAccountDone: '云端数据已删除。账号记录将在核验后由我们手动移除。',
     deleteAccountFailed: '注销失败，请稍后重试；若持续失败请联系 herr@ulink.ren',
     membership: '会员与权益',

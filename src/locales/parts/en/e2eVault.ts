@@ -6,7 +6,7 @@ export const e2eVaultEn = {
   e2e: {
     // ── E2ESetupModal ──
     setupTitle: 'Enable end-to-end encryption',
-    intro1: 'End-to-end encryption ensures your passwords and sensitive data are encrypted locally before they are uploaded to the cloud.',
+    intro1: 'Once enabled, bookmark username and password fields are encrypted locally before upload; titles, URLs, notes and other content still sync as plain text.',
     intro2: 'The server can never read your encrypted data.',
     legacyDetected: 'Existing encrypted data detected',
     legacyBody: 'Your current data includes content encrypted with <strong>another device\'s master password</strong>. Setting a new master password here will create a brand-new key, and that historical data will be <strong>permanently unrecoverable</strong>.',
@@ -23,7 +23,7 @@ export const e2eVaultEn = {
     recoveryKeyLabel: 'Recovery key',
     iSavedRecoveryKey: 'I have saved the recovery key',
     enabledTitle: 'End-to-end encryption enabled',
-    enabledIntro1: 'Your passwords and sensitive data are now stored encrypted.',
+    enabledIntro1: 'Your username and password fields are now stored encrypted.',
     enabledIntro2: 'You will need to enter your master password to unlock each time.',
     bioHint: 'Enable fingerprint unlock to skip entering the master password every time',
     enrolling: 'Enrolling…',
