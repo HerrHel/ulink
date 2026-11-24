@@ -15,8 +15,8 @@
 .group-tiptap span[style*="font-size"],.group-body span[style*="font-size"]{line-height:inherit}
 
 /* ---- 标题 ---- */
-.group-tiptap h1,.group-body h1{font-size:var(--fs-2xl);font-weight:600;margin:0.5em 0;border-left:3px solid var(--accent);padding-left:10px}
-.group-tiptap h2,.group-body h2{font-size:var(--fs-lg);font-weight:600;margin:0.4em 0}
+.group-tiptap h1,.group-body h1{font-family:var(--font-display);font-size:var(--fs-2xl);font-weight:700;margin:0.5em 0;border-left:3px solid var(--accent);padding-left:10px}
+.group-tiptap h2,.group-body h2{font-family:var(--font-display);font-size:var(--fs-lg);font-weight:700;margin:0.4em 0}
 .group-tiptap h3,.group-body h3{font-size:1rem;font-weight:600;margin:0.3em 0}
 
 /* ---- 列表 ---- */
@@ -24,6 +24,13 @@
 .group-tiptap ol,.group-body ol{list-style:decimal}
 .group-tiptap ul,.group-body ul{list-style:disc}
 .group-tiptap li,.group-body li{margin:0.15em 0}
+/* 行内代码 / 快捷键：键帽样式，与宣传页 kbd 同一语汇（细边 + 下沿加厚），颜色走 token 随主题切换 */
+.group-tiptap code,.group-body code{
+  font-family:var(--font-mono);font-size:0.82em;
+  padding:1px 6px;border:1px solid var(--border);border-bottom-width:2px;border-radius:var(--radius-xs);
+  background:var(--surface);color:var(--text);
+  white-space:nowrap;
+}
 
 /* ---- 内联卡片（书签/组引用）---- */
 .group-tiptap .group-inline-card .gic-remove{display:none}

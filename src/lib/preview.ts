@@ -13,6 +13,9 @@ import type { Bookmark, SiblingGroup } from '../types.js'
 /** 纯文本摘要字符上限（超出省略号） */
 const PREVIEW_MAX = 160
 
+/** 摘要中需要在其后断开的块级元素 */
+const BLOCK_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, div, blockquote, pre, tr, td, th, br'
+
 /** 复用的临时 DOM 元素，避免 htmlToText 每次创建 div */
 let _htmlToTextEl: HTMLDivElement | null = null
 
@@ -27,6 +30,9 @@ function htmlToText(html: string): string {
   if (!_htmlToTextEl) _htmlToTextEl = document.createElement('div')
   _htmlToTextEl.innerHTML = sanitizeHTML(html)
   _htmlToTextEl.querySelectorAll('.gic-btn, .gic-remove, .gic-domain, .gic-count, .gic-edit-btn').forEach(el => el.remove())
+  // 块级元素与换行后补一个空格：textContent 不保留块边界，否则 <h1>欢迎使用 与链</h1><p>与链…</p>
+  // 会拼成「欢迎使用 与链与链…」。多余空白由下方 \s+ 折叠。
+  _htmlToTextEl.querySelectorAll(BLOCK_SELECTOR).forEach(el => el.after(' '))
   return (_htmlToTextEl.textContent || '').replace(/\s+/g, ' ').trim()
 }
 

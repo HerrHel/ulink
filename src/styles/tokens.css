@@ -64,7 +64,8 @@
   --fs-2xl:1.45rem;
   --fs-3xl:2.1rem;
   --font-sans:'Satoshi',-apple-system,BlinkMacSystemFont,'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
-  --font-display:'Clash Display','Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  /* 标题字体：思源宋体，与宣传页 /about 的 --serif 同源（自托管切片见 public/fonts/gf.css，仅 600/700 字重；标题统一用 700，600 偏细） */
+  --font-display:'Noto Serif SC','Source Han Serif SC','Songti SC','STSong',serif;
   --font-mono:'JetBrains Mono','SF Mono','Cascadia Code','Consolas',monospace;
   --danger:#dc2626;
   --accent-dark:#0e2270;

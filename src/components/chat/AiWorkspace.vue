@@ -1096,7 +1096,7 @@ watch(aiQuery, () => {
 
 .ai-hero-headline {
   font-size:var(--fs-3xl);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--text);
   margin: 0;

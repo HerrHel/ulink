@@ -12,7 +12,7 @@
 }
 .panel-breadcrumb{
   font-family:var(--font-display);
-  font-size:var(--fs-lg);font-weight:600;
+  font-size:var(--fs-lg);font-weight:700;
   letter-spacing:-0.01em;
   display:flex;align-items:center;gap:8px;
   white-space:nowrap;
@@ -50,7 +50,7 @@
 /* Focus mode title input (used by AppHeader.vue) */
 .focus-title-input{
   font-family:var(--font-display);
-  font-size:var(--fs-lg);font-weight:600;
+  font-size:var(--fs-lg);font-weight:700;
   background:transparent;
   border:none;border-bottom:1.5px dashed var(--border);
   outline:none;color:var(--text);
@@ -250,18 +250,21 @@ html:not([data-theme="dark"]) .share-theme-btn svg{
 .search-box{
   position:relative;width:100%;
 }
-.search-box svg{
-  position:absolute;left:10px;top:50%;transform:translateY(-50%);
+.search-box>svg{
+  position:absolute;left:12px;top:50%;transform:translateY(-50%);
   width:16px;height:16px;color:var(--text-muted);pointer-events:none;
 }
+/* 图标包在 span 里时只由 span 定位；旧写法 .search-box svg 会让内层 svg 再偏移 10px，压到占位文字上 */
 .search-box>span{
-  position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  position:absolute;left:12px;top:50%;transform:translateY(-50%);
   width:16px;height:16px;color:var(--text-muted);pointer-events:none;
 }
+.search-box>span svg{display:block;width:16px;height:16px}
 .search-input{
   width:100%;height:36px;
-  padding:0 14px 0 34px;
-  background:var(--bg-alt);
+  padding:0 14px 0 36px;
+  /* 浅底细边：不与页面内容抢焦点，聚焦时再抬起 */
+  background:var(--surface);
   border:1px solid var(--border);
   border-radius:var(--radius-md);
   font-size:var(--fs-sm);color:var(--text);
@@ -269,6 +272,7 @@ html:not([data-theme="dark"]) .share-theme-btn svg{
   transition:border-color 0.2s var(--ease-out),box-shadow 0.2s var(--ease-out),background-color 0.2s var(--ease-out);
 }
 .search-input::placeholder{color:var(--text-muted);transition:color 0.2s ease}
+.search-input:hover:not(:focus){border-color:var(--border-hover)}
 .search-input:focus{
   border-color:var(--accent);
   box-shadow:0 0 0 3px var(--accent-glow),var(--shadow-sm);

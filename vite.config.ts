@@ -1547,7 +1547,7 @@ export default defineConfig({
         // 首刷命中旧版（autoUpdate 需等 SW 换代才切新）。改为导航请求 NetworkFirst
         // （网络优先，离线回退 pages-cache），部署后刷新即拿新 HTML —— 一次刷新即新。
         globPatterns: ['**/*.{js,css,svg,woff2}'],
-        // 自托管 Google Fonts 切片（public/fonts/gf/，107 个 / ~4.4MB）不进预缓存：
+        // 自托管 Google Fonts 切片（public/fonts/gf/，208 个 / ~10MB，含思源黑体与思源宋体）不进预缓存：
         // 否则每个用户安装 SW 都被强制下载全部切片。改由下方运行时 CacheFirst 按需缓存。
         // 宣传页素材（public/landing/：截图 + 标题宋体子集）只给 /about 用，应用的 SW 不必预下载
         globIgnores: ['fonts/gf/**', 'landing/**'],

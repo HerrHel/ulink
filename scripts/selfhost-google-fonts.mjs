@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * selfhost-google-fonts.mjs — 把 Google Fonts（Noto Sans SC + JetBrains Mono）镜像到 public/fonts/gf/
+ * selfhost-google-fonts.mjs — 把 Google Fonts（Noto Sans SC + Noto Serif SC + JetBrains Mono）镜像到 public/fonts/gf/
  *
  * 为什么：index.html / app.html 原先同步引入 fonts.googleapis.com 样式表（阻塞渲染）。
  * 国内访问 Google 时快时慢，实测样式表 6.8s、首屏骨架 5.5~30s 才完成；自托管后走 CloudBase
@@ -21,7 +21,7 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 const CSS_URL =
-  'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&display=swap'
 // 用现代 Chrome UA 请求，Google 才会返回 woff2 + unicode-range 切片版本
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'

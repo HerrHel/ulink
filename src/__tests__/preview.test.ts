@@ -33,6 +33,13 @@ describe('preview', () => {
     }))).toBe('hello world')
   })
 
+  it('bookmarkPreview 块级元素之间以空格断开，不把相邻段落粘连', () => {
+    expect(bookmarkPreview(bm({
+      id: 'b1',
+      notes: '<h1>欢迎使用 与链</h1><p>与链不仅是书签</p><ul><li>一</li><li>二</li></ul>第三行<br>第四行',
+    }))).toBe('欢迎使用 与链 与链不仅是书签 一 二 第三行 第四行')
+  })
+
   it('bookmarkPreview 空 notes 返回空串', () => {
     expect(bookmarkPreview(bm({ id: 'b1', notes: '' }))).toBe('')
   })
