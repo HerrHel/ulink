@@ -322,13 +322,23 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
         var r = el.getBoundingClientRect();
         return { x: axis, y: r.top - mr.top + r.height / 2 };
       });
-      // 两股在最后一个锚点（结尾号召）交汇收束，不再往下延伸：
-      // 延伸出去的那一段只剩单股收不拢，像根垂下来的绳头
+      // 收尾：两股在最后一个锚点（结尾号召）照常交叉，再一起往下垂 TAIL px、各自偏向一侧，
+      // 末端由渐变遮罩淡出——像打完结后垂下的两根线头
+      var TAIL = 160;
+      var lastPt = pts[pts.length - 1];
+      var n = pts.length;
       function strand(sign) {
         var d = 'M ' + pts[0].x + ' ' + pts[0].y;
-        for (var i = 0; i < pts.length - 1; i++) {
-          var a = pts[i], b = pts[i + 1], dy = b.y - a.y;
+        for (var i = 0; i < n; i++) {
+          var a = pts[i];
           var s = sign * (i % 2 === 0 ? 1 : -1);
+          if (i === n - 1) {
+            // 垂下的线头：交叉后偏向本段鼓起的一侧，两根线头不再汇合
+            d += ' C ' + (a.x + s * 12) + ' ' + (a.y + TAIL * 0.3) + ', ' +
+                 (a.x + s * 18) + ' ' + (a.y + TAIL * 0.7) + ', ' + (a.x + s * 16) + ' ' + (a.y + TAIL);
+            break;
+          }
+          var b = pts[i + 1], dy = b.y - a.y;
           // 两股在每个锚点交叉；鼓起最多 32px，始终留在页边距里，不压正文
           var bow = Math.min(32, Math.max(12, dy * 0.04));
           d += ' C ' + (a.x + s * bow) + ' ' + (a.y + dy * 0.25) + ', ' +
@@ -336,6 +346,44 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
         }
         return d;
       }
+      // 线头淡出遮罩（只建一次，按最新坐标更新渐变范围）
+      var NS = 'http://www.w3.org/2000/svg';
+      var grad = svg.querySelector('#knot-fade');
+      if (!grad) {
+        var defs = document.createElementNS(NS, 'defs');
+        grad = document.createElementNS(NS, 'linearGradient');
+        grad.setAttribute('id', 'knot-fade');
+        grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+        grad.setAttribute('x1', '0');
+        grad.setAttribute('x2', '0');
+        [['0', '1'], ['1', '0']].forEach(function (st) {
+          var stop = document.createElementNS(NS, 'stop');
+          stop.setAttribute('offset', st[0]);
+          stop.setAttribute('stop-color', '#fff');
+          stop.setAttribute('stop-opacity', st[1]);
+          grad.appendChild(stop);
+        });
+        var mask = document.createElementNS(NS, 'mask');
+        mask.setAttribute('id', 'knot-mask');
+        mask.setAttribute('maskUnits', 'userSpaceOnUse');
+        var rect = document.createElementNS(NS, 'rect');
+        rect.setAttribute('fill', 'url(#knot-fade)');
+        mask.appendChild(rect);
+        defs.appendChild(grad);
+        defs.appendChild(mask);
+        svg.insertBefore(defs, svg.firstChild);
+        pb.setAttribute('mask', 'url(#knot-mask)');
+        pg.setAttribute('mask', 'url(#knot-mask)');
+      }
+      // 结点往下 30px 开始淡，到线头末端完全透明
+      grad.setAttribute('y1', String(lastPt.y + 30));
+      grad.setAttribute('y2', String(lastPt.y + TAIL));
+      var mrect = svg.querySelector('#knot-mask rect');
+      var box = { w: main.scrollWidth, h: main.scrollHeight };
+      mrect.setAttribute('x', '-100');
+      mrect.setAttribute('y', '-100');
+      mrect.setAttribute('width', String(box.w + 200));
+      mrect.setAttribute('height', String(box.h + 400));
       pb.setAttribute('d', strand(1));
       pg.setAttribute('d', strand(-1));
       lenB = pb.getTotalLength();
@@ -353,7 +401,8 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
         svg.appendChild(c);
         return { el: c, y: pt.y };
       });
-      span = [pts[0].y, pts[pts.length - 1].y];
+      // 进度终点算到线头末端：画满时两根线头一起垂下
+      span = [pts[0].y, lastPt.y + TAIL];
       draw();
     }
 
@@ -366,9 +415,10 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
       // 滚到页底时笔尖可能够不到最后一个锚点（它离页底太近），此时直接画满
       var doc = document.documentElement;
       if (window.scrollY + window.innerHeight >= doc.scrollHeight - 4) p = 1;
-      // 两股同步描出：原先绿线故意慢 2%，到底时会差一截收不拢
+      // 绿线比蓝线慢一拍，滚动时有一前一后的层次；画满（p=1，含滚到页底）时两股一起到头
+      var pG = p >= 1 ? 1 : Math.max(0, p - 0.02);
       pb.style.strokeDashoffset = String(lenB * (1 - p));
-      pg.style.strokeDashoffset = String(lenG * (1 - p));
+      pg.style.strokeDashoffset = String(lenG * (1 - pG));
       var reach = span[0] + p * (span[1] - span[0]);
       nodes.forEach(function (n) { n.el.classList.toggle('on', reach >= n.y - 2); });
     }
