@@ -142,7 +142,7 @@
     <div class="card-foot">
       <span class="card-stat">{{ tN('count.bookmarks', group.bookmarkIds?.length ?? (group as any).bookmark_ids?.length ?? 0) }}</span>
       <span class="card-actions" v-if="!isShareReadonly">
-        <button v-if="detailMode" class="btn-xs" @click.stop="addToGrp" :title="t('filter.addBookmarkOrGroup')" :aria-label="t('filter.addBookmarkOrGroup')" v-html="I.plus"></button>
+        <button class="btn-xs" @click.stop="addToGrp" :title="t('filter.addBookmarkOrGroup')" :aria-label="t('filter.addBookmarkOrGroup')" v-html="I.plus"></button>
         <button class="btn-xs" @click.stop="editGrp" :title="t('cards.editGroup')" :aria-label="t('cards.editGroup')" v-html="I.edit"></button>
         <button v-if="detailMode" class="btn-xs btn-danger" @click.stop="delGrp" :title="t('cards.deleteGroup')" :aria-label="t('cards.deleteGroup')" v-html="I.trash"></button>
       </span>

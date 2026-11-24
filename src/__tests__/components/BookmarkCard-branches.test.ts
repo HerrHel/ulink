@@ -589,13 +589,16 @@ describe('BookmarkCard — 转发函数契约', () => {
     expect(mocks.addSub).toHaveBeenCalledWith('child1')
   })
 
-  it('普通模式下（detailMode 为 false），悬停只保留编辑按钮，加号与删除走右键菜单', () => {
+  it('普通模式下（detailMode 为 false），子书签悬停只有编辑，顶层书签有加号+编辑，删除都走右键菜单', () => {
     const parent = makeBm({ id: 'parent_top', parentId: null })
     const child = makeBm({ id: 'child1', parentId: 'parent_top' })
     ds.bookmarks = [parent, child]
     ;(ds as any)._syncMaps()
-    const w = mount(BookmarkCard, { props: { bookmark: child } })
-    expect(w.findAll('.card-actions .btn-xs')).toHaveLength(1)
+    const wc = mount(BookmarkCard, { props: { bookmark: child } })
+    expect(wc.findAll('.card-actions .btn-xs')).toHaveLength(1)
+    const wp = mount(BookmarkCard, { props: { bookmark: parent } })
+    expect(wp.findAll('.card-actions .btn-xs')).toHaveLength(2)
+    expect(wp.find('.card-actions .btn-danger').exists()).toBe(false)
   })
 
   it('doOpenDetail(bmId) → openQuickLook(bmId)', async () => {
