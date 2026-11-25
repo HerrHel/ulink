@@ -49,6 +49,10 @@ export const shareAppZh = {
     saved: '已收藏',
     edit: '编辑',
     untitled: '未命名页面',
+    siteSaved: '你在 {host} 存过 {n} 条',
+    siteSavedMore: '你在 {host} 还存过 {n} 条',
+    siteShowAll: '展开其余 {n} 条',
+    siteCollapse: '收起',
   },
 } as const
 

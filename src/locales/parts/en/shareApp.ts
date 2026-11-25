@@ -58,5 +58,13 @@ export const shareAppEn = {
     saved: 'Saved',
     edit: 'Edit',
     untitled: 'Untitled page',
+    siteSaved: 'You saved {n} pages on {host}',
+    siteSaved_one: 'You saved {n} page on {host}',
+    siteSaved_other: 'You saved {n} pages on {host}',
+    siteSavedMore: 'You saved {n} more pages on {host}',
+    siteSavedMore_one: 'You saved {n} more page on {host}',
+    siteSavedMore_other: 'You saved {n} more pages on {host}',
+    siteShowAll: 'Show {n} more',
+    siteCollapse: 'Show less',
   },
 } as const
