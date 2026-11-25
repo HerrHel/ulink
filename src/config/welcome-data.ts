@@ -20,6 +20,16 @@ const _inlineCard = (
 ): string =>
   '<span class="group-inline-card" contenteditable="false" data-bm-id="' + bmId + '" draggable="true"><img src="' + FAVICON_PROVIDER_URL + domain + '" alt=""><span class="gic-name">' + name + '</span><span class="gic-domain">' + domain + '</span><span class="gic-btn">' + detailLabel + '</span></span>'
 
+/**
+ * 「宣传页」内联卡片：引用 ensureOfficialSiteBookmark 启动时写入的子书签 bm_ulink_landing（→ /about）。
+ * 不 import stores 常量（本文件需保持零依赖、可单独分包）；id 与 OFFICIAL_SITE_LANDING_ID 一致，由单测钉住。
+ * 编辑器按 id 从 store 取标题/图标渲染；用户删掉该书签后卡片按已删除灰显，不会报错。
+ * 不写进 sg_welcome.bookmarkIds：种子阶段该书签尚未创建，首次编辑笔记时 syncGroupBookmarks 会自动补上。
+ */
+export const LANDING_CARD_BM_ID = 'bm_ulink_landing'
+const _landingCard = (name: string, detailLabel: string): string =>
+  '<span class="group-inline-card" contenteditable="false" data-bm-id="' + LANDING_CARD_BM_ID + '" draggable="true"><img src="/logo.svg" alt=""><span class="gic-name">' + name + '</span><span class="gic-domain">ulink.ren</span><span class="gic-btn">' + detailLabel + '</span></span>'
+
 /** zh-CN 上手指南（精简至 5 条核心玩法，与当前版本完全对齐） */
 const WELCOME_ZH =
   '<h1>欢迎使用 与链</h1>'
@@ -36,6 +46,7 @@ const WELCOME_ZH =
   + '<p>正文内嵌的书签卡片可拖拽排版，点击名称可直接跳转访问：</p>'
   + _inlineCard('b1', 'github.com', 'GitHub', '详') + ' '
   + _inlineCard('b6', 'www.ilovepdf.com', 'I Love PDF', '详')
+  + '<p>想全面了解与链能做什么，看看宣传页：' + _landingCard('宣传页', '详') + '</p>'
   + '<p><br><span style="color: #6B7280; font-size: 0.9em">提示：本笔记为上手引导，可随时编辑或删除。</span></p>'
 
 /** en-US 上手指南（5 条核心玩法，结构与中文版对齐） */
@@ -54,6 +65,7 @@ const WELCOME_EN =
   + '<p>Bookmarks embedded in notes can be dragged to reorder or clicked to visit:</p>'
   + _inlineCard('b1', 'github.com', 'GitHub', 'i') + ' '
   + _inlineCard('b6', 'www.ilovepdf.com', 'I Love PDF', 'i')
+  + '<p>Want the full tour? See the landing page: ' + _landingCard('Landing', 'i') + '</p>'
   + '<p><br><span style="color: #6B7280; font-size: 0.9em">Tip: This note is an onboarding guide. Feel free to edit or delete it anytime.</span></p>'
 
 /** 向后兼容：保留 WELCOME_NOTES / TIPS_NOTES 常量导出（zh 版本），旧使用指南现统一指向精简版。 */

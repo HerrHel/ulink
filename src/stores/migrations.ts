@@ -48,6 +48,7 @@ export function _readSchemaVersion(d: Partial<AppData>): number {
 const OLD_GUIDE_HASHES = new Set([
   '1u99euv', 'yuciku', 'sn7ewv', '1t615x5', '1s7142a', '86sex1', '1z0s2ct', '1jyv2lv',
   '1z02pcm', 'rao7u5', '98hhn3', 'hwl9v1', 'rsjtsq', '19y4yqb', '1lv4jb0',
+  '15gp490', 'ad637m', // 2026-11-25 加「看看宣传页」卡片前的中 / 英版
 ])
 function guideTextHash(html: string): string {
   const s = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
