@@ -80,6 +80,8 @@ export const en = {
     bookmarksCount: 'bookmarks',
     focusGroup: 'Focus note',
     importBookmarks: 'Import bookmarks',
+    /** 上手指南卡片头部的导入按钮：与标题同排，手机上长文案会把「Getting Started」挤成省略号 */
+    guideImport: 'Import',
     editGroup: 'Edit note',
     deleteGroup: 'Delete note',
     expand: 'Expand',

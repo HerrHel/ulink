@@ -53,6 +53,8 @@
        运行时由书签列表末尾居中的 SiteBeian 组件接替展示。号与 src/config/site.ts 保持一致；
        公安联网备案号下发后同样在此静态补上。 -->
   <footer style="position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#8a8580">
+    <!-- 静态「关于」链接：首页正文是 SPA，爬虫/无 JS 访客只能从这里发现宣传页 /about；挂载后同样被替换，用户看不到 -->
+    <a href="/about" style="color:inherit">关于与链</a> ·
     <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="color:inherit">鄂ICP备2026061718号-1</a>
   </footer>
 </div>

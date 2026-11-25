@@ -772,7 +772,8 @@ function buildAppShell(
   const year = new Date().getUTCFullYear()
   const isZh = dict.lang === 'zh-CN'
   const slogan = isZh ? '个人书签与知识库 · 随时随地整理分享' : 'Personal bookmarks & knowledge vault'
-  const ctaFoot = isZh ? '免费体验与链 ulink →' : 'Try ulink for free →'
+  // 页脚给「还没决定用不用」的访客：指向宣传页 /about；顶栏「保存至我的库」是动作，仍直达应用
+  const ctaFoot = isZh ? '了解与链 ulink →' : 'Learn about ulink →'
   const reportHref = `mailto:herr@ulink.ren?subject=${encodeURIComponent(dict.reportSubject)}&amp;body=${encodeURIComponent(dict.reportBody)}`
   return [
     `<div class="share-app">`,
@@ -803,7 +804,7 @@ function buildAppShell(
     `<span class="footer-name">${esc(dict.footerBrand)}</span>`,
     `</div>`,
     `<p class="share-footer-slogan">${slogan}</p>`,
-    `<a class="share-footer-cta" href="${esc(appOrigin)}/">${ctaFoot}</a>`,
+    `<a class="share-footer-cta" href="${esc(appOrigin)}/about">${ctaFoot}</a>`,
     `<span class="share-footer-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
     `<a class="share-footer-report" href="${reportHref}">${esc(dict.reportLink)}</a>`,
     `</div>`,

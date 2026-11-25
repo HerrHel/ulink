@@ -407,6 +407,7 @@ import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { t, isZh } from '../../i18n/index.js'
+import { classifyReply } from '../../lib/ai/suggestedReplies.js'
 import ChatStream from './ChatStream.vue'
 import ChatConvHeader from './ChatConvHeader.vue'
 import ChatTurnRail from './ChatTurnRail.vue'
@@ -974,22 +975,16 @@ function onWorkspaceDrop(e: DragEvent) {
 
 function handleApplySuggestedReply(reply: string, turn: ChatTurn) {
   turn.suggestedReplies = []
-  const isConfirmAction =
-    reply.includes('执行') ||
-    reply.includes('确认') ||
-    reply.includes('合并') ||
-    reply.includes('应用') ||
-    reply.includes('方案A') ||
-    reply.includes('方案 A')
-  if (isConfirmAction && turn.actionCard && !turn.actionCard.completed) {
+  const intent = classifyReply(reply)
+  if (intent === 'confirm' && turn.actionCard && !turn.actionCard.completed) {
     handleActionCardClick(turn.actionCard, turn)
     return
   }
-  if (reply.includes('全部一键加入收藏') || reply.includes('加入收藏')) {
+  if (intent === 'saveAll') {
     addAllInTurn(turn)
     return
   }
-  if (reply.includes('存为卡片笔记') && turn.content) {
+  if (intent === 'saveAsNote' && turn.content) {
     handleSaveAsNewNote(turn.content)
     return
   }

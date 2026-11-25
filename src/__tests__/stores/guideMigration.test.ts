@@ -7,7 +7,9 @@ import { OFFICIAL_SITE_LANDING_ID } from '../../stores/dataActionsBookmarks.js'
 // 上一版 = 当前版去掉「看看宣传页」那一段（2026-11-25 新增）
 const dropLanding = (html: string) => html.replace(/<p>[^<]*<span class="group-inline-card"[^>]*data-bm-id="bm_ulink_landing"[\s\S]*?<\/span><\/span><\/p>/, '')
 const prevZh = () => dropLanding(getWelcomeNotes('zh-CN'))
-const prevEn = () => dropLanding(getWelcomeNotes('en-US'))
+// 英文版另有一步：导入按钮改名「Import」（2026-11-25，带宣传页卡片那版之后）
+const enBeforeImportRename = () => getWelcomeNotes('en-US').replace('click "Import" on this card', 'click "Import Bookmarks" on this card')
+const prevEn = () => dropLanding(enBeforeImportRename())
 // 再上一版（eb264055）与上一版的差异只在这几处措辞，倒推即可复原
 const prev2Zh = () => prevZh()
   .replace('「设置 → 数据与维护」', '「设置 → 数据管理」')
@@ -22,6 +24,7 @@ describe('isUneditedOldGuide', () => {
     expect(isUneditedOldGuide(prevEn())).toBe(true)
     expect(isUneditedOldGuide(prev2Zh())).toBe(true)
     expect(isUneditedOldGuide(prev2En())).toBe(true)
+    expect(isUneditedOldGuide(enBeforeImportRename())).toBe(true)
   })
 
   it('当前版本带「宣传页」内联卡片，引用的 id 与官网书签常量一致', () => {

@@ -8,6 +8,17 @@ export const aiZh = {
     analyzing: '分析中…',
     extracting: '提炼中…',
     videoSummaryLabel: '内容速览',
+    /** 对话预判快捷回复胶囊（src/lib/ai/suggestedReplies.ts） */
+    reply: {
+      saveAll: '全部一键加入收藏',
+      narrow: '🇨🇳 只要国内免翻直连的',
+      more: '还有其他同类吗？',
+      doIt: '好的，执行',
+      another: '换个方案',
+      adjust: '我想调整一下',
+      saveAsNote: '存为卡片笔记',
+      findSimilar: '帮我找类似工具',
+    },
     videoAnswerLabel: '回答',
     groupCreatedSuccess: '已打包创建笔记「{name}」',
     foundCount: '为你甄选到 {n} 个匹配站点',

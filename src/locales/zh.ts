@@ -83,6 +83,7 @@ export const zh = {
     bookmarksCount: '个书签',
     focusGroup: '聚焦笔记',
     importBookmarks: '导入书签',
+    guideImport: '导入书签',
     editGroup: '编辑笔记',
     deleteGroup: '删除笔记',
     expand: '展开',

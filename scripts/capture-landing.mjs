@@ -181,8 +181,7 @@ async function captureLocale(browser, locale) {
     await page.waitForTimeout(600)
     const clip = await page.locator('.detail-panel').evaluate((el) => {
       const r = el.getBoundingClientRect()
-      // 截到「AI 生成」免责提示为止：下面的行动建议卡与快捷回复在英文界面里仍有未翻译的中文
-      // （应用侧 i18n 缺口），宣传页两种语言统一不带这一段
+      // 截到「AI 生成」免责提示为止：下面的行动建议卡与快捷回复不进宣传页画面（构图更干净）
       const action = el.querySelector('.chat-action-card')
       const items = el.querySelectorAll('.chat-turn-item')
       const end = action ? action.getBoundingClientRect().top - 4

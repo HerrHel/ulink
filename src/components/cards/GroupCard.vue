@@ -121,7 +121,7 @@
         <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
       <!-- 上手指南：新手的导入入口（原欢迎弹窗的「从其他工具导入」移到这里） -->
-      <button v-if="isGuide && !ui.batchMode && !isShareReadonly" type="button" class="guide-import-btn" data-testid="lv-guide-import" @click.stop="openImport">{{ t('cards.importBookmarks') }}</button>
+      <button v-if="isGuide && !ui.batchMode && !isShareReadonly" type="button" class="guide-import-btn" data-testid="lv-guide-import" @click.stop="openImport" :title="t('cards.importBookmarks')">{{ t('cards.guideImport') }}</button>
       <div class="group-head-actions" v-if="!ui.batchMode && !isShareReadonly">
         <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" :title="t('common.undo')" :aria-label="t('common.undo')" v-html="I.undo"></button>
         <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" :title="t('common.redo')" :aria-label="t('common.redo')" v-html="I.redo"></button>

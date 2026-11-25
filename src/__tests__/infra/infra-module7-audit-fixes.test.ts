@@ -109,6 +109,8 @@ describe('模块 7 审计：国家合规备案与工信部跳转一致性', () =
       expect(html, f).toContain(ICP_NUMBER)
       expect(html, f).toContain('href="https://beian.miit.gov.cn/"')
     }
+    // 首页正文是 SPA：静态 DOM 里留一条指向宣传页的链接，供爬虫发现 /about
+    expect(readFileSync(resolve(process.cwd(), 'app.html'), 'utf8')).toContain('<a href="/about"')
   })
 })
 

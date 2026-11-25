@@ -56,7 +56,7 @@ const WELCOME_EN =
   + '<h2>Quick Start Guide</h2>'
   + '<ul data-type="taskList">'
   + '<li data-type="taskItem" data-checked="true"><strong>Browse & Search</strong> — Switch categories on the left; use the top bar for search (<code>Ctrl+K</code>) and layout toggles</li>'
-  + '<li data-type="taskItem" data-checked="false"><strong>Create & Import</strong> — Click <strong>+</strong> or press <code>Ctrl+N</code> to add; click "Import Bookmarks" on this card or go to Settings → Data &amp; Maintenance</li>'
+  + '<li data-type="taskItem" data-checked="false"><strong>Create & Import</strong> — Click <strong>+</strong> or press <code>Ctrl+N</code> to add; click "Import" on this card or go to Settings → Data &amp; Maintenance</li>'
   + '<li data-type="taskItem" data-checked="false"><strong>Notes & Formatting</strong> — Edit text directly in cards, click titles for full-screen focus; type <code>@</code> to search and embed bookmarks</li>'
   + '<li data-type="taskItem" data-checked="false"><strong>Drag & Hierarchy</strong> — Drag external cards into notes to curate; add nested sub-bookmarks for multi-link websites</li>'
   + '<li data-type="taskItem" data-checked="false"><strong>Sync & Settings</strong> — Log in for automatic real-time sync; use top bar Settings for backups, theme appearance, and encryption</li>'

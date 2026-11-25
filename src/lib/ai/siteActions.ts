@@ -301,6 +301,30 @@ export function normalizeWorkspaceTopic(topicName: string): string {
   return /[\u4e00-\u9fff]$/.test(name) && /^[\u4e00-\u9fff]/.test(suffix) ? `${name}${suffix}` : `${name} ${suffix}`
 }
 
+/** 英文请求开场白：Find me a few / Can you recommend some / Please suggest the best … */
+const EN_REQUEST_PREFIX =
+  /^(?:(?:please|hey|hi)[,\s]+)?(?:(?:can|could|would) you\s+)?(?:please\s+)?(?:help me\s+)?(?:find|recommend|suggest|search(?: for)?|look for|show|list|give|get)(?:\s+me)?(?:\s+|$)(?:(?:a few|a couple of|some|several|any|a list of|the best|best|good|great|top(?:\s+\d+)?)(?:\s+|$))*/i
+const ZH_REQUEST_PREFIX = /^(?:请?帮?我?)?(?:推荐|找|搜|整理|搭建|介绍|有哪些|看下)?\s*/
+/** 英文主题最长字符数（按词截断，不切半个单词） */
+const EN_TOPIC_MAX = 32
+
+/**
+ * 从用户原话里取主题名（行动卡「一键装配」用）：去掉中英文请求开场白与句末标点。
+ * 中文截 16 字；英文按词截到 32 字符以内并首字母大写——旧实现只认中文开场白再硬截 16 字，
+ * 英文会变成「Find me a few fr」。取不到时返回空串，由调用方回退到 ai.wsTopicFallback。
+ */
+export function extractWorkspaceTopic(raw: string): string {
+  const s = (raw || '').trim().replace(/[?？!！。.]+$/, '').trim()
+  if (/[一-鿿]/.test(s)) return s.replace(ZH_REQUEST_PREFIX, '').trim().slice(0, 16)
+  let topic = s.replace(EN_REQUEST_PREFIX, '').trim()
+  if (topic.length > EN_TOPIC_MAX) {
+    const cut = topic.slice(0, EN_TOPIC_MAX + 1)
+    const sp = cut.lastIndexOf(' ')
+    topic = (sp > 0 ? cut.slice(0, sp) : cut.slice(0, EN_TOPIC_MAX)).replace(/[\s,;:-]+$/, '')
+  }
+  return topic ? topic.charAt(0).toUpperCase() + topic.slice(1) : ''
+}
+
 export interface CreateTopicWorkspaceResult {
   success: boolean
   group: SiblingGroup | null

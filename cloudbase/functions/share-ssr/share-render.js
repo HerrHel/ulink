@@ -539,7 +539,7 @@ function buildAppShell(dict, appOrigin, opts) {
   const year = (/* @__PURE__ */ new Date()).getUTCFullYear();
   const isZh = dict.lang === "zh-CN";
   const slogan = isZh ? "\u4E2A\u4EBA\u4E66\u7B7E\u4E0E\u77E5\u8BC6\u5E93 \xB7 \u968F\u65F6\u968F\u5730\u6574\u7406\u5206\u4EAB" : "Personal bookmarks & knowledge vault";
-  const ctaFoot = isZh ? "\u514D\u8D39\u4F53\u9A8C\u4E0E\u94FE ulink \u2192" : "Try ulink for free \u2192";
+  const ctaFoot = isZh ? "\u4E86\u89E3\u4E0E\u94FE ulink \u2192" : "Learn about ulink \u2192";
   const reportHref = `mailto:herr@ulink.ren?subject=${encodeURIComponent(dict.reportSubject)}&amp;body=${encodeURIComponent(dict.reportBody)}`;
   return [
     `<div class="share-app">`,
@@ -567,7 +567,7 @@ function buildAppShell(dict, appOrigin, opts) {
     `<span class="footer-name">${esc(dict.footerBrand)}</span>`,
     `</div>`,
     `<p class="share-footer-slogan">${slogan}</p>`,
-    `<a class="share-footer-cta" href="${esc(appOrigin)}/">${ctaFoot}</a>`,
+    `<a class="share-footer-cta" href="${esc(appOrigin)}/about">${ctaFoot}</a>`,
     `<span class="share-footer-copy">\xA9 ${year} ulink \xB7 ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
     `<a class="share-footer-report" href="${reportHref}">${esc(dict.reportLink)}</a>`,
     `</div>`,

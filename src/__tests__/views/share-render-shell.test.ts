@@ -67,6 +67,12 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).not.toContain('复制到我的库')
     expect(en).not.toContain('Open in ulink')
   })
+  it('页脚引流指向宣传页 /about（访客多半还没决定用不用），双语文案', () => {
+    expect(zh).toContain('<a class="share-footer-cta" href="https://ulink.ren/about">了解与链 ulink →</a>')
+    expect(en).toContain('<a class="share-footer-cta" href="https://ulink.ren/about">Learn about ulink →</a>')
+    const nf = renderNotFoundPage('zh-CN')
+    expect(nf).toContain('class="share-footer-cta" href="https://ulink.ren/about"')
+  })
   it('分类页含外壳 + 真实卡片网格', () => {
     expect(catHtml).toContain('class="share-app"')
     expect(catHtml).toContain('class="cat-hero"')

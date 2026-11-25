@@ -16,7 +16,7 @@ import {
 import { containsVideoPlatformUrl } from '../../lib/ai/videoPlatforms.js'
 import { askMiMoStream, getMiMoConfig, sanitizeToolResult, type MiMoChatMessage } from '../../lib/ai/mimoClient.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
-import { normalizeWorkspaceTopic } from '../../lib/ai/siteActions.js'
+import { normalizeWorkspaceTopic, extractWorkspaceTopic } from '../../lib/ai/siteActions.js'
 import { updateSession, type AiChatSession, type ChatTurn } from '../../lib/ai/chatSessions.js'
 import {
   resolveCardContext,
@@ -43,6 +43,7 @@ import { toast } from '../../lib/toast.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
 import type { AbortControllerSlot } from './useAiChatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
+import { presetReplies } from '../../lib/ai/suggestedReplies.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
@@ -372,7 +373,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         assistantTurn.steps = siteCmd.steps
         assistantTurn.actionCard = siteCmd.actionCard
         if (siteCmd.actionCard) {
-          assistantTurn.suggestedReplies = ['好的，执行', '换个方案', '我想调整一下']
+          assistantTurn.suggestedReplies = presetReplies('action')
         }
         return
       }
@@ -404,7 +405,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               ? `**${res.videoTitle}**\n\n`
               : ''
           assistantTurn.content = `${titlePrefix}${res.summary}`
-          assistantTurn.suggestedReplies = ['存为卡片笔记', '帮我找类似工具']
+          assistantTurn.suggestedReplies = presetReplies('note')
         } else {
           assistantTurn.content = formatFoundCount(res.bookmarks.length, res.videoTitle, res.bookmarks)
           // 文字源总结（简介/字幕/评论区提炼）：带用户问题时为「回答提问」模式，标签随之切换，无则缺省
@@ -413,7 +414,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             assistantTurn.content += `\n\n**${summaryLabel}**\n${res.summary}`
           }
           if (res.bookmarks.length > 0) {
-            assistantTurn.suggestedReplies = ['全部一键加入收藏', '还有其他同类吗？']
+            assistantTurn.suggestedReplies = presetReplies('sitesShort')
           }
         }
       } else if (isUrl) {
@@ -423,7 +424,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         assistantTurn.candidates = res
         assistantTurn.content = formatFoundCount(res.length, undefined, res)
         if (res.length > 0) {
-          assistantTurn.suggestedReplies = ['全部一键加入收藏', '🇨🇳 只要国内免翻直连的', '还有其他同类吗？']
+          assistantTurn.suggestedReplies = presetReplies('sites')
         }
       } else {
         const mimoConf = getMiMoConfig()
@@ -1006,12 +1007,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
       // 智能挂载行动卡片：当单轮甄选到 3 个及以上候选站点且未挂载卡片时，出具一键装配工作台卡片
       if (assistantTurn.candidates && assistantTurn.candidates.length >= 3 && !assistantTurn.actionCard) {
-        const topicRaw =
-          raw
-            .replace(/^(?:请?帮?我?)?(?:推荐|找|搜|整理|搭建|介绍|有哪些|看下)?\s*/i, '')
-            .replace(/[?？!！。]+$/, '')
-            .trim()
-            .slice(0, 16) || t('ai.wsTopicFallback')
+        const topicRaw = extractWorkspaceTopic(raw) || t('ai.wsTopicFallback')
         const cleanTopic = normalizeWorkspaceTopic(topicRaw)
         assistantTurn.actionCard = {
           type: 'custom',
@@ -1030,11 +1026,11 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       const isErrorReply = replyFailed || !assistantTurn.content || assistantTurn.content.startsWith(t('ai.searchFailed'))
       if (!assistantTurn.suggestedReplies?.length && !isErrorReply) {
         if (assistantTurn.actionCard) {
-          assistantTurn.suggestedReplies = ['好的，执行', '换个方案', '我想调整一下']
+          assistantTurn.suggestedReplies = presetReplies('action')
         } else if (assistantTurn.candidates && assistantTurn.candidates.length > 0) {
-          assistantTurn.suggestedReplies = ['全部一键加入收藏', '🇨🇳 只要国内免翻直连的', '还有其他同类吗？']
+          assistantTurn.suggestedReplies = presetReplies('sites')
         } else if (assistantTurn.content && !assistantTurn.loading) {
-          assistantTurn.suggestedReplies = ['存为卡片笔记', '帮我找类似工具']
+          assistantTurn.suggestedReplies = presetReplies('note')
         }
       }
     } catch (err: unknown) {

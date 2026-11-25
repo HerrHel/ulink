@@ -95,6 +95,7 @@ import { ref, watch, nextTick, computed } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { ambientHub } from '../../lib/ai/ambientInsights.js'
+import { classifyReply } from '../../lib/ai/suggestedReplies.js'
 import ChatInputDock from '../chat/ChatInputDock.vue'
 import ChatStream from '../chat/ChatStream.vue'
 import ChatTopBar from '../chat/ChatTopBar.vue'
@@ -281,17 +282,18 @@ function handleApplySuggestedReply(reply: string, turn: ChatTurn) {
   // 清理当前轮及历史预判小按钮，防止重复点击
   turn.suggestedReplies = []
   // 1. 若是执行/确认类预判，且当轮有待执行的行动卡片，直接一键执行
-  if ((reply.includes('执行') || reply.includes('确认')) && turn.actionCard && !turn.actionCard.completed) {
+  const intent = classifyReply(reply)
+  if (intent === 'confirm' && turn.actionCard && !turn.actionCard.completed) {
     handleActionCardClick(turn.actionCard, turn)
     return
   }
   // 2. 若是一键收藏全部，直接批量存入
-  if (reply.includes('全部一键加入收藏') || reply.includes('加入收藏')) {
+  if (intent === 'saveAll') {
     addAllInTurn(turn)
     return
   }
   // 3. 若是存为新笔记
-  if (reply.includes('存为卡片笔记') && turn.content) {
+  if (intent === 'saveAsNote' && turn.content) {
     handleSaveAsNewNote(turn.content)
     return
   }
