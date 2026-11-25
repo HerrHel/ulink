@@ -29,6 +29,7 @@ __export(share_render_exports, {
   renderUnavailablePage: () => renderUnavailablePage,
   resolveGroupTitle: () => resolveGroupTitle,
   serializeScriptData: () => serializeScriptData,
+  shareGoUrl: () => shareGoUrl,
   stripTags: () => stripTags
 });
 module.exports = __toCommonJS(share_render_exports);
@@ -1053,19 +1054,15 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   transform: translate(0, 0);
   color: var(--accent);
 }
-.bm.is-child {
-  margin-left: 16px;
-  position: relative;
-}
-.bm.is-child::before {
-  content: "";
+/* \u5E26\u5B50\u4E66\u7B7E\u7684\u5361\u7247\uFF1Adiv \u5916\u58F3 + \u5168\u5361\u70B9\u51FB\u70ED\u533A\uFF0C\u5B50\u4E66\u7B7E\u80F6\u56CA\uFF08.sub-sites, z-index 4\uFF09\u6D6E\u5728\u70ED\u533A\u4E4B\u4E0A */
+.bm.has-kids { cursor: pointer }
+.bm-hit {
   position: absolute;
-  left: -10px;
-  top: 50%;
-  width: 8px;
-  height: 1px;
-  background: var(--border-hover);
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
 }
+.bm-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
 
 .empty {
   text-align: center;
@@ -2058,6 +2055,47 @@ body:has(.group-focus-panel:target) #cardGrid {
   max-width: 420px;
 }
 
+/* ==================== \u6587\u672B\u8F6C\u5316\u5361\u7247 ==================== */
+.share-start {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.share-start-logo { display: flex; flex-shrink: 0; width: 36px; height: 36px }
+.share-start-logo svg { width: 100%; height: 100% }
+.share-start-text { flex: 1; min-width: 0 }
+.share-start-title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.share-start-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.share-start-btn {
+  flex-shrink: 0;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.share-start-btn:hover { border-color: var(--accent) }
+
 /* ==================== \u54CD\u5E94\u5F0F\u9002\u914D ==================== */
 @media (max-width: 768px) {
   .share-container {
@@ -2086,6 +2124,17 @@ body:has(.group-focus-panel:target) #cardGrid {
   /* \u624B\u673A\u4E0A\u5DE5\u5177\u6761\u6362\u884C\u5360\u6EE1\u6574\u884C\uFF1A\u590D\u5236\u6309\u94AE\u5728\u5DE6\u3001\u641C\u7D22\u6846\u6491\u6EE1\u5269\u4F59\u5BBD\u5EA6 */
   .section-tools { flex-basis: 100%; margin-left: 0 }
   .section-tools .bm-search-wrap { flex: 1; width: auto; max-width: none }
+  /* \u8F6C\u5316\u5361\u7247\uFF1A\u6309\u94AE\u6362\u5230\u4E0B\u65B9\u5360\u6EE1\u6574\u884C */
+  .share-start { flex-wrap: wrap; padding: 16px }
+  .share-start-text { flex-basis: calc(100% - 52px) }
+  .share-start-btn { flex-basis: 100%; text-align: center }
+  /* \u9876\u680F\uFF1ACTA \u5E26\u94FE\u63A5\u6570\u540E\u53D8\u957F\uFF0C\u54C1\u724C\u540D\u4E0D\u8BB8\u6298\u884C */
+  .share-brand-title { white-space: nowrap }
+}
+
+@media (max-width: 440px) {
+  /* \u6781\u7A84\u5C4F\u8BA9\u4F4D\u7ED9\u300C\u4FDD\u5B58\u8FD9 N \u4E2A\u94FE\u63A5\u300D\uFF1A\u9690\u85CF\u300C\u79C1\u6709\u94FE\u63A5\u5206\u4EAB\u300D\u5FBD\u6807 */
+  .share-badge { display: none }
 }
 `;
 
@@ -2168,14 +2217,21 @@ if(cb){
   cb.addEventListener('click',function(){
     var items=document.querySelectorAll('#bmList .bm');
     var lines=[];
+    var add=function(title,href){
+      if(!href||href==='#')return;
+      lines.push(title?title+'\\n'+href:href);
+    };
     for(var n=0;n<items.length;n++){
       var it=items[n];
       if(it.style.display==='none')continue;
-      var href=it.getAttribute('href')||'';
-      if(!href||href==='#')continue;
+      // \u666E\u901A\u5361\u7247\u672C\u8EAB\u662F <a>\uFF1B\u5E26\u5B50\u4E66\u7B7E\u7684\u5361\u7247\u662F div\uFF0C\u94FE\u63A5\u5728\u5168\u5361\u70ED\u533A .bm-hit \u4E0A
+      var hit=it.querySelector('.bm-hit');
       var te=it.querySelector('.bm-title');
-      var title=te?te.textContent.trim():'';
-      lines.push(title?title+'\\n'+href:href);
+      add(te?te.textContent.trim():'',(hit||it).getAttribute('href')||'');
+      var kids=it.querySelectorAll('.sub-sites a');
+      for(var kk=0;kk<kids.length;kk++){
+        add(kids[kk].getAttribute('title')||kids[kk].textContent.trim(),kids[kk].getAttribute('href')||'');
+      }
     }
     if(!lines.length)return;
     var text=lines.join('\\n\\n');
@@ -2261,6 +2317,10 @@ var T = {
     miniGridView: "\u5C0F\u5BAB\u683C\u89C6\u56FE",
     updatedAt: "\u66F4\u65B0\u4E8E {d}",
     cta: "\u4FDD\u5B58\u81F3\u6211\u7684\u5E93",
+    ctaN: "\u4FDD\u5B58\u8FD9 {n} \u4E2A\u94FE\u63A5",
+    startTitle: "\u8FD9\u4EFD\u6E05\u5355\u7531\u4E0E\u94FE\u6574\u7406",
+    startBody: "\u4F60\u4E5F\u53EF\u4EE5 30 \u79D2\u5EFA\u4E00\u4EFD\u81EA\u5DF1\u7684\u4E66\u7B7E\u6E05\u5355\uFF1A\u591A\u8BBE\u5907\u540C\u6B65\uFF0C\u968F\u65F6\u5206\u4EAB\u3002",
+    startBtn: "\u514D\u8D39\u5F00\u59CB",
     tocTitle: "\u76EE\u5F55",
     bookmarksTitle: "\u6536\u5F55\u7684\u4E66\u7B7E",
     searchBookmarks: "\u641C\u7D22\u4E66\u7B7E...",
@@ -2329,6 +2389,11 @@ var T = {
     miniGridView: "Mini grid view",
     updatedAt: "Updated {d}",
     cta: "Save to my library",
+    ctaN: "Save these {n} links",
+    ctaN_one: "Save this link",
+    startTitle: "Made with ulink",
+    startBody: "Build your own bookmark list in 30 seconds \u2014 synced across devices, easy to share.",
+    startBtn: "Start free",
     tocTitle: "Contents",
     bookmarksTitle: "Bookmarks in this note",
     searchBookmarks: "Search bookmarks...",
@@ -2668,7 +2733,7 @@ function orderBookmarksHierarchically(bms) {
   }
   return ordered;
 }
-function buildBookmarkItem(dict, b, child = false) {
+function buildBookmarkItem(dict, b, kids = []) {
   const urlCipher = isCipherText(b.url);
   const safe = urlCipher ? "" : fixUrl(b.url);
   const href = safe ? esc(safe) : "#";
@@ -2679,9 +2744,9 @@ function buildBookmarkItem(dict, b, child = false) {
   const ch = title.charAt(0).toUpperCase();
   const rawNotes = typeof b.notes === "string" ? safeNotes(b.notes).trim() : "";
   const notes = rawNotes ? stripTags(rawNotes).slice(0, 120) : "";
-  const searchStr = esc((title + " " + dm).toLowerCase());
-  return [
-    `<a class="bm${child ? " is-child" : ""}" href="${href}"${target}${rel} data-search="${searchStr}">`,
+  const kidLinks = kids.map((k) => buildKidLink(dict, k));
+  const searchStr = esc([title, dm, ...kidLinks.map((k) => k.search)].join(" ").toLowerCase());
+  const inner = [
     `<div class="bm-main">`,
     `<span class="bm-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bm")}</span>`,
     `<div class="bm-info">`,
@@ -2690,9 +2755,40 @@ function buildBookmarkItem(dict, b, child = false) {
     `</div>`,
     `<span class="bm-arrow" aria-hidden="true">${ARROW_SVG}</span>`,
     `</div>`,
-    notes ? `<p class="bm-notes">${esc(notes)}</p>` : "",
-    `</a>`
+    notes ? `<p class="bm-notes">${esc(notes)}</p>` : ""
   ].join("");
+  if (!kidLinks.length) {
+    return `<a class="bm" href="${href}"${target}${rel} data-search="${searchStr}">${inner}</a>`;
+  }
+  return [
+    `<div class="bm has-kids" data-search="${searchStr}">`,
+    `<a class="bm-hit" href="${href}"${target}${rel} aria-label="${esc(title)}"></a>`,
+    inner,
+    `<div class="sub-sites">${kidLinks.map((k) => k.html).join("")}</div>`,
+    `</div>`
+  ].join("");
+}
+function buildKidLink(dict, k) {
+  const safe = isCipherText(k.url) ? "" : fixUrl(k.url);
+  const dm = safe ? domainOf(safe) : "";
+  const title = deCipherText(dict, k.title).trim() || dm || "?";
+  const ch = title.charAt(0).toUpperCase();
+  const attrs = safe ? ` href="${esc(safe)}" target="_blank" rel="noopener nofollow"` : ' href="#"';
+  return {
+    html: `<a class="group-inline-card"${attrs} title="${esc(title)}"><span class="gic-ic">${iconMarkup(safe ? faviconOf(safe) : "", ch, "gic-ic")}</span><span class="gic-name">${esc(title)}</span></a>`,
+    search: `${title} ${dm}`
+  };
+}
+function groupBookmarkFamilies(bms) {
+  const ids = new Set((bms || []).map((b) => String(b && b.id)));
+  const families = [];
+  for (const b of orderBookmarksHierarchically(bms)) {
+    const pid = typeof b.parent_id === "string" ? b.parent_id.trim() : "";
+    const last = families[families.length - 1];
+    if (pid && ids.has(pid) && last) last.kids.push(b);
+    else families.push({ root: b, kids: [] });
+  }
+  return families;
 }
 function groupIconMarkup(group, letter) {
   const icon = typeof group.icon === "string" ? group.icon.trim() : "";
@@ -2733,6 +2829,22 @@ function notesHtml(dict, group, bmMap, skipLeadingH1) {
   const toc = headings.length ? `<nav class="toc" aria-label="${esc(dict.tocTitle)}"><div class="toc-title">${esc(dict.tocTitle)}</div>` + headings.map((h, i) => `<a class="toc-item toc-l${h.level}" href="#toc-${i}" title="${esc(h.text)}">${esc(h.text)}</a>`).join("") + `</nav>` : "";
   return { html: `<div class="focus-notes">${cleaned}</div>`, toc };
 }
+function shareGoUrl(appOrigin, kind, id) {
+  const enc = encodeURIComponent(id);
+  return kind === "g" ? `${appOrigin}/s/${enc}/go` : `${appOrigin}/s/c/${enc}/go`;
+}
+function buildStartCard(dict, startUrl) {
+  return [
+    `<aside class="share-start">`,
+    `<span class="share-start-logo" aria-hidden="true">${LOGO_SVG}</span>`,
+    `<div class="share-start-text">`,
+    `<p class="share-start-title">${esc(dict.startTitle)}</p>`,
+    `<p class="share-start-body">${esc(dict.startBody)}</p>`,
+    `</div>`,
+    `<a class="share-start-btn" href="${esc(startUrl)}">${esc(dict.startBtn)}</a>`,
+    `</aside>`
+  ].join("\n");
+}
 function buildAppShell(dict, appOrigin, opts) {
   const year = (/* @__PURE__ */ new Date()).getUTCFullYear();
   const isZh = dict.lang === "zh-CN";
@@ -2752,12 +2864,13 @@ function buildAppShell(dict, appOrigin, opts) {
     opts.hdrMeta,
     `<button class="share-theme-btn" id="themeToggle" type="button" aria-label="${esc(dict.themeToggle)}" title="${esc(dict.themeToggle)}"><span class="theme-icon-sun">${SUN_SVG}</span><span class="theme-icon-moon">${MOON_SVG}</span></button>`,
     // 密码门等「访客还看不到内容」的页面不出「保存至我的库」，避免点进去无物可存
-    opts.hideCta ? "" : `<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a>`,
+    opts.hideCta ? "" : `<a class="cta" href="${esc(opts.ctaUrl)}">${esc(opts.ctaText || dict.cta)}</a>`,
     `</div>`,
     `</div>`,
     `</header>`,
     `<main class="share-container">`,
     opts.inner,
+    opts.startUrl ? buildStartCard(dict, opts.startUrl) : "",
     `</main>`,
     `<footer class="share-footer">`,
     `<div class="share-footer-inner">`,
@@ -2815,7 +2928,7 @@ function buildBody(dict, group, bookmarks, appOrigin) {
       tools,
       `</div>`,
       `<div class="bm-grid" id="bmList">`,
-      orderBookmarksHierarchically(bookmarks).map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("\n"),
+      groupBookmarkFamilies(bookmarks).map((f) => buildBookmarkItem(dict, f.root, f.kids)).join("\n"),
       `</div>`,
       `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
       `</section>`
@@ -2839,7 +2952,14 @@ function buildBody(dict, group, bookmarks, appOrigin) {
     `</div>`,
     `</article>`
   ].filter(Boolean).join("\n");
-  return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner });
+  const go = shareGoUrl(appOrigin, "g", group.id);
+  return buildAppShell(dict, appOrigin, {
+    hdrMeta: "",
+    ctaUrl: count > 0 ? `${go}?to=save` : appUrl,
+    ctaText: count > 0 ? fill(pick(dict, "ctaN", count), { n: count }) : void 0,
+    startUrl: `${go}?to=start`,
+    inner
+  });
 }
 function extractAppAssets(indexHtml) {
   const out = [];
@@ -2967,7 +3087,7 @@ function buildGroupFocusPanel(dict, entry, bmMap, catName) {
   const notes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html;
   const orderedItems = orderBookmarksHierarchically(entry.items);
   const n = orderedItems.length;
-  const itemsHtml = n ? orderedItems.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("") : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`;
+  const itemsHtml = n ? groupBookmarkFamilies(entry.items).map((f) => buildBookmarkItem(dict, f.root, f.kids)).join("") : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`;
   const gid = esc(String(g.id));
   return [
     `<div class="group-focus-panel" id="focus-${gid}">`,
@@ -3105,7 +3225,15 @@ function buildCategoryBody(dict, category, groups, bookmarks, shareId, shareUrl,
     grid,
     ...focusPanels
   ].filter(Boolean).join("\n");
-  return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner });
+  const go = shareGoUrl(appOrigin, "c", shareId);
+  const total = bookmarks.length;
+  return buildAppShell(dict, appOrigin, {
+    hdrMeta: "",
+    ctaUrl: total > 0 ? `${go}?to=save` : appUrl,
+    ctaText: total > 0 ? fill(pick(dict, "ctaN", total), { n: total }) : void 0,
+    startUrl: `${go}?to=start`,
+    inner
+  });
 }
 function buildCategoryHead(dict, category, count, groupCount, shareUrl, ogImage) {
   const title = `${category.name || dict.defaultCategoryName} - ${dict.siteName}`;
@@ -3276,5 +3404,6 @@ function renderUnavailablePage(locale = "zh-CN") {
   renderUnavailablePage,
   resolveGroupTitle,
   serializeScriptData,
+  shareGoUrl,
   stripTags
 });

@@ -56,12 +56,13 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).not.toContain('class="layout"')
     expect(zh).not.toContain('class="page"')
   })
-  it('组页 CTA 指向 SPA 分享路由 + 双语只读 chip + 新 CTA 文案', () => {
-    expect(zh).toContain('#share/grp-demo-001')
+  it('组页 CTA 经 /go 计数后跳 SPA 分享路由 + 双语只读 chip + 带链接数的 CTA 文案', () => {
+    // 2026-11-25：CTA 先到 share-ssr 的 /go 计一次转化，再 302 到 /app#share/<gid>（见 share-ssr-go.test.ts）
+    expect(zh).toContain('href="https://ulink.ren/s/grp-demo-001/go?to=save"')
     expect(zh).toContain('私有链接分享')
     expect(en).toContain('Private share')
-    expect(zh).toContain('保存至我的库')
-    expect(en).toContain('Save to my library')
+    expect(zh).toContain('保存这 3 个链接')
+    expect(en).toContain('Save these 3 links')
     // 旧 CTA 文案彻底移除
     expect(zh).not.toContain('在与链中打开')
     expect(zh).not.toContain('复制到我的库')

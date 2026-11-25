@@ -27,6 +27,7 @@ const {
   renderPasswordGate,
 } = require('./share-render.js')
 const { getFresh, getStale, putShare } = require('./mem-cache.js')
+const { classifyAgent, resolveSource, resolveGoSource, goTarget } = require('./share-stats.js')
 const {
   verifyPassword,
   makeTicket,
@@ -197,6 +198,40 @@ function getDb() {
   return _db
 }
 
+const APP_HOST = new URL(APP_ORIGIN).hostname.toLowerCase()
+
+/**
+ * 访问统计：计一次（best-effort，绝不阻断或拖慢页面）。
+ * 在响应发出之后调用、不 await；失败只打日志。
+ */
+function track(kind, id, event, source) {
+  try {
+    Promise.resolve(
+      getDb().rpc('record_share_event', {
+        p_kind: kind,
+        p_share_id: id,
+        p_event: event,
+        p_source: source,
+      }),
+    )
+      .then((r) => {
+        if (r && r.error) console.error('[share-ssr] record_share_event failed:', r.error)
+      })
+      .catch((e) => console.error('[share-ssr] record_share_event threw:', e))
+  } catch (e) {
+    console.error('[share-ssr] record_share_event threw:', e)
+  }
+}
+
+/** 内容页 / 密码门展示后的计数：HEAD 与脚本工具不计；链接预览抓取单独记 preview */
+function trackPageView(req, url, kind, id, event) {
+  if (req.method !== 'GET') return
+  const agent = classifyAgent(req.headers['user-agent'])
+  if (agent === 'ignore') return
+  const source = resolveSource(url, req.headers, APP_HOST)
+  track(kind, id, agent === 'preview' ? 'preview' : event, source)
+}
+
 const server = http.createServer(async (req, res) => {
   // POST 仅用于提交访问密码（组分享）；分类分享与其它方法一律拒绝
   const isPost = req.method === 'POST'
@@ -226,13 +261,49 @@ const server = http.createServer(async (req, res) => {
   // 过大，差异型扫描器会把「加一个引号就让状态码和响应体剧变」判成注入信号
   // （安全复查报告中的 SQL 注入高危即疑似此误报）。语义上也更准确：格式非法
   // 与不存在，对访客而言都是「没有这个分享」。此处仍提前 return，不写缓存。
+  //
+  // 唯一允许的尾段是 /go（分享页出站跳转计数，见下方 isGo 分支）。
+  const baseLen = isCategory ? 3 : 2
+  const isGo = pathParts.length === baseLen + 1 && pathParts[baseLen] === 'go'
   if (
-    pathParts.length !== (isCategory ? 3 : 2) ||
+    (pathParts.length !== baseLen && !isGo) ||
     pathParts[0] !== 's' ||
     !isValidShareId(id) ||
     (isCategory && !id)
   ) {
     sendHtml(res, 404, renderNotFoundPage(locale), { 'x-share-cache': 'MISS' })
+    return
+  }
+
+  const kind = isCategory ? 'c' : 'g'
+
+  // ── 出站跳转 /s/<gid>/go?to=save|start、/s/c/<sid>/go?to=… ─────────────
+  // 先 302（目标白名单，见 goTarget），再异步确认分享真实存在后计数 ——
+  // 不确认的话，任何人可用随机 id 往统计表里灌行。
+  if (isGo) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      sendText(res, 405, 'method not allowed', { Allow: 'GET, HEAD' })
+      return
+    }
+    const target = goTarget(kind, id, url.searchParams.get('to'), APP_ORIGIN)
+    res.writeHead(302, {
+      Location: target.location,
+      'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex, nofollow',
+      ...SHARE_SECURITY_HEADERS,
+    })
+    res.end()
+    if (req.method === 'GET' && classifyAgent(req.headers['user-agent']) === 'human') {
+      const source = resolveGoSource(req.headers)
+      const check = isCategory
+        ? getDb().rpc('get_public_category', { p_share_id: id }).then((r) => !r.error && r.data && r.data.category)
+        : getDb().rpc('get_share_secret', { p_gid: id }).then((r) => !r.error && r.data)
+      Promise.resolve(check)
+        .then((exists) => {
+          if (exists) track(kind, id, target.event, source)
+        })
+        .catch((e) => console.error('[share-ssr] go check threw:', e))
+    }
     return
   }
 
@@ -383,11 +454,13 @@ const server = http.createServer(async (req, res) => {
       const gateHit = getFresh(gateKey)
       if (gateHit) {
         sendHtml(res, 200, gateHit, { 'x-share-cache': 'HIT' })
+        trackPageView(req, url, kind, id, 'gate')
         return
       }
       const gateHtml = renderPasswordGate(locale)
       putShare(gateKey, gateHtml)
       sendHtml(res, 200, gateHtml, { 'x-share-cache': 'MISS' })
+      trackPageView(req, url, kind, id, 'gate')
       return
     }
   } else {
@@ -400,6 +473,7 @@ const server = http.createServer(async (req, res) => {
       const hit = getFresh(cacheKey)
       if (hit) {
         sendHtml(res, 200, hit, { 'x-share-cache': 'HIT' })
+        trackPageView(req, url, kind, id, 'view')
         return
       }
     }
@@ -479,6 +553,7 @@ const server = http.createServer(async (req, res) => {
       ? { 'x-share-cache': 'BYPASS', 'cache-control': 'private, no-store' }
       : { 'x-share-cache': 'MISS' },
   )
+  trackPageView(req, url, kind, id, 'view')
 })
 
 const PORT = Number(process.env.PORT) || 9000

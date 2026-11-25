@@ -25,6 +25,8 @@ declare module '*functions/_lib/share-render.js' {
     appAssets?: string,
   ): string
   export function renderNotFoundPage(locale?: ShareLocale): string
+  export function renderPasswordGate(locale?: ShareLocale, opts?: { error?: boolean }): string
+  export function shareGoUrl(appOrigin: string, kind: 'g' | 'c', id: string): string
   export function stripTags(html: string): string
   export function resolveGroupTitle(
     dict: any,

@@ -35,6 +35,8 @@ import { buildItemListJsonLd } from '../views/buildItemListJsonLd.js'
 import { deriveShareUrl } from '../views/deriveShareUrl.js'
 import { APP_CANONICAL_BASE } from '../config/urls.js'
 import { toast } from '../lib/toast.js'
+import { dbRpc } from '../lib/dbApi.js'
+import { isCloudBaseBackend } from '../lib/cloudbase.js'
 import { t, tN } from '../i18n/index.js'
 import { extractGroupTitle, stripTags } from '../utils.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
@@ -312,6 +314,16 @@ export const useShareStore = defineStore('share', () => {
     return { kind: 'group', group: group.value, bookmarks: bookmarks.value }
   }
 
+  /** 分享转化计数（「保存」真正完成）：best-effort，失败静默，绝不影响保存流程 */
+  function _recordFork(kind: string, id: string): void {
+    if (!isCloudBaseBackend()) return
+    try {
+      void Promise.resolve(dbRpc('record_share_fork', { p_kind: kind, p_share_id: id })).catch(() => {})
+    } catch {
+      /* 统计失败不打扰用户 */
+    }
+  }
+
   async function fork() {
     const auth = useAuth()
     if (!auth.isLoggedIn) {
@@ -322,11 +334,14 @@ export const useShareStore = defineStore('share', () => {
     const payload = _payload()
     if (!payload || forking.value) return
     forking.value = true
+    // teardown 会清掉 shareMode，先记下分享 id 供保存成功后的转化计数
+    const shareRef = ui.shareMode ? { kind: ui.shareMode.kind === 'category' ? 'c' : 'g', id: ui.shareMode.id } : null
     // 关键：fork 写的是访问者自己的库，必须先解锁并清空影子数据
     _teardown(true)
     try {
       if (payload.kind === 'category') await forkPublicCategory(payload.data)
       else await forkPublicGroup(payload.group, payload.bookmarks)
+      if (shareRef) _recordFork(shareRef.kind, shareRef.id)
     } catch (e) {
       toast(t('shareView.copyFailed', { msg: (e as Error).message }), false)
     } finally {

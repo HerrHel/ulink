@@ -92,14 +92,21 @@ if(cb){
   cb.addEventListener('click',function(){
     var items=document.querySelectorAll('#bmList .bm');
     var lines=[];
+    var add=function(title,href){
+      if(!href||href==='#')return;
+      lines.push(title?title+'\\n'+href:href);
+    };
     for(var n=0;n<items.length;n++){
       var it=items[n];
       if(it.style.display==='none')continue;
-      var href=it.getAttribute('href')||'';
-      if(!href||href==='#')continue;
+      // 普通卡片本身是 <a>；带子书签的卡片是 div，链接在全卡热区 .bm-hit 上
+      var hit=it.querySelector('.bm-hit');
       var te=it.querySelector('.bm-title');
-      var title=te?te.textContent.trim():'';
-      lines.push(title?title+'\\n'+href:href);
+      add(te?te.textContent.trim():'',(hit||it).getAttribute('href')||'');
+      var kids=it.querySelectorAll('.sub-sites a');
+      for(var kk=0;kk<kids.length;kk++){
+        add(kids[kk].getAttribute('title')||kids[kk].textContent.trim(),kids[kk].getAttribute('href')||'');
+      }
     }
     if(!lines.length)return;
     var text=lines.join('\\n\\n');

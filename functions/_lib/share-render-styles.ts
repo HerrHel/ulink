@@ -1021,19 +1021,15 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   transform: translate(0, 0);
   color: var(--accent);
 }
-.bm.is-child {
-  margin-left: 16px;
-  position: relative;
-}
-.bm.is-child::before {
-  content: "";
+/* 带子书签的卡片：div 外壳 + 全卡点击热区，子书签胶囊（.sub-sites, z-index 4）浮在热区之上 */
+.bm.has-kids { cursor: pointer }
+.bm-hit {
   position: absolute;
-  left: -10px;
-  top: 50%;
-  width: 8px;
-  height: 1px;
-  background: var(--border-hover);
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
 }
+.bm-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
 
 .empty {
   text-align: center;
@@ -2026,6 +2022,47 @@ body:has(.group-focus-panel:target) #cardGrid {
   max-width: 420px;
 }
 
+/* ==================== 文末转化卡片 ==================== */
+.share-start {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.share-start-logo { display: flex; flex-shrink: 0; width: 36px; height: 36px }
+.share-start-logo svg { width: 100%; height: 100% }
+.share-start-text { flex: 1; min-width: 0 }
+.share-start-title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.share-start-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.share-start-btn {
+  flex-shrink: 0;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.share-start-btn:hover { border-color: var(--accent) }
+
 /* ==================== 响应式适配 ==================== */
 @media (max-width: 768px) {
   .share-container {
@@ -2054,5 +2091,16 @@ body:has(.group-focus-panel:target) #cardGrid {
   /* 手机上工具条换行占满整行：复制按钮在左、搜索框撑满剩余宽度 */
   .section-tools { flex-basis: 100%; margin-left: 0 }
   .section-tools .bm-search-wrap { flex: 1; width: auto; max-width: none }
+  /* 转化卡片：按钮换到下方占满整行 */
+  .share-start { flex-wrap: wrap; padding: 16px }
+  .share-start-text { flex-basis: calc(100% - 52px) }
+  .share-start-btn { flex-basis: 100%; text-align: center }
+  /* 顶栏：CTA 带链接数后变长，品牌名不许折行 */
+  .share-brand-title { white-space: nowrap }
+}
+
+@media (max-width: 440px) {
+  /* 极窄屏让位给「保存这 N 个链接」：隐藏「私有链接分享」徽标 */
+  .share-badge { display: none }
 }
 `

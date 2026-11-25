@@ -63,6 +63,10 @@ const T = {
     miniGridView: '小宫格视图',
     updatedAt: '更新于 {d}',
     cta: '保存至我的库',
+    ctaN: '保存这 {n} 个链接',
+    startTitle: '这份清单由与链整理',
+    startBody: '你也可以 30 秒建一份自己的书签清单：多设备同步，随时分享。',
+    startBtn: '免费开始',
     tocTitle: '目录',
     bookmarksTitle: '收录的书签',
     searchBookmarks: '搜索书签...',
@@ -131,6 +135,11 @@ const T = {
     miniGridView: 'Mini grid view',
     updatedAt: 'Updated {d}',
     cta: 'Save to my library',
+    ctaN: 'Save these {n} links',
+    ctaN_one: 'Save this link',
+    startTitle: 'Made with ulink',
+    startBody: 'Build your own bookmark list in 30 seconds — synced across devices, easy to share.',
+    startBtn: 'Start free',
     tocTitle: 'Contents',
     bookmarksTitle: 'Bookmarks in this note',
     searchBookmarks: 'Search bookmarks...',
@@ -671,7 +680,7 @@ function orderBookmarksHierarchically(bms: PublicBookmark[]): PublicBookmark[] {
 function buildBookmarkItem(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   b: PublicBookmark,
-  child = false,
+  kids: PublicBookmark[] = [],
 ): string {
   // E2E 历史密文 URL 不派生链接（不跳转乱码地址、不派生图标）
   const urlCipher = isCipherText(b.url)
@@ -684,9 +693,10 @@ function buildBookmarkItem(
   const ch = title.charAt(0).toUpperCase()
   const rawNotes = typeof b.notes === 'string' ? safeNotes(b.notes).trim() : ''
   const notes = rawNotes ? stripTags(rawNotes).slice(0, 120) : ''
-  const searchStr = esc((title + ' ' + dm).toLowerCase())
-  return [
-    `<a class="bm${child ? " is-child" : ""}" href="${href}"${target}${rel} data-search="${searchStr}">`,
+  const kidLinks = kids.map((k) => buildKidLink(dict, k))
+  // 搜索串带上子书签的标题与域名：搜子站时父卡片一起留下
+  const searchStr = esc([title, dm, ...kidLinks.map((k) => k.search)].join(' ').toLowerCase())
+  const inner = [
     `<div class="bm-main">`,
     `<span class="bm-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bm")}</span>`,
     `<div class="bm-info">`,
@@ -696,8 +706,55 @@ function buildBookmarkItem(
     `<span class="bm-arrow" aria-hidden="true">${ARROW_SVG}</span>`,
     `</div>`,
     notes ? `<p class="bm-notes">${esc(notes)}</p>` : '',
-    `</a>`,
   ].join("")
+  if (!kidLinks.length) {
+    return `<a class="bm" href="${href}"${target}${rel} data-search="${searchStr}">${inner}</a>`
+  }
+  // 有子书签：<a> 不能嵌套 <a>，卡片改为 div + 全卡点击热区（.bm-hit），
+  // 子书签以小胶囊排在卡片底部（.sub-sites 层级高于热区，可单独点击）
+  return [
+    `<div class="bm has-kids" data-search="${searchStr}">`,
+    `<a class="bm-hit" href="${href}"${target}${rel} aria-label="${esc(title)}"></a>`,
+    inner,
+    `<div class="sub-sites">${kidLinks.map((k) => k.html).join("")}</div>`,
+    `</div>`,
+  ].join("")
+}
+
+/** 子书签胶囊（复用分类页 .sub-sites .group-inline-card 样式） */
+function buildKidLink(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  k: PublicBookmark,
+): { html: string; search: string } {
+  const safe = isCipherText(k.url) ? "" : fixUrl(k.url)
+  const dm = safe ? domainOf(safe) : ""
+  const title = deCipherText(dict, k.title).trim() || dm || "?"
+  const ch = title.charAt(0).toUpperCase()
+  const attrs = safe ? ` href="${esc(safe)}" target="_blank" rel="noopener nofollow"` : ' href="#"'
+  return {
+    html:
+      `<a class="group-inline-card"${attrs} title="${esc(title)}">` +
+      `<span class="gic-ic">${iconMarkup(safe ? faviconOf(safe) : "", ch, "gic-ic")}</span>` +
+      `<span class="gic-name">${esc(title)}</span>` +
+      `</a>`,
+    search: `${title} ${dm}`,
+  }
+}
+
+/**
+ * 把层级有序列表（orderBookmarksHierarchically 的输出：子孙紧跟在根之后）
+ * 折成「根书签 + 全部子孙」的家族；孙书签也平铺进根卡片，不再逐级缩进。
+ */
+function groupBookmarkFamilies(bms: PublicBookmark[]): Array<{ root: PublicBookmark; kids: PublicBookmark[] }> {
+  const ids = new Set((bms || []).map((b) => String(b && b.id)))
+  const families: Array<{ root: PublicBookmark; kids: PublicBookmark[] }> = []
+  for (const b of orderBookmarksHierarchically(bms)) {
+    const pid = typeof b.parent_id === 'string' ? b.parent_id.trim() : ''
+    const last = families[families.length - 1]
+    if (pid && ids.has(pid) && last) last.kids.push(b)
+    else families.push({ root: b, kids: [] })
+  }
+  return families
 }
 
 /**
@@ -773,10 +830,33 @@ function notesHtml(
  * 专栏画卷外壳：吸顶毛玻璃顶栏 + 居中自适应专栏容器 + 品牌传播尾部。
  * 去除原后台侧边栏，以内容为绝对主角，SPA 接管前/后体验统一。
  */
+/**
+ * 分享页出站跳转（/s/<gid>/go、/s/c/<sid>/go）：share-ssr 计一次 cta/start 再 302 到应用。
+ * 跳转目标由服务端按 to=save|start 白名单决定，不接受任意 URL（防开放重定向）。
+ */
+export function shareGoUrl(appOrigin: string, kind: 'g' | 'c', id: string): string {
+  const enc = encodeURIComponent(id)
+  return kind === 'g' ? `${appOrigin}/s/${enc}/go` : `${appOrigin}/s/c/${enc}/go`
+}
+
+/** 文末转化卡片：访客看完清单、意愿最高的时刻，给一个轻量的「你也来建一份」入口 */
+function buildStartCard(dict: typeof T['zh-CN'] | typeof T['en-US'], startUrl: string): string {
+  return [
+    `<aside class="share-start">`,
+    `<span class="share-start-logo" aria-hidden="true">${LOGO_SVG}</span>`,
+    `<div class="share-start-text">`,
+    `<p class="share-start-title">${esc(dict.startTitle)}</p>`,
+    `<p class="share-start-body">${esc(dict.startBody)}</p>`,
+    `</div>`,
+    `<a class="share-start-btn" href="${esc(startUrl)}">${esc(dict.startBtn)}</a>`,
+    `</aside>`,
+  ].join("\n")
+}
+
 function buildAppShell(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   appOrigin: string,
-  opts: { hdrMeta: string; ctaUrl: string; inner: string; hideCta?: boolean },
+  opts: { hdrMeta: string; ctaUrl: string; inner: string; hideCta?: boolean; ctaText?: string; startUrl?: string },
 ): string {
   const year = new Date().getUTCFullYear()
   const isZh = dict.lang === 'zh-CN'
@@ -800,12 +880,13 @@ function buildAppShell(
       `<span class="theme-icon-moon">${MOON_SVG}</span>` +
     `</button>`,
     // 密码门等「访客还看不到内容」的页面不出「保存至我的库」，避免点进去无物可存
-    opts.hideCta ? '' : `<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a>`,
+    opts.hideCta ? '' : `<a class="cta" href="${esc(opts.ctaUrl)}">${esc(opts.ctaText || dict.cta)}</a>`,
     `</div>`,
     `</div>`,
     `</header>`,
     `<main class="share-container">`,
     opts.inner,
+    opts.startUrl ? buildStartCard(dict, opts.startUrl) : '',
     `</main>`,
     `<footer class="share-footer">`,
     `<div class="share-footer-inner">`,
@@ -882,7 +963,7 @@ function buildBody(
       tools,
       `</div>`,
       `<div class="bm-grid" id="bmList">`,
-      orderBookmarksHierarchically(bookmarks).map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("\n"),
+      groupBookmarkFamilies(bookmarks).map((f) => buildBookmarkItem(dict, f.root, f.kids)).join("\n"),
       `</div>`,
       `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
       `</section>`,
@@ -910,7 +991,14 @@ function buildBody(
     `</article>`,
   ].filter(Boolean).join("\n")
 
-  return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
+  const go = shareGoUrl(appOrigin, 'g', group.id)
+  return buildAppShell(dict, appOrigin, {
+    hdrMeta: "",
+    ctaUrl: count > 0 ? `${go}?to=save` : appUrl,
+    ctaText: count > 0 ? fill(pick(dict, 'ctaN', count), { n: count }) : undefined,
+    startUrl: `${go}?to=start`,
+    inner,
+  })
 }
 
 /**
@@ -1136,7 +1224,7 @@ function buildGroupFocusPanel(
   const orderedItems = orderBookmarksHierarchically(entry.items)
   const n = orderedItems.length
   const itemsHtml = n
-    ? orderedItems.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("")
+    ? groupBookmarkFamilies(entry.items).map((f) => buildBookmarkItem(dict, f.root, f.kids)).join("")
     : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
   const gid = esc(String(g.id))
 
@@ -1356,7 +1444,15 @@ function buildCategoryBody(
     grid,
     ...focusPanels,
   ].filter(Boolean).join("\n")
-  return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
+  const go = shareGoUrl(appOrigin, 'c', shareId)
+  const total = bookmarks.length
+  return buildAppShell(dict, appOrigin, {
+    hdrMeta: "",
+    ctaUrl: total > 0 ? `${go}?to=save` : appUrl,
+    ctaText: total > 0 ? fill(pick(dict, 'ctaN', total), { n: total }) : undefined,
+    startUrl: `${go}?to=start`,
+    inner,
+  })
 }
 
 /** 分类分享 <head>：分类名进 title，描述用「N 个书签 · M 个组 · 由与链公开分享」。 */
