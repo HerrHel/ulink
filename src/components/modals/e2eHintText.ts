@@ -9,10 +9,14 @@
  *   - enabled   | locked     → fieldsOpen=false | hint 「点击解锁后可编辑 X」（引导用户去解锁）
  *   - enabled   | unlocked   → fieldsOpen=true  | hint 不显示（字段已开放，E2ELockOverlay 不渲染遮罩）
  *
+ * 文案走 i18n（modal.bookmark.e2eHint*）：曾写死中文，英文界面也显示中文提示。
+ *
  * 安全引导价值：错配 hint 文案会让用户误判当前为何不能编辑
  *   - 「不能编辑=没开 E2E」误判 → 用户去重置主密码而非解锁，丢失已加密数据
  *   - 「不能编辑=没解锁」误判 → 用户去开启 E2E 而非解锁，误覆盖已有加密态
  */
+
+import { t } from '../../i18n/index.js'
 
 export interface E2EState {
   enabled: boolean
@@ -36,13 +40,13 @@ export function e2eFieldsOpen(state: E2EState): boolean {
  */
 export function e2eHintAccount(state: E2EState): string {
   return state.enabled && !state.unlocked
-    ? '点击解锁后可编辑账户'
-    : '开启 E2E 后可存储账户'
+    ? t('modal.bookmark.e2eHintUnlockAccount')
+    : t('modal.bookmark.e2eHintEnableAccount')
 }
 
 /** 密码 hint 文案：与 e2eHintAccount 同形仅末词不同（账户→密码） */
 export function e2eHintPassword(state: E2EState): string {
   return state.enabled && !state.unlocked
-    ? '点击解锁后可编辑密码'
-    : '开启 E2E 后可存储密码'
+    ? t('modal.bookmark.e2eHintUnlockPassword')
+    : t('modal.bookmark.e2eHintEnablePassword')
 }

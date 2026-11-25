@@ -34,6 +34,11 @@ export const modalsZh = {
       aiSuggestSep: '，',
       aiSuggestAttrSep: '」「',
       aiFetchBtn: '智能提取',
+      // 账户 / 密码字段的 E2E 提示（e2eHintText.ts）
+      e2eHintUnlockAccount: '点击解锁后可编辑账户',
+      e2eHintEnableAccount: '开启 E2E 后可存储账户',
+      e2eHintUnlockPassword: '点击解锁后可编辑密码',
+      e2eHintEnablePassword: '开启 E2E 后可存储密码',
       aiFetching: '提取中…',
       aiFetched: '已智能提取',
       aiFetchHint: '读取公网网页真实标题与描述，自动建议分类标签',

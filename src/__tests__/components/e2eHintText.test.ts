@@ -14,6 +14,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { e2eFieldsOpen, e2eHintAccount, e2eHintPassword } from '../../components/modals/e2eHintText.js'
+import { setLocale } from '../../i18n/index.js'
 
 describe('e2eHintText 三态门控 hint 护栏', () => {
   describe('e2eFieldsOpen 字段开放判定', () => {
@@ -106,5 +107,19 @@ describe('e2eHintText 三态门控 hint 护栏', () => {
       ]
       expect(allFour.map(s => e2eFieldsOpen(s))).toEqual([false, false, false, true])
     })
+  })
+})
+
+describe('e2eHintText — 英文界面不再显示中文提示', () => {
+  it('切到 en-US 后四条提示均为英文', () => {
+    setLocale('en-US')
+    try {
+      expect(e2eHintAccount({ enabled: false, unlocked: false })).toBe('Turn on E2E to store an account')
+      expect(e2eHintAccount({ enabled: true, unlocked: false })).toBe('Unlock to edit the account')
+      expect(e2eHintPassword({ enabled: false, unlocked: false })).toBe('Turn on E2E to store a password')
+      expect(e2eHintPassword({ enabled: true, unlocked: false })).toBe('Unlock to edit the password')
+    } finally {
+      setLocale('zh-CN')
+    }
   })
 })
