@@ -61,7 +61,7 @@ const JOBS = [
     from: 'supabase/functions/_shared/cb-auth.ts',
     to: 'cloudbase/functions/check-link/cb-auth.js',
   },
-  // 分享 SSR 渲染核（3400+ 行零依赖纯函数，bundle 自包含）
+  // 分享 SSR 渲染核（零依赖纯函数；样式 share-render-styles.ts、前端脚本 share-render-client.ts 由 bundle 打进单文件）
   {
     from: 'functions/_lib/share-render.ts',
     to: 'cloudbase/functions/share-ssr/share-render.js',
