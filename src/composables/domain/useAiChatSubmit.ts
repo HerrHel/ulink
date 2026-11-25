@@ -41,7 +41,7 @@ import {
 } from '../../lib/ai/toolResult.js'
 import { toast } from '../../lib/toast.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
-import type { AbortControllerSlot } from './useAiChatSessions.js'
+import type { AbortControllerSlot, ChatTurnsChangeReason } from './useAiChatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
 import { presetReplies } from '../../lib/ai/suggestedReplies.js'
 import type { useDataStore } from '../../stores/data.js'
@@ -70,7 +70,7 @@ export interface AiChatSubmitContext {
   persistCurrentSession: () => void
   handleCreateSession: () => void
   /** 对话轮次变化后需要滚动到底部时回调 */
-  onTurnsChanged?: () => void
+  onTurnsChanged?: (reason?: ChatTurnsChangeReason) => void
   /** aiQuery 被代码改写后回调（供调用方重置输入框高度） */
   onQueryChanged?: () => void
   /** 提交对话需切回「对话」tab 时回调 */
@@ -342,7 +342,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       timestamp: Date.now(),
     }) as ChatTurn
     chatTurns.value.push(assistantTurn)
-    onTurnsChanged?.()
+    onTurnsChanged?.('submit')
 
     // 本轮是否失败收尾：错误轮次不得再挂载「换个方案 / 存为卡片」等预判胶囊
     let replyFailed = false
@@ -722,7 +722,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                     assistantTurn._thinkingOpen = true
                   }
                   assistantTurn.reasoning = accumulatedReasoning
-                  onTurnsChanged?.()
+                  onTurnsChanged?.('stream')
                 },
                 onContentDelta(_delta, accumulatedContent) {
                   if (controller.signal.aborted) return
@@ -733,7 +733,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                     assistantTurn._thinkingOpen = false
                   }
                   assistantTurn.content = accumulatedContent
-                  onTurnsChanged?.()
+                  onTurnsChanged?.('stream')
                 },
                 onStall: onStreamStall,
               }
@@ -905,7 +905,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                       onContentDelta(_delta, accumulatedContent) {
                         if (controller.signal.aborted) return
                         assistantTurn.content = accumulatedContent
-                        onTurnsChanged?.()
+                        onTurnsChanged?.('stream')
                       },
                       onStall: onStreamStall,
                     },
@@ -1058,7 +1058,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         aiLoading.value = false
         abortSlot.current = null
         persistCurrentSession()
-        onTurnsChanged?.()
+        onTurnsChanged?.('stream')
       }
     }
   }

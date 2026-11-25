@@ -27,6 +27,9 @@ import {
 } from '../../lib/ai/chatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
 
+/** 对话轮次变化原因：submit/session/revoke 需主动回到底部，stream/action/stop 仅在跟随底部时自动滚动 */
+export type ChatTurnsChangeReason = 'submit' | 'session' | 'stream' | 'action' | 'stop' | 'revoke'
+
 /** 在途请求控制器槽位：请求编排层写入/接管，本层负责中止（等同原模块内 let 变量的可变句柄） */
 export interface AbortControllerSlot {
   current: AbortController | null
@@ -38,7 +41,7 @@ export interface AiChatSessionsContext {
   aiLoading: Ref<boolean>
   t: ReturnType<typeof useI18n>['t']
   /** 对话轮次变化后需要滚动到底部时回调 */
-  onTurnsChanged?: () => void
+  onTurnsChanged?: (reason?: ChatTurnsChangeReason) => void
   /** aiQuery 被代码改写后回调（供调用方重置输入框高度） */
   onQueryChanged?: () => void
   /** 需要聚焦输入框时回调 */
@@ -146,7 +149,7 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
 
   function handleStopGenerating() {
     abortInFlight()
-    onTurnsChanged?.()
+    onTurnsChanged?.('stop')
   }
 
   function handleCreateSession() {
@@ -185,7 +188,7 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
     setCurrentSessionId(id)
     chatTurns.value = [...target.turns]
     closeSessionMenu?.()
-    onTurnsChanged?.()
+    onTurnsChanged?.('session')
     focusInput?.()
   }
 

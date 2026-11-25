@@ -170,4 +170,38 @@ describe('ChatStream — 预判建议按钮与写回笔记图标', () => {
 
     expect(bodyEl.scrollTop).toBe(1000)
   })
+
+  it('深度思考框即使只上翻小幅距离（如 20px < 40px）也立即暂停吸底，不与用户抢滚动条', async () => {
+    const turn: ChatTurn = {
+      id: 'turn-thinking-small',
+      role: 'assistant',
+      content: '',
+      reasoning: '第1行思考内容...',
+      isThinking: true,
+      _thinkingOpen: true,
+      loading: true,
+      timestamp: Date.now(),
+    }
+    const wrapper = mountStream([turn])
+    const bodyEl = wrapper.find('.chat-thinking-body').element as HTMLElement
+
+    Object.defineProperty(bodyEl, 'scrollHeight', { value: 600, configurable: true })
+    Object.defineProperty(bodyEl, 'clientHeight', { value: 240, configurable: true })
+
+    turn.reasoning += '\n第2行思考内容...'
+    await wrapper.setProps({ chatTurns: [{ ...turn }] })
+    expect(bodyEl.scrollTop).toBe(600)
+
+    // 先同步真实最大 scrollTop=360，再向上小幅翻动 20px（340，距离底部仅 20px < 40px）
+    bodyEl.scrollTop = 360
+    await wrapper.find('.chat-thinking-body').trigger('scroll')
+    bodyEl.scrollTop = 340
+    await wrapper.find('.chat-thinking-body').trigger('scroll')
+
+    Object.defineProperty(bodyEl, 'scrollHeight', { value: 720, configurable: true })
+    turn.reasoning += '\n继续思考第3行...'
+    await wrapper.setProps({ chatTurns: [{ ...turn }] })
+
+    expect(bodyEl.scrollTop).toBe(340)
+  })
 })

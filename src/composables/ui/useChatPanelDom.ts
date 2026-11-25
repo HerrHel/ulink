@@ -9,6 +9,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Ref } from
 import { useUIStore } from '../../stores/ui.js'
 import { isMobile } from '../../utils.js'
 import { attachFilesToAi } from '../../lib/ai/attachFiles.js'
+import { useChatAutoScroll } from './useChatAutoScroll.js'
 
 export interface ChatPanelDomDeps {
   panelRef: Ref<HTMLElement | null>
@@ -55,23 +56,17 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
     },
   )
 
-  // ── 聊天区滚动到底 ──
-  function scrollToBottom(smooth = false) {
-    nextTick(() => {
-      if (!scrollRef.value) return
-      const el = scrollRef.value
-      if (typeof el.scrollTo === 'function' && smooth) {
-        try {
-          el.scrollTo({
-            top: el.scrollHeight,
-            behavior: 'smooth',
-          })
-        } catch {
-          // fallback to direct assignment
-        }
-      }
-      el.scrollTop = el.scrollHeight
-    })
+  // ── 聊天区滚动到底（粘性贴底：用户手动上翻后暂停，主动提交/切会话传 force=true 强制恢复） ──
+  const {
+    userScrolledUp,
+    scrollToBottom: autoScrollToBottom,
+    resetAutoScroll,
+  } = useChatAutoScroll({
+    scrollRef,
+  })
+
+  function scrollToBottom(smooth = false, force = smooth) {
+    autoScrollToBottom({ smooth, force })
   }
 
   // ── 输入框自适应高度 ──
@@ -169,7 +164,9 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
     onPanelDragOver,
     onPanelDragLeave,
     onPanelDrop,
+    userScrolledUp,
     scrollToBottom,
+    resetAutoScroll,
     adjustTextareaHeight,
     isSwiping,
     translateY,

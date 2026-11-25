@@ -163,6 +163,7 @@ const {
   onPanelDragLeave,
   onPanelDrop,
   scrollToBottom,
+  resetAutoScroll,
   adjustTextareaHeight,
   isSwiping,
   panelStyle,
@@ -213,7 +214,10 @@ const {
   historyCursor,
   tempInput,
 } = useAiChat({
-  onTurnsChanged: () => scrollToBottom(),
+  onTurnsChanged: (reason) => scrollToBottom(
+    false,
+    reason === 'submit' || reason === 'session' || reason === 'revoke',
+  ),
   onQueryChanged: () => adjustTextareaHeight(),
   focusInput: () => nextTick(() => aiTextareaRef.value?.focus()),
   closeSessionMenu: () => {
@@ -308,6 +312,13 @@ function handleApplySuggestedReply(reply: string, turn: ChatTurn) {
 // ── 终端式命令历史回溯 (↑ / ↓) 状态由 useAiChat 提供（inputHistory / historyCursor / tempInput）──
 
 watch(
+  () => currentSessionId.value,
+  () => {
+    resetAutoScroll()
+  },
+)
+
+watch(
   () => isOpen.value,
   (open) => {
     if (open) {
@@ -351,10 +362,11 @@ watch(
 .chat-scroll-body {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 16px 14px;
   min-width: 0 !important;
   box-sizing: border-box;
-  scroll-behavior: smooth;
+  /* 不写 scroll-behavior:smooth，避免流式输出直接赋值 scrollTop 贴底时被动画拖住 */
   scrollbar-width: thin;
   scrollbar-color: var(--border-light) transparent;
 }

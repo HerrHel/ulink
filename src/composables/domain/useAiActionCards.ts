@@ -27,6 +27,7 @@ import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
+import type { ChatTurnsChangeReason } from './useAiChatSessions.js'
 import type { Ref } from 'vue'
 
 /** 行动卡片 payload 内的候选条目（与原 DetailPanel 内联 any 形态一致） */
@@ -46,7 +47,7 @@ export interface AiActionCardsContext {
   t: ReturnType<typeof useI18n>['t']
   tN: ReturnType<typeof useI18n>['tN']
   /** 对话轮次变化后需要滚动到底部时回调 */
-  onTurnsChanged?: () => void
+  onTurnsChanged?: (reason?: ChatTurnsChangeReason) => void
 }
 
 function resolveAppStore() {
@@ -213,7 +214,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
     } finally {
       card.executing = false
       persistTurns()
-      onTurnsChanged?.()
+      onTurnsChanged?.('action')
     }
   }
 
@@ -248,7 +249,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
             steps: [{ text: res.message, done: true }],
             timestamp: Date.now(),
           })
-          onTurnsChanged?.()
+          onTurnsChanged?.('action')
           persistTurns()
         }
       } else if (card.type === 'dag_plan' || card.actionName === 'execute_dag_plan') {
@@ -281,7 +282,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           } else {
             toast(t('ai.actionFailed'), false)
           }
-          onTurnsChanged?.()
+          onTurnsChanged?.('action')
           persistTurns()
         }
       } else if (card.actionName === 'merge_dedup') {
@@ -296,7 +297,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
             steps: [{ text: t('ai.mergeStep', { n: res.mergedCount }), done: true }],
             timestamp: Date.now(),
           })
-          onTurnsChanged?.()
+          onTurnsChanged?.('action')
           persistTurns()
         } else {
           if (res.message) toast(res.message, false)
@@ -313,7 +314,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           steps: res.steps,
           timestamp: Date.now(),
         })
-        onTurnsChanged?.()
+        onTurnsChanged?.('action')
         persistTurns()
       } else if (card.actionName === 'inbox_zero') {
         const res = await dispatchSiteCommand('/inbox', { ds, ui, app })
@@ -325,7 +326,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           actionCard: res.actionCard,
           timestamp: Date.now(),
         })
-        onTurnsChanged?.()
+        onTurnsChanged?.('action')
         persistTurns()
       } else if (card.actionName === 'apply_inbox_zero') {
         const res = await applyInboxZeroClustering({ ds, ui, app })
@@ -338,7 +339,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           steps: [{ text: tN('ai.inboxStepDone', res.movedCount, { n: res.movedCount }), done: true }],
           timestamp: Date.now(),
         })
-        onTurnsChanged?.()
+        onTurnsChanged?.('action')
         persistTurns()
       } else if (card.actionName === 'create_topic_workspace') {
         const payload = (card.payload || {}) as {
@@ -377,7 +378,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
               : [],
             timestamp: Date.now(),
           })
-          onTurnsChanged?.()
+          onTurnsChanged?.('action')
           persistTurns()
         } else {
           if (res.message) toast(res.message, false)
@@ -406,7 +407,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
               ],
               timestamp: Date.now(),
             })
-            onTurnsChanged?.()
+            onTurnsChanged?.('action')
             persistTurns()
           } else {
             if (res.message) toast(res.message, false)
@@ -428,7 +429,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
               steps: [{ text: `已成功为 ${res.taggedCount} 个书签写入标签`, done: true }],
               timestamp: Date.now(),
             })
-            onTurnsChanged?.()
+            onTurnsChanged?.('action')
             persistTurns()
           } else {
             toast(res.message || t('ai.actionFailed'), false)
@@ -463,7 +464,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
               ...(turn.steps ? { steps: turn.steps } : {}),
               ...(turn.actionCard ? { actionCard: turn.actionCard } : {}),
             })
-            onTurnsChanged?.()
+            onTurnsChanged?.('action')
             persistTurns()
             toast(t('ai.destructiveToolConfirmed'), true)
           }

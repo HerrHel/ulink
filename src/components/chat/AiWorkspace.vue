@@ -418,6 +418,7 @@ import { useAiChat, type ChatTurn } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
 import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
 import { useChatPanelShell } from '../../composables/ui/useChatPanelShell.js'
+import { useChatAutoScroll } from '../../composables/ui/useChatAutoScroll.js'
 import { attachFilesToAi } from '../../lib/ai/attachFiles.js'
 import { toast } from '../../lib/toast.js'
 import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
@@ -452,13 +453,13 @@ const { currentPlaceholder: rotatingHeroPlaceholder } = useRotatingPlaceholder({
   hasContent: hasHeroInputContent,
 })
 
-function scrollToBottom() {
-  nextTick(() => {
-    if (scrollContainerRef.value) {
-      scrollContainerRef.value.scrollTop = scrollContainerRef.value.scrollHeight
-    }
-  })
-}
+const {
+  scrollToBottom,
+  notifyManualScroll,
+  resetAutoScroll,
+} = useChatAutoScroll({
+  scrollRef: scrollContainerRef,
+})
 
 function focusTextarea() {
   const ta = activeTa.value
@@ -518,7 +519,9 @@ const {
   historyCursor,
   tempInput,
 } = useAiChat({
-  onTurnsChanged: () => scrollToBottom(),
+  onTurnsChanged: (reason) => scrollToBottom({
+    force: reason === 'submit' || reason === 'session' || reason === 'revoke',
+  }),
   onQueryChanged: () => adjustTextareaHeight(),
   focusInput: () => nextTick(() => activeTa.value?.focus()),
 })
@@ -651,7 +654,7 @@ const convHeaderTitle = computed(() => {
 function onSelectRecentSession(sid: string) {
   switchSession(sid)
   nextTick(() => {
-    scrollToBottom()
+    scrollToBottom({ force: true })
   })
 }
 
@@ -676,7 +679,7 @@ function openHistoryDrawer() {
 function selectSessionFromDrawer(id: string) {
   switchSession(id)
   isHistoryDrawerOpen.value = false
-  scrollToBottom()
+  scrollToBottom({ force: true })
 }
 
 function createSessionFromDrawer() {
@@ -748,6 +751,7 @@ function jumpToTurn(id: string) {
   // 用户实测「定位一条消息却把整个页面上移」（左侧导航与标题一起跑掉）。
   const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top
   const target = Math.max(0, container.scrollTop + delta - 56) // 让出常驻会话顶栏（46px）
+  notifyManualScroll(target)
   if (typeof container.scrollTo === 'function') {
     container.scrollTo({ top: target, behavior: 'smooth' })
   } else {
@@ -872,7 +876,7 @@ function submitQuery() {
   const heroRect = findCapsule(aiTextareaRef.value)?.getBoundingClientRect() ?? null
   handleAiSubmit()
   void morphCapsule(heroRect, () => findCapsule(aiTextareaDockRef.value))
-  scrollToBottom()
+  scrollToBottom({ force: true })
 }
 
 function onNewConversation() {
@@ -1016,6 +1020,10 @@ watch(
     }
   },
 )
+
+watch(currentSessionId, () => {
+  resetAutoScroll()
+})
 
 watch(aiQuery, () => {
   nextTick(adjustTextareaHeight)

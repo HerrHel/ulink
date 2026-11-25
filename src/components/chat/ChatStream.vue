@@ -193,6 +193,7 @@
                         :ref="(el) => setThinkingBodyRef(turn.id, el as HTMLElement | null)"
                         class="chat-thinking-body"
                         @scroll="handleThinkingScroll(turn.id, $event)"
+                        @wheel.passive="handleThinkingWheel(turn.id, $event)"
                       >
                         <div class="chat-thinking-text">{{ turn.reasoning }}<span v-if="turn.isThinking" class="thinking-stream-cursor" aria-hidden="true"></span></div>
                       </div>
@@ -585,6 +586,7 @@ function canShowSuggestedReplies(turn: ChatTurn, tIdx: number): boolean {
 // ── 深度思考体滚动跟随 (Reasoning Auto-scroll) ──
 const thinkingBodyEls = new Map<string, HTMLElement>()
 const userScrolledUpMap = new Map<string, boolean>()
+const lastThinkingScrollTopMap = new Map<string, number>()
 
 function setThinkingBodyRef(turnId: string, el: HTMLElement | null) {
   if (el) {
@@ -593,24 +595,36 @@ function setThinkingBodyRef(turnId: string, el: HTMLElement | null) {
     if (turn?.isThinking && !userScrolledUpMap.get(turnId) && el.scrollHeight > el.clientHeight) {
       el.scrollTop = el.scrollHeight
     }
+    lastThinkingScrollTopMap.set(turnId, el.scrollTop)
   } else {
     thinkingBodyEls.delete(turnId)
     userScrolledUpMap.delete(turnId)
+    lastThinkingScrollTopMap.delete(turnId)
+  }
+}
+
+function handleThinkingWheel(turnId: string, event: WheelEvent) {
+  const el = event.currentTarget as HTMLElement | null
+  if (!el || event.ctrlKey || event.deltaY >= 0) return
+  if (el.scrollHeight > el.clientHeight + 1 && el.scrollTop > 0) {
+    userScrolledUpMap.set(turnId, true)
   }
 }
 
 function handleThinkingScroll(turnId: string, event: Event) {
   const el = event.target as HTMLElement
   if (!el) return
+  const prevTop = lastThinkingScrollTopMap.get(turnId) ?? el.scrollTop
   // 计算距离底部的像素差
   const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-  // 若用户主动往上滑动超过 40px，暂停吸底，方便用户翻看前文
-  if (distanceToBottom > 40) {
+  // 向上滚动且脱离底部超过 6px，或距离底部超过 40px，立即暂停吸底，避免与用户抢控制权
+  if ((el.scrollTop < prevTop - 1 && distanceToBottom > 6) || distanceToBottom > 40) {
     userScrolledUpMap.set(turnId, true)
-  } else {
-    // 重新滑回底部区域，恢复自动滚动跟随
+  } else if (el.scrollTop >= prevTop - 1 && distanceToBottom <= 40) {
+    // 非向上滚动且重新滑回底部区域，恢复自动滚动跟随
     userScrolledUpMap.set(turnId, false)
   }
+  lastThinkingScrollTopMap.set(turnId, el.scrollTop)
 }
 
 function scrollThinkingBodyToBottom() {
@@ -621,6 +635,7 @@ function scrollThinkingBodyToBottom() {
     if (userScrolledUpMap.get(turn.id)) continue
     if (el.scrollHeight > el.clientHeight) {
       el.scrollTop = el.scrollHeight
+      lastThinkingScrollTopMap.set(turn.id, el.scrollTop)
     }
   }
 }

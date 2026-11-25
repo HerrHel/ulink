@@ -21,7 +21,8 @@ import { saveAppData } from '../../stores/app.js'
 import { updateSession, type ChatTurn } from '../../lib/ai/chatSessions.js'
 export type { ChatTurn } from '../../lib/ai/chatSessions.js'
 import type { AiSearchPreference } from '../../types/ai.js'
-import { useAiChatSessions } from './useAiChatSessions.js'
+import { useAiChatSessions, type ChatTurnsChangeReason } from './useAiChatSessions.js'
+export type { ChatTurnsChangeReason } from './useAiChatSessions.js'
 import { useAiChatSubmit } from './useAiChatSubmit.js'
 import { useAiActionCards } from './useAiActionCards.js'
 import { SLASH_COMMAND_KEYS as SLASH_COMMANDS } from '../../lib/ai/slashCommands.js'
@@ -36,7 +37,7 @@ interface QuickHint {
 /** useAiChat 可选回调：全部为 UI 侧（DetailPanel）注入的副作用钩子，composable 不碰 DOM */
 export interface UseAiChatOptions {
   /** 对话轮次变化后需要滚动到底部时回调（handleAiSubmit / handleActionCardClick / handleStopGenerating / switchSession 收尾处） */
-  onTurnsChanged?: () => void
+  onTurnsChanged?: (reason?: ChatTurnsChangeReason) => void
   /** aiQuery 被代码改写后回调（供调用方重置输入框高度） */
   onQueryChanged?: () => void
   /** 需要聚焦输入框时回调（新建/切换会话、撤回消息、斜杠补全后） */
@@ -239,7 +240,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     sessions.value = updateSession(currentSessionId.value, chatTurns.value)
 
     // 4. 通知对话流变化
-    onTurnsChanged?.()
+    onTurnsChanged?.('revoke')
 
     // 5. 聚焦输入框便于修改重发（视觉状态已清晰直达，无需全局弹窗阻断）
     focusInput?.()

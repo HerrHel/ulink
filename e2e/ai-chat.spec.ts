@@ -321,3 +321,164 @@ test.describe('AI 提问分流路由（mock）', () => {
     expect(mimoCalls).toBe(0)
   })
 })
+
+test.describe('流式生成时手动上翻不抢控制权（真实浏览器滚动）', () => {
+  async function installControllableStreamFetch(page: Page) {
+    await page.addInitScript(() => {
+      const origFetch = window.fetch.bind(window)
+      let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
+      const encoder = new TextEncoder()
+      ;(window as unknown as Record<string, unknown>).__hasActiveSseStream = () => Boolean(ctrl)
+      ;(window as unknown as Record<string, unknown>).__pushSseChunk = (text: string) => {
+        if (!ctrl) return false
+        const payload = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`
+        ctrl.enqueue(encoder.encode(payload))
+        return true
+      }
+      ;(window as unknown as Record<string, unknown>).__endSseStream = () => {
+        if (!ctrl) return
+        ctrl.enqueue(encoder.encode('data: [DONE]\n\n'))
+        ctrl.close()
+        ctrl = null
+      }
+      window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (/\/(functions\/v1\/)?mimo-chat$/.test(new URL(url, location.origin).pathname)) {
+          let isStream = false
+          try {
+            const parsed = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as { stream?: boolean }
+            isStream = parsed.stream === true
+          } catch {
+            isStream = false
+          }
+          // queryExpand 走非流式（stream: false），直接快速返回空数组避免阻塞 4s 超时
+          if (!isStream) {
+            return new Response(JSON.stringify({ choices: [{ message: { content: '[]' } }] }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          }
+          const stream = new ReadableStream<Uint8Array>({
+            start(c) {
+              ctrl = c
+            },
+          })
+          return new Response(stream, {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream' },
+          })
+        }
+        return origFetch(input, init)
+      }
+    })
+  }
+
+  test('AiWorkspace 全屏工作台：流式期间滚轮上翻后保持阅读位置，不被后续增量拽回底部', async ({ page }) => {
+    test.setTimeout(60000)
+    await installSupabaseMock(page)
+    await installControllableStreamFetch(page)
+
+    await page.goto('/app')
+    await page.getByTestId('lv-card-grid').waitFor({ state: 'attached', timeout: 15000 })
+    await page.locator('[data-testid="rail-item-ai"]').click()
+    const ta = page.locator('.ai-minimal-textarea')
+    await expect(ta).toBeVisible({ timeout: 5000 })
+    await ta.fill('请详细展开说明 30 条建议')
+    await ta.press('Enter')
+
+    // 等待流建立后分批推入足够撑出滚动条的内容
+    await page.waitForFunction(() => Boolean((window as unknown as { __hasActiveSseStream?: () => boolean }).__hasActiveSseStream?.()))
+    const longPart = Array.from({ length: 28 }, (_, i) => `${i + 1}. 详尽建议条目 ${i + 1}：保持结构清晰与可维护性。`).join('\n')
+    await page.evaluate((chunk) => {
+      ;(window as unknown as { __pushSseChunk: (t: string) => boolean }).__pushSseChunk(chunk)
+    }, longPart)
+
+    const scrollView = page.locator('.ai-scroll-view')
+    await expect.poll(async () => {
+      return await scrollView.evaluate((el) => el.scrollHeight - el.clientHeight)
+    }, { timeout: 8000 }).toBeGreaterThan(200)
+
+    // 第 1 阶段：未手动上翻时应自动贴底
+    await expect.poll(async () => {
+      return await scrollView.evaluate((el) => Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight))
+    }, { timeout: 5000 }).toBeLessThanOrEqual(24)
+
+    // 第 2 阶段：鼠标移动到滚动区中心并用真实滚轮向上滚动
+    const box = await scrollView.boundingBox()
+    expect(box).not.toBeNull()
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
+    await page.mouse.wheel(0, -320)
+
+    await expect.poll(async () => {
+      return await scrollView.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)
+    }, { timeout: 5000 }).toBeGreaterThan(100)
+
+    const topAfterUserScroll = await scrollView.evaluate((el) => el.scrollTop)
+
+    // 第 3 阶段：继续推入多批流式内容并完成流，scrollTop 不得被强行拽回页脚
+    for (let k = 29; k <= 36; k++) {
+      await page.evaluate((line) => {
+        ;(window as unknown as { __pushSseChunk: (t: string) => boolean }).__pushSseChunk(line)
+      }, `\n${k}. 后续流式补充条目 ${k}：持续生成内容检验滚动控制权。`)
+      await page.waitForTimeout(30)
+    }
+    await page.evaluate(() => {
+      ;(window as unknown as { __endSseStream: () => void }).__endSseStream()
+    })
+
+    await expect(page.locator('.chat-flow-text').last()).toContainText('后续流式补充条目 36', { timeout: 8000 })
+    const topAfterStream = await scrollView.evaluate((el) => el.scrollTop)
+    expect(Math.abs(topAfterStream - topAfterUserScroll)).toBeLessThanOrEqual(2)
+  })
+
+  test('DetailPanel 侧边 AI 栏：流式期间滚轮上翻后保持阅读位置，不被后续增量拽回底部', async ({ page }) => {
+    test.setTimeout(60000)
+    await installSupabaseMock(page)
+    await installControllableStreamFetch(page)
+
+    await page.goto('/app')
+    await openAiPanel(page)
+    await page.locator('.chat-textarea').fill('侧边栏输出 30 条建议')
+    await page.locator('.chat-send-btn').click()
+
+    await page.waitForFunction(() => Boolean((window as unknown as { __hasActiveSseStream?: () => boolean }).__hasActiveSseStream?.()))
+    const longPart = Array.from({ length: 28 }, (_, i) => `${i + 1}. 侧栏条目 ${i + 1}：保持阅读控制权。`).join('\n')
+    await page.evaluate((chunk) => {
+      ;(window as unknown as { __pushSseChunk: (t: string) => boolean }).__pushSseChunk(chunk)
+    }, longPart)
+
+    const scrollView = page.locator('#detailInner')
+    await expect.poll(async () => {
+      return await scrollView.evaluate((el) => el.scrollHeight - el.clientHeight)
+    }, { timeout: 8000 }).toBeGreaterThan(200)
+
+    await expect.poll(async () => {
+      return await scrollView.evaluate((el) => Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight))
+    }, { timeout: 5000 }).toBeLessThanOrEqual(24)
+
+    const box = await scrollView.boundingBox()
+    expect(box).not.toBeNull()
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
+    await page.mouse.wheel(0, -320)
+
+    await expect.poll(async () => {
+      return await scrollView.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)
+    }, { timeout: 5000 }).toBeGreaterThan(100)
+
+    const topAfterUserScroll = await scrollView.evaluate((el) => el.scrollTop)
+
+    for (let k = 29; k <= 36; k++) {
+      await page.evaluate((line) => {
+        ;(window as unknown as { __pushSseChunk: (t: string) => boolean }).__pushSseChunk(line)
+      }, `\n${k}. 侧栏流式补充 ${k}：持续输出内容。`)
+      await page.waitForTimeout(30)
+    }
+    await page.evaluate(() => {
+      ;(window as unknown as { __endSseStream: () => void }).__endSseStream()
+    })
+
+    await expect(page.locator('.chat-flow-text').last()).toContainText('侧栏流式补充 36', { timeout: 8000 })
+    const topAfterStream = await scrollView.evaluate((el) => el.scrollTop)
+    expect(Math.abs(topAfterStream - topAfterUserScroll)).toBeLessThanOrEqual(2)
+  })
+})

@@ -123,6 +123,32 @@ describe('useChatPanelDom 滚动到底', () => {
     expect(h1.scroll.scrollTop).toBe(300)
     h1.wrapper.unmount()
   })
+
+  it('用户向上滚动后默认 scrollToBottom() 暂停抢控，force=true 时恢复滚动到底', async () => {
+    const h1 = makeHarness()
+    Object.defineProperty(h1.scroll, 'scrollHeight', { value: 800, configurable: true })
+    Object.defineProperty(h1.scroll, 'clientHeight', { value: 300, configurable: true })
+    h1.api.scrollToBottom()
+    await nextTick()
+    expect(h1.scroll.scrollTop).toBe(800)
+
+    // 用户上翻到 200
+    h1.scroll.scrollTop = 200
+    h1.scroll.dispatchEvent(new Event('scroll'))
+    expect(h1.api.userScrolledUp.value).toBe(true)
+
+    Object.defineProperty(h1.scroll, 'scrollHeight', { value: 1100, configurable: true })
+    h1.api.scrollToBottom()
+    await nextTick()
+    expect(h1.scroll.scrollTop).toBe(200)
+
+    // 显式强制滚到底（如提交新问题）恢复自动跟随
+    h1.api.scrollToBottom(false, true)
+    await nextTick()
+    expect(h1.api.userScrolledUp.value).toBe(false)
+    expect(h1.scroll.scrollTop).toBe(1100)
+    h1.wrapper.unmount()
+  })
 })
 
 describe('useChatPanelDom 拖拽悬停', () => {
