@@ -4,6 +4,7 @@
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { getLocale } from '../i18n/index.js'
 import * as persist from './persist.js'
+import { restoreDirty } from './dirtyPersist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { useUndoStore } from './undo.js'
@@ -162,6 +163,8 @@ export const ioActions = {
     }
     // 复用 importFromData 整集替换语义（runMigrations + _syncMaps + 清缓存）
     this.importFromData(target)
+    // 回到主页：并回落盘的待同步标记（离开主页时内存标记已清，未登录时它们没入队）
+    if (space === 'main') restoreDirty(this)
     // 私密空间首进：runMigrations 会从 DEFAULTS 注入全部示例分类（邮箱/工具/AI等），
     // 首次进入只保留 CAT_ALL 与 CAT_UNCATEGORIZED；非首进则确保基础两项存在且保留用户在私密下的自定义分类
     if (space === 'vault') {

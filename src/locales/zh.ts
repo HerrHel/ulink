@@ -323,6 +323,13 @@ export const zh = {
     offlinePending: '离线 · {n} 项待同步',
     pendingLocked: '{n} 项等待解锁后同步',
     pendingCount: '{n} 项待同步',
+    stashAskTitle: '本机还保存着 {n} 条无法确认归属的书签/组（来自之前登录过的账号或旧版本）。要合并到当前账号吗？',
+    stashMerge: '合并到当前账号',
+    stashMergeDesc: '这些数据会上传到当前账号的云端',
+    stashKeep: '保持分开',
+    stashKeepDesc: '数据继续留在本机原账号名下，不上传，不再提示',
+    stashMerged: '已合并 {n} 项到当前账号',
+    ownerSwitchFailed: '本地数据切换账号失败（存储不可写），已暂停同步',
   },
   toast: {
     undo: '撤回',

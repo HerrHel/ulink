@@ -12,6 +12,7 @@
 import { STORAGE_KEY, STORAGE_KEY_VAULT, DEFAULTS, buildSeedDefaults } from '../config/constants.js'
 import { runMigrations, CURRENT_SCHEMA_VERSION } from './migrations.js'
 import { idbGet, idbSet } from './storage.js'
+import { isWriteAllowed } from '../lib/dataOwner.js'
 import { AppDataSchema } from '../schemas.js'
 import { cloneDeep } from '../lib/clone.js'
 import type { AppData } from '../types.js'
@@ -66,7 +67,19 @@ export function _stamp(data: AppData) {
  */
 let _saveChain: Promise<boolean> = Promise.resolve(true)
 
+/**
+ * 账号分仓写入围栏：本实例内存数据已不属于当前归属账号（别的实例/本实例已换仓）时
+ * 拒绝一切落盘，防止把上一个账号的内存快照写进新账号的仓。见 lib/dataOwner.ts。
+ * 放在真正执行写入的时刻判定（_saveChain 排队期间可能已换仓）。
+ */
+function _fenced(where: string): boolean {
+  if (isWriteAllowed()) return false
+  console.warn(`[persist] ${where}：本地数据归属已变更，拒绝落盘（等待重载）`)
+  return true
+}
+
 async function _saveDataCore(data: AppData, space: Space = 'main'): Promise<boolean> {
+  if (_fenced('saveData')) return false
   const stamped = _stamp(data)
 
   // L14 修复：旧实现先 JSON.parse(JSON.stringify(stamped)) 给 IDB 再 JSON.stringify(stamped)
@@ -119,6 +132,7 @@ export function saveData(data: AppData, space: Space = 'main'): Promise<boolean>
 
 /** 仅写 localStorage（用于备份/导出场景） */
 export function saveToLocalStorage(data: AppData, space: Space = 'main'): boolean {
+  if (_fenced('saveToLocalStorage')) return false
   try {
     const stamped = _stamp(data)
     localStorage.setItem(_keyOf(space, 'ls'), JSON.stringify(stamped))
@@ -133,6 +147,7 @@ export function saveToLocalStorage(data: AppData, space: Space = 'main'): boolea
  *  返回是否写入成功。备份场景同样不应静默吞掉 IDB 失败（隐私模式/配额满），
  *  否则用户以为「已备份到本地」实则没落库——与 saveData 对齐如实上报。 */
 export async function saveToIDB(data: AppData, space: Space = 'main'): Promise<boolean> {
+  if (_fenced('saveToIDB')) return false
   const stamped = _stamp(data)
   const plain = cloneDeep(stamped)
   try {

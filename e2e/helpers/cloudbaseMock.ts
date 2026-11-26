@@ -11,7 +11,8 @@
  *  - 硬删除写入墓地表 deleted_item_graveyard；
  *  - 墓地中已存在的 (user_id, 表, id) 不允许再 INSERT（防删除复活）；
  *  - UPDATE 不能用不更新的时间戳把软删行复活。
- * 鉴权只模拟登录响应，不校验 token（单用户场景）。
+ * 鉴权只模拟登录响应，不校验 RLS；支持多账号（按登录邮箱发 token，/user/me 按 token 认人），
+ * 供跨账号隔离用例断言「哪个 user_id 的行被推上了云端」。
  */
 import { expect, type BrowserContext, type Page, type Route } from '@playwright/test'
 
@@ -36,7 +37,12 @@ export interface CbRequestLog {
 }
 
 export interface CbBackend {
+  /** 默认账号（row / seed / live 的作用对象） */
   user: CbUser
+  /** 可登录的全部账号（含默认账号） */
+  users: CbUser[]
+  /** 某账号云端某表未软删的行 */
+  liveFor(table: string, sub: string): Row[]
   /** 表名 → (user_id|id) → 行 */
   tables: Map<string, Map<string, Row>>
   /** 墓地：user_id|table|id */
@@ -63,7 +69,7 @@ const CORS = {
 
 const key = (userId: unknown, id: unknown) => `${String(userId)}|${String(id)}`
 
-export function createCloudBaseBackend(user: CbUser = CB_USER): CbBackend {
+export function createCloudBaseBackend(user: CbUser = CB_USER, extraUsers: CbUser[] = []): CbBackend {
   const tables = new Map<string, Map<string, Row>>()
   const graveyard = new Set<string>()
   const t = (name: string) => {
@@ -73,6 +79,8 @@ export function createCloudBaseBackend(user: CbUser = CB_USER): CbBackend {
   }
   return {
     user,
+    users: [user, ...extraUsers],
+    liveFor: (table, sub) => [...t(table).values()].filter((r) => r.user_id === sub && r.deleted_at == null),
     tables,
     graveyard,
     requests: [],
@@ -324,14 +332,19 @@ export async function attachCloudBase(context: BrowserContext, backend: CbBacken
     const path = url.pathname
 
     if (path.endsWith('/auth/v1/signin')) {
+      // 多账号：按请求体里出现的邮箱认人，token 里带 sub，后续 /user/me 据此返回对应账号
+      const body = req.postData() || ''
+      const u = backend.users.find((x) => body.includes(x.email)) ?? backend.user
       return reply(route, 200, {
-        token_type: 'Bearer', access_token: 'sync-e2e-at', refresh_token: 'sync-e2e-rt',
-        expires_in: 7200, scope: 'user', sub: backend.user.sub,
+        token_type: 'Bearer', access_token: `e2e-at.${u.sub}`, refresh_token: `e2e-rt.${u.sub}`,
+        expires_in: 7200, scope: 'user', sub: u.sub,
       })
     }
     if (path.includes('/auth/v1/')) {
       if (path.includes('/user/me')) {
-        return reply(route, 200, { sub: backend.user.sub, email: backend.user.email, name: 'sync-e2e', groups: [], created_at: new Date().toISOString() })
+        const auth = req.headers()['authorization'] || ''
+        const u = backend.users.find((x) => auth.endsWith(`e2e-at.${x.sub}`)) ?? backend.user
+        return reply(route, 200, { sub: u.sub, email: u.email, name: u.email.split('@')[0], groups: [], created_at: new Date().toISOString() })
       }
       return reply(route, 200, {})
     }

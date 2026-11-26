@@ -19,6 +19,8 @@ import { getSyncRemotePort, type SyncPortResult } from './syncRemotePort.js'
 import { _markPendingSync, _clearPendingSync, rememberDeadDelete, forgetDeadDelete, listDeadDeletes } from './syncPending.js'
 import { recordSyncFailure, recordSyncSuccess, classifySyncError } from './syncCircuit.js'
 import { safeGetItem, safeSetItem } from '../../lib/storageSafe.js'
+import { isSyncAllowedFor } from '../../lib/dataOwner.js'
+import { persistDirty } from '../../stores/dirtyPersist.js'
 
 /** 单条 sync op 最大推送重试次数 */
 export const MAX_PUSH_RETRIES = 3
@@ -146,6 +148,9 @@ export async function enqueueDirtyAsOps(): Promise<void> {
   const ds = useDataStore()
   const userId = _getUserId()
   if (!userId) return
+  // 同步总闸：本地数据不归属当前账号（换号后尚未换仓 / 本实例是旧账号的内存）时
+  // 不入队，标记原样保留在内存与落盘里，归属账号重新登录后再推
+  if (!isSyncAllowedFor(userId)) return
 
   const dirty = ds.drainDirtyIds()
   const deleted = ds.drainDeletedIds()
@@ -195,6 +200,8 @@ export async function enqueueDirtyAsOps(): Promise<void> {
       _clearPendingSync(new Set(ops.map(o => o.itemId)))
       console.error('[sync] enqueueSyncOps 失败：本地变更未入队，已保留 dirty 标记等待重试')
     }
+    // 入队成功 → 落盘标记随之清空；失败 → 回填后的标记重新落盘
+    persistDirty(ds)
     void refreshPendingCount()
   }
 }
@@ -340,6 +347,8 @@ export async function pushFromQueue(): Promise<boolean> {
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId) return false
+  // 同步总闸（见 lib/dataOwner.ts）：队列里的 op 属于本地归属账号，绝不以别的账号身份推送
+  if (!isSyncAllowedFor(userId)) return false
   if (!navigator.onLine) { syncStore.setSyncError('网络离线'); syncStore.setSyncErrorKind('network'); return false }
 
   const e2eGuard = useE2E()

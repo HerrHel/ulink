@@ -25,11 +25,16 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 // 把 lv_locale 写进 localStorage；i18n.detect() 启动时即读到 zh-CN。
 localStorageMock.setItem('lv_locale', 'zh-CN')
 
-beforeEach(() => {
+beforeEach(async () => {
   setActivePinia(createPinia())
   // 熔断器是模块级单例（非 Pinia），必须随每个用例复位，防失败场景跨用例污染门控
   __resetSyncCircuit()
   localStorageMock.clear()
+  // 账号分仓的「本实例归属」是模块级缓存：localStorage 每例清空后必须一起复位，
+  // 否则上一例登录过的账号会让本例的写入围栏 / 同步总闸误判为「已换号」。
+  // 必须动态 import：静态导入会经 dataOwner → storage.ts 抢先加载真实 Dexie，
+  // 让 storage-branches 等用 vi.mock('dexie') 的测试文件拿不到假 Dexie。
+  ;(await import('../lib/dataOwner.js')).__resetDataOwnerForTest()
   // clear() 不会重置 i18n 模块已缓存的 locale ref（模块级常量），但保险起见重新钉一下，
   // 防止某些测试调 setLocale('en-US') 后下一个测试默认跑到了 en。
   localStorageMock.setItem('lv_locale', 'zh-CN')

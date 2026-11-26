@@ -1,6 +1,7 @@
 /**
  * syncPull — selectSince + decrypt + merge + soft-delete + reconcile
  */
+import { isSyncAllowedFor } from '../../lib/dataOwner.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
@@ -36,6 +37,8 @@ export async function pullChanges(full = false): Promise<boolean> {
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId) return false
+  // 同步总闸：不把当前账号的云端数据合并进别的账号的本地数据（否则换回原账号时会被推上去）
+  if (!isSyncAllowedFor(userId)) return false
   if (!navigator.onLine) { syncStore.setSyncError('网络离线'); syncStore.setSyncErrorKind('network'); return false }
 
   syncStore.setSyncStatus('syncing')

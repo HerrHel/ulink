@@ -3,7 +3,7 @@
  * 手动同步、书签增删改。与 cloudbaseMock.ts 配合，供 cloudbase-*.spec.ts 共用。
  */
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test'
-import { attachCloudBase, loginViaUi, type CbBackend } from './cloudbaseMock'
+import { attachCloudBase, loginViaUi, type CbBackend, type CbUser } from './cloudbaseMock'
 
 export const isProd = !!process.env.LV_E2E_PROD || process.env.npm_lifecycle_event === 'test:e2e:prod'
 
@@ -13,16 +13,16 @@ export interface Device {
 }
 
 /** 新开一台设备：独立上下文（独立 localStorage / IndexedDB），接同一个云端，登录并等首轮同步完成 */
-export async function newDevice(browser: Browser, backend: CbBackend, label = 'A'): Promise<Device> {
+export async function newDevice(browser: Browser, backend: CbBackend, label = 'A', user: CbUser = backend.user): Promise<Device> {
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL })
   await attachCloudBase(context, backend, label)
   const page = await context.newPage()
   await page.goto('/app')
   await expect(grid(page)).toBeAttached({ timeout: 15000 })
-  await loginViaUi(page)
+  await loginViaUi(page, user.email)
   await page.keyboard.press('Escape')
   // 首轮同步完成的可观测信号：本机示例数据已补推到云端
-  await expect.poll(() => backend.live('bookmarks').length, { timeout: 20000 }).toBeGreaterThan(0)
+  await expect.poll(() => backend.liveFor('bookmarks', user.sub).length, { timeout: 20000 }).toBeGreaterThan(0)
   // 回归守卫：首次登录不得凭空出现冲突（曾因基线补推后 dirty 未释放，官网示例书签必报 4 条冲突）
   await page.waitForTimeout(1500)
   await expect(page.getByTestId('lv-conflict-banner')).toHaveCount(0)
@@ -96,3 +96,37 @@ export async function deleteBookmark(page: Page, title: string) {
 
 export const liveTitles = (backend: CbBackend) => backend.live('bookmarks').map((r) => r.title)
 export const findLive = (backend: CbBackend, title: string) => backend.live('bookmarks').find((r) => r.title === title)
+
+/** 经设置抽屉「账户」页退出登录（走 signOutAndReset：清同步态，本地数据保留） */
+export async function logoutViaUi(page: Page) {
+  const drawer = page.getByTestId('lv-settings-drawer')
+  if (!(await drawer.isVisible())) await page.getByTestId('lv-btn-settings').click()
+  await drawer.waitFor({ state: 'visible', timeout: 10000 })
+  const tab = page.getByTestId('settings-tab-account')
+  if (await tab.isVisible().catch(() => false)) await tab.click()
+  await drawer.getByRole('button', { name: '退出登录' }).click()
+  await expect(drawer.getByRole('button', { name: '登录 / 注册' })).toBeVisible({ timeout: 10000 })
+  await page.keyboard.press('Escape')
+  // 等抽屉关完：关闭动画期间 isVisible 仍为 true，紧接着的 loginViaUi 会误以为抽屉开着，
+  // 去点一个随抽屉关闭被移除的按钮
+  await expect(drawer).toBeHidden({ timeout: 10000 })
+}
+
+/**
+ * 模拟会话异常断掉（令牌失效 / 被挤下线）：只抹掉认证 SDK 的本地凭证并重载，
+ * 不走退出登录流程——推送队列、本地数据、归属标记都原样留着。
+ */
+export async function dropSessionAbnormally(page: Page) {
+  await page.evaluate(() => {
+    const keep = /^(lv_|linkvault_|ulink_)/
+    const doomed: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && !keep.test(k)) doomed.push(k)
+    }
+    for (const k of doomed) localStorage.removeItem(k)
+  })
+  await page.reload()
+  await expect(grid(page)).toBeAttached({ timeout: 15000 })
+}
+

@@ -28,7 +28,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 - UI 文本、代码注释一律用中文
 - 新组件放 `src/components/` 对应子目录；测试放 `src/__tests__/`（子目录 `composables/`、`stores/`）
 - 单测：vitest + jsdom + @vue/test-utils，setup 为 `src/__tests__/setup.ts`（mock localStorage，每测试自动建新 Pinia 实例）
-- E2E：Playwright 仅 chromium，baseURL `localhost:5173`，CI 下重试 2 次；默认 L1 注入 mock Supabase URL（e2e/helpers/supabaseMock page.route 拦截），`LV_E2E_L2=1` 切 L2 真后端；**线上形态（CloudBase）的同步/支付**只在 prod 模式（`LV_E2E_PROD=1`，build+preview）跑：`e2e/helpers/cloudbaseMock.ts` 是多设备共享的内存 PostgREST 云端（复刻墓地/防复活触发器），用例见 `cloudbase-sync.spec.ts`（同步）、`cloudbase-security.spec.ts`（主密码跨设备 + 私密空间不上云）、`purchase-flow.spec.ts`；CI 开 `failOnFlakyTests`，重试才过也判红
+- E2E：Playwright 仅 chromium，baseURL `localhost:5173`，CI 下重试 2 次；默认 L1 注入 mock Supabase URL（e2e/helpers/supabaseMock page.route 拦截），`LV_E2E_L2=1` 切 L2 真后端；**线上形态（CloudBase）的同步/支付**只在 prod 模式（`LV_E2E_PROD=1`，build+preview）跑：`e2e/helpers/cloudbaseMock.ts` 是多设备共享的内存 PostgREST 云端（复刻墓地/防复活触发器），用例见 `cloudbase-sync.spec.ts`（同步）、`cloudbase-security.spec.ts`（主密码跨设备 + 私密空间不上云）、`cloudbase-account-switch.spec.ts`（跨账号隔离：会话异常后换号、双标签页；mock 支持多账号 `createCloudBaseBackend(A, [B])`）、`purchase-flow.spec.ts`；CI 开 `failOnFlakyTests`，重试才过也判红
 - CI：四个 workflow —— `.github/workflows/ci.yml`（门禁 + 部署，`lint-test`、`unit`（3 分片）、`unit-cloudbase`（3 分片）、`e2e` 并行，`unit` 后由 `coverage` 合并分片报告并判覆盖率门槛，全绿后 `deploy`）+ `cert-check.yml`（证书到期监控）+ `prune-hosting-assets.yml`（手动清理托管 assets/ 旧分包，默认只统计）+ `backup-check.yml`（每天北京时间 09:00 查当天 db_backup 是否存在，缺失即红并发邮件）。`deploy` 仅 main 且测试全绿才发：复用 build 产物 → `tcb login --cloudbase-api-key` → `tcb hosting deploy ./dist --entry <全部 html,sw.js,version.json>`（CloudBase 静态托管；入口文件最后上传，**不用 `--safe`**：它每次全量服务端备份且不清理，单步 6.5 分钟）。未配 secret 时跳过部署但门禁照常执行；手动重部署 `gh workflow run ci.yml --ref main`；线上版本自检 `npm run check:prod`。⚠️ **CI 部署与手动 `tcb hosting deploy` 互斥**，统一走 CI
 - ESLint（`eslint.config.js`，Flat Config，v10）：ts/js 基础规则作用 `src/**/*.{js,ts}`（no-undef 由 TS 接管故关闭），`.vue` 由 vue flat/recommended 管理，高价值规则（require-v-for-key / no-mutating-props 等）钉 error：
   - error：no-eval / no-implied-eval / no-caller / no-redeclare / no-dupe-keys / no-duplicate-case
@@ -47,6 +47,8 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 ### 持久化
 
 `persist.ts`（IDB 权威 + localStorage 缓存）、`storage.ts`（Dexie，突破 5MB 限制）、`migrations.ts`（旧格式加载时自动兼容）
+
+**按账号分仓（`src/lib/dataOwner.ts`，2026-11-26）**：本地数据带归属账号 `lv_data_owner`（登出/会话过期都不清）。入队/推送/拉取统一过同步总闸 `isSyncAllowedFor(uid)`，持久化写入过围栏 `isWriteAllowed()`；登录账号 ≠ 归属时整体换仓（主数据、私密空间、推送队列、账号相关 localStorage 收进 IDB `lv_acct_stash:<uid>`）后整页重载，从不删数据。**新增随账号走的本地键必须登记进 `ACCOUNT_SCOPED_KEYS`**，否则换号会串号。待同步标记落盘于 `lv_sync_dirty_v1`（`stores/dirtyPersist.ts`）。
 
 ### Composables（`src/composables/`）
 

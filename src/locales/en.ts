@@ -328,6 +328,13 @@ export const en = {
     offlinePending: 'Offline · {n} pending',
     pendingLocked: '{n} awaiting unlock',
     pendingCount: '{n} pending',
+    stashAskTitle: 'This device still holds {n} bookmarks/groups whose account can’t be confirmed (from a previously signed-in account or an older version). Merge them into the current account?',
+    stashMerge: 'Merge into this account',
+    stashMergeDesc: 'They will be uploaded to this account’s cloud',
+    stashKeep: 'Keep separate',
+    stashKeepDesc: 'They stay on this device under the original account, not uploaded; won’t ask again',
+    stashMerged: 'Merged {n} items into this account',
+    ownerSwitchFailed: 'Couldn’t switch local data to this account (storage not writable); sync paused',
   },
   toast: {
     undo: 'Undo',

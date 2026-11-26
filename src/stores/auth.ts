@@ -11,32 +11,8 @@ import type { User, Session } from '@supabase/supabase-js'
 export const K_CUSTOM_NICKNAME = 'lv_user_nickname'
 export const K_CUSTOM_AVATAR = 'lv_user_avatar'
 
-// 缺陷7：跨账号切换标记。持久化 lastUserId，检测「已登录 A → 登录 B」时置位，
-// 供 useCloudSync.initialSync（不在本次可改范围，由主代理接线）跳过
-// _enqueueMissingToCloud，防止把上一账号的本地存量误补推到新账号。
-// 本地书签数据是有意保留的本地权威数据，登出不清 IDB。
-const K_LAST_USER_ID = 'lv_last_user_id'
-const K_ACCOUNT_SWITCHED = 'lv_account_switched'
-
-/** 记录当前已建立会话的 userId；与上次不同（且上次非空）时标记账号切换 */
-function _observeUserId(nextId: string | null): void {
-  const prevId = safeGetItem(K_LAST_USER_ID) || ''
-  if (nextId && prevId && prevId !== nextId) {
-    safeSetItem(K_ACCOUNT_SWITCHED, '1')
-    console.warn('[auth] 检测到账号切换，标记待 useCloudSync 跳过跨账号补推')
-  }
-  if (nextId) safeSetItem(K_LAST_USER_ID, nextId)
-}
-
-/** 是否刚发生账号切换（供 useCloudSync.initialSync 守卫 _enqueueMissingToCloud） */
-export function hasAccountSwitched(): boolean {
-  return safeGetItem(K_ACCOUNT_SWITCHED) === '1'
-}
-
-/** 主代理在跳过/完成本账号基线补推后调用，清标记避免后续轮次一直跳过 */
-export function clearAccountSwitched(): void {
-  safeRemoveItem(K_ACCOUNT_SWITCHED)
-}
+// 跨账号隔离不在这里做：本地数据的归属账号与按账号分仓见 lib/dataOwner.ts
+// （旧版一次性的 lv_account_switched 标记已由其迁移逻辑接管并清除）。
 
 /**
  * 读取用户资料时要同时认 Supabase 与 CloudBase 两套字段名。
@@ -267,15 +243,13 @@ export const useAuthStore = defineStore('auth', () => {
   const RECOVER_THROTTLE_MS = 30_000
 
   /**
-   * 单一入口写登录态：userId 观察与敏感密钥上锁都收在这里，
+   * 单一入口写登录态：敏感密钥上锁收在这里，
    * 避免「抢救成功」和「真登出」两条路径漏掉其中一步。
    */
   function applySession(s: Session | null) {
     const prevUser = user.value
     session.value = s
     user.value = s?.user ?? null
-    // 缺陷7：登录/换账号时检测 userId 变化并置跨账号标记
-    _observeUserId(s?.user?.id ?? null)
     if (prevUser && !s?.user) {
       // 会话过期或远端登出：立即锁定 E2E 与 Vault 敏感解密密钥
       try { useE2EStore().lock() } catch { /* ignore */ }
@@ -355,8 +329,6 @@ export const useAuthStore = defineStore('auth', () => {
     session.value = initial
     user.value = initial?.user ?? null
     _syncFromMetadata(user.value)
-    // 缺陷7：会话恢复时记录 userId（跨刷新的账号切换检测）
-    _observeUserId(user.value?.id ?? null)
     loading.value = false
 
     driver.onAuthStateChange((s) => {

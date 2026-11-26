@@ -11,8 +11,9 @@
  */
 import { computed, ref, toRef } from 'vue'
 import { useAuth } from './useAuth.js'
+import { t } from '../../i18n/index.js'
 import { useDataStore } from '../../stores/data.js'
-import { hasAccountSwitched, clearAccountSwitched } from '../../stores/auth.js'
+import { ensureOwnerFor, getDataOwner, isSyncAllowedFor, requestReload } from '../../lib/dataOwner.js'
 import { useSyncStore } from '../../stores/sync.js'
 import {
   enqueueSyncOps, syncOpsCount, clearAllSyncOps, type SyncOp,
@@ -34,7 +35,7 @@ import { _clearAllPendingSync } from './syncPending.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 import { __resetSyncCircuit, canAttemptSync, takeSyncRecovered, getSyncCircuitSnapshot, recordSyncSuccess } from './syncCircuit.js'
 import { withLock } from '../../lib/withLock.js'
-import { saveAppData } from '../../stores/app.js'
+import { saveAppData, flushSaveAppData } from '../../stores/app.js'
 import { _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
 import type { EntityType } from '../../types.js'
 
@@ -201,6 +202,8 @@ export function useCloudSync() {
    *   本地残墓由 fullSync 的 full-absent-delete 对账清理。
    */
   async function _enqueueMissingToCloud(userId: string): Promise<number | false> {
+    // 同步总闸：「云端缺失」判据会把本地全量当基线补推，本地数据必须归属当前账号
+    if (!isSyncAllowedFor(userId)) return 0
     const ds = useDataStore()
     const port = getSyncRemotePort()
     const [bmIds, gIds, cIds, aIds, graveyard] = await Promise.all([
@@ -342,6 +345,8 @@ export function useCloudSync() {
     if (!isLoggedIn.value) return false
     const userId = _getUserId()
     if (!userId) return false
+    // 先清队列再补推：本地数据不归属当前账号时清队列会丢掉归属账号的待推 op
+    if (!isSyncAllowedFor(userId)) return false
     if (_syncTimer) {
       clearTimeout(_syncTimer)
       _syncTimer = null
@@ -368,9 +373,43 @@ export function useCloudSync() {
     })
   }
 
+  /**
+   * 确保本地数据归属当前登录账号（见 lib/dataOwner.ts）。
+   * 返回 true 可继续同步；false 表示页面正在重载（已换仓）或换仓失败——调用方立即停手，
+   * 不得再做任何读写本地数据 / 云端的动作（包括 E2E 校验值比对与上传）。
+   *
+   * 必须在 withLock('linkvault-sync') 之外调用（内部自己拿锁；Web Locks 不可重入）。
+   */
+  async function ensureLocalOwner(): Promise<boolean> {
+    const userId = _getUserId()
+    if (!userId) return true
+    if (getDataOwner() === userId && isSyncAllowedFor(userId)) return true
+    // 换仓前把本实例未落盘的编辑写进「原归属账号」的现场，随后整体入仓
+    try { await flushSaveAppData() } catch { /* 落盘失败也继续：现场是上次成功落盘的状态 */ }
+    if (_syncTimer) {
+      clearTimeout(_syncTimer)
+      _syncTimer = null
+    }
+    const r = await withLock('linkvault-sync', () => ensureOwnerFor(userId))
+    if (r === 'same' || r === 'adopted') return true
+    if (r === 'switched' || r === 'stale') {
+      requestReload()
+      return false
+    }
+    // failed：现场与归属均已回滚，同步总闸保持关闭，下次启动 / 登录再试
+    syncStore.setSyncStatus('error')
+    syncStore.setSyncError(t('sync.ownerSwitchFailed'))
+    return false
+  }
+
   async function initialSync(): Promise<void> {
     if (_initialized || !isLoggedIn.value) return
     _initialized = true
+
+    if (!(await ensureLocalOwner())) {
+      _initialized = false
+      return
+    }
 
     await withLock('linkvault-sync', async () => {
       // CloudBase 专属：老用户首次登录时，把历史数据从 Supabase 时代的 uuid 认领到
@@ -401,18 +440,13 @@ export function useCloudSync() {
       // 按「云端缺失」补推会把 A 端已删除的条目以旧存活快照推回云端（复活）。故
       // pull 成功才补推；失败侧的本地脏数据由 _onOnline/_onVisibilityChange 的
       // 常规增量链路补上，不因跳过本轮补推而丢失。
+      // 跨账号：ensureLocalOwner 已保证本地数据归属当前账号（否则早已换仓重载），
+      // 这里的补推只会推当前账号自己的数据。
       if (pulled) {
-        // 换账号登录时本地仍保留上一账号的数据（本地权威是有意设计），
-        // 但绝不能把这份存量当作新账号基线补推到 B 的云端。
-        if (hasAccountSwitched()) {
-          console.warn('[sync] 检测到账号切换，跳过跨账号补推（保留本地数据）')
-          clearAccountSwitched()
-        } else {
-          // 死信 delete 补偿：重新入队后再统一推送（墓碑已在 pull 合并时阻止复活）
-          await reenqueueDeadDeletes()
-          // #12: 补推入队失败即中止本轮，不继续后续 push/pull 报 success
-          if ((await _enqueueMissingToCloud(userId)) === false) return
-        }
+        // 死信 delete 补偿：重新入队后再统一推送（墓碑已在 pull 合并时阻止复活）
+        await reenqueueDeadDeletes()
+        // #12: 补推入队失败即中止本轮，不继续后续 push/pull 报 success
+        if ((await _enqueueMissingToCloud(userId)) === false) return
       }
 
       // 首轮基线上传失败退避重试：首次登录/注册的用户要把本机长期积累的成百上千条
@@ -561,7 +595,7 @@ export function useCloudSync() {
     lastClaim,
 
     pushToCloud: pushFromQueue, pullFromCloud: pullChanges, fullSync,
-    debouncedSync, syncImmediate, initialSync, resetSyncState, signOutAndReset, resyncAllToCloud,
+    debouncedSync, syncImmediate, initialSync, ensureLocalOwner, resetSyncState, signOutAndReset, resyncAllToCloud,
     initOnlineListener, destroyOnlineListener,
     refreshPendingCount,
 

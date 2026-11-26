@@ -79,6 +79,8 @@ Store 按"数据 / UI / 覆盖层 / 同步 / 安全"分多块，`app.ts` 为 Fac
 ### 持久化与数据迁移
 
 - **`stores/persist.ts`**：IDB 权威 + localStorage 缓存，saveData/loadFromStorage/getStorageInfo
+- **`lib/dataOwner.ts`**：本地数据归属账号 + 按账号分仓（跨账号串号修复）。同步总闸 `isSyncAllowedFor`（syncPush/syncPull/_enqueueMissingToCloud 入口）、写入围栏 `isWriteAllowed`（persist/app.save）、`ensureOwnerFor` 换仓（journal 崩溃恢复）、`ACCOUNT_SCOPED_KEYS` 随账号走的本地键清单（新增账号相关键必须登记）；不明归属分仓由 `composables/domain/useAccountStash.ts` 询问合并/保持分开
+- **`stores/dirtyPersist.ts`**：主页待同步标记落盘（`lv_sync_dirty_v1`），未登录离线修改刷新后仍能补推
 - **`stores/storage.ts`**：Dexie IndexedDB 封装，突破 localStorage 5MB 限制
 - **`stores/migrations.ts`**：旧格式兼容，在加载时自动执行
 
@@ -232,7 +234,7 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - UI 文本用中文，代码注释用中文
 - 测试文件放 `src/__tests__/`，子目录有 `composables/` 和 `stores/`
 - 单元测试使用 vitest + jsdom + @vue/test-utils
-- E2E 测试在 `e2e/`，使用 Playwright（`playwright.config.ts` 自动起 dev server，baseURL `localhost:5173`，仅 chromium，CI 下重试 2 次且 `failOnFlakyTests`——重试才过也判红）。dev 模式为 Supabase 形态（`e2e/helpers/supabaseMock.ts`）；**线上 CloudBase 形态的同步与支付只在 prod 模式跑**（`LV_E2E_PROD=1`）：`e2e/helpers/cloudbaseMock.ts` 是多设备共享的内存 PostgREST 云端（复刻 032/035 墓地与防复活触发器），用例 `cloudbase-sync.spec.ts`（双设备往返 / 删除不复活 / 离线补推 / 冲突 / 云端故障）、`cloudbase-security.spec.ts`（主密码跨设备：云端全表无明文 / base64 泄露、错误密码不改云端；私密空间数据不上云）与 `purchase-flow.spec.ts`；设备操作辅助在 `e2e/helpers/cloudbaseDevice.ts`
+- E2E 测试在 `e2e/`，使用 Playwright（`playwright.config.ts` 自动起 dev server，baseURL `localhost:5173`，仅 chromium，CI 下重试 2 次且 `failOnFlakyTests`——重试才过也判红）。dev 模式为 Supabase 形态（`e2e/helpers/supabaseMock.ts`）；**线上 CloudBase 形态的同步与支付只在 prod 模式跑**（`LV_E2E_PROD=1`）：`e2e/helpers/cloudbaseMock.ts` 是多设备共享的内存 PostgREST 云端（复刻 032/035 墓地与防复活触发器），用例 `cloudbase-sync.spec.ts`（双设备往返 / 删除不复活 / 离线补推 / 冲突 / 云端故障）、`cloudbase-security.spec.ts`（主密码跨设备：云端全表无明文 / base64 泄露、错误密码不改云端；私密空间数据不上云）、`cloudbase-account-switch.spec.ts`（跨账号隔离：A 会话异常断掉后登录 B 不串号、切回 A 原样恢复并补推；双标签页换号后另一页自动重载不写旧快照。mock 多账号 `createCloudBaseBackend(A, [B])` + `liveFor(table, sub)`，`LV_E2E_DEBUG=1` 打印各标签页导航/认证日志）与 `purchase-flow.spec.ts`；设备操作辅助在 `e2e/helpers/cloudbaseDevice.ts`
 - 测试 setup 文件 `src/__tests__/setup.ts`：mock localStorage，每个测试自动创建新 Pinia 实例
 
 ## 移动端拖拽排序

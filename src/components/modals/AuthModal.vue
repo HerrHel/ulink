@@ -164,6 +164,7 @@ import { ref, watch, nextTick, computed, onBeforeUnmount } from 'vue'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
+import { promptAmbiguousStashes } from '../../composables/domain/useAccountStash.js'
 import { I } from '../../config/icons.js'
 import { t, getLocale } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
@@ -289,6 +290,9 @@ function schedulePostLogin() {
   syncTimer.value = window.setTimeout(async () => {
     syncTimer.value = null
     auth.authModalOpen = false
+    // 本地数据归属另一个账号时先整体换仓并重载（见 lib/dataOwner.ts）。在此之前绝不能
+    // 拿本地（上一个账号的）E2E 校验值去比对 / 上传到当前账号云端。
+    if (sync.ensureLocalOwner && !(await sync.ensureLocalOwner())) return
     // 登录后刷�?E2E 状态：checkE2EStatus 在未登录时只能判本地 canary（判不到云端），
     // 登录后才能读云端 master_canary。不刷新则「本地无 canary、云端有」的账户登录�?
     // isE2EEnabled 停留 false �?编辑加密书签解锁成功仍提示设置主密码，且新建密码�?
@@ -305,6 +309,7 @@ function schedulePostLogin() {
       }
     } catch { /* ignore */ }
     await sync.initialSync()
+    void promptAmbiguousStashes()
     // CloudBase 迁移：老用户首次登录会认领历史数据，认领到东西时给个明确反馈，
     // 否则用户只会看到书架「突然有了东西」而不知道发生了什么�?
     // 用可选链：部分单测会 mock 一个精简�?useCloudSync，未必带 lastClaim�?

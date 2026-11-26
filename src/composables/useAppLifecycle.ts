@@ -18,6 +18,9 @@ export function onShareRoute(cb: (gid: string) => void) { _onShareRoute = cb }
 export { whenDataReady, isDataHydrated } from '../lib/dataReady.js'
 import { markDataReady, isDataHydrated } from '../lib/dataReady.js'
 import { onOtherInstanceSaved } from '../lib/crossInstance.js'
+import { initDataOwner, isWriteAllowed, requestReload, watchOwnerChanges } from '../lib/dataOwner.js'
+import { restoreDirty } from '../stores/dirtyPersist.js'
+import { promptAmbiguousStashes } from './domain/useAccountStash.js'
 import { useSyncStore } from '../stores/sync.js'
 
 // 多设备主密码一致性维护（每会话一次）：登录后先确保本机 canary 上云（打通
@@ -66,6 +69,9 @@ const RELOAD_RETRY_MS = 800
 export async function reloadFromOtherInstance(): Promise<void> {
   if (_reloadRetryTimer) { clearTimeout(_reloadRetryTimer); _reloadRetryTimer = null }
   if (!isDataHydrated()) return
+  // 对方实例已按账号换仓：本实例内存是上一个账号的数据，直接整页重载（而不是把新账号的
+  // 数据载进一个仍以旧账号身份运行的实例）
+  if (!isWriteAllowed()) { requestReload(); return }
   const ds = useDataStore()
   const ui = useUIStore()
   if (ui.shareMode || ui.curSpace !== 'main') return
@@ -97,6 +103,9 @@ export function useAppLifecycle() {
     if (history.scrollRestoration) history.scrollRestoration = 'manual'
 
     // IDB 权威数据源，localStorage 回退（loadData 内部处理）
+    // 账号分仓：迁移归属、从中断的换仓恢复、锁定本实例归属——必须早于任何读取本地数据
+    try { await initDataOwner() } catch (e) { console.warn('[LinkVault] data owner init failed:', e) }
+    cleanups.push(watchOwnerChanges())
     try {
       const loaded = await loadData()
       ds.categories = loaded.categories
@@ -106,6 +115,8 @@ export function useAppLifecycle() {
       ds._syncMaps()
       // 跨会话恢复软删书签的组归属映射，否则回收站 restore 永远丢组关系（DATA-2）
       ds._restoreDeletedGroupMemberships()
+      // 未登录期间的离线修改：待同步标记在上次会话已落盘，并回内存等登录后补推
+      restoreDirty(ds)
     } finally {
       // 无论 load 成败都放行扩展保存门闩，避免永久挂起
       markDataReady()
@@ -130,11 +141,18 @@ export function useAppLifecycle() {
     // 初始化认证 & 云同步
     const auth = useAuth()
     await auth.init()
+    const sync = useCloudSync()
+    // 本地数据归属另一个账号（换号登录 / 会话异常后换号）：先整体换仓并重载，
+    // 在此之前不做任何 E2E 校验值比对或上传——否则会拿上一个账号的本地校验值去比对甚至
+    // 覆盖当前账号的云端主密码校验。
+    // 返回 false：已换仓（页面正在重载）或换仓失败（存储不可写，同步总闸保持关闭）。
+    // 两种情况都只跳过 E2E 与云同步，本地编辑 / 关页保存等其余初始化照常。
+    const ownerOk = !auth.isLoggedIn || await sync.ensureLocalOwner()
     // 登录后重新检查 E2E 状态：App.vue onMounted 的 checkE2EStatus 执行时尚未登录，
     // 读不到云端 user_security → isE2EEnabled 为 false。登录后有了 auth.user，
     // 重新检查才能从云端拉取 canary 并正确设置 isE2EEnabled = true（常见于移动端、
     // 换设备等本地无 canary 但云端已设置主密码的场景）。
-    if (auth.isLoggedIn) {
+    if (auth.isLoggedIn && ownerOk) {
       void useEntitlement().refresh().catch(() => {})
       try {
         const e2e = useE2E()
@@ -143,10 +161,9 @@ export function useAppLifecycle() {
         }
       } catch { /* 不阻塞初始化 */ }
     }
-    const sync = useCloudSync()
     // 多设备主密码一致性检测：登录且本机已设主密码时，对比云端 canary。
     // 不一致时弹解决向导（统一主密码 / 保留本机），每会话最多检测一次不打扰。
-    if (auth.isLoggedIn) {
+    if (auth.isLoggedIn && ownerOk) {
       void _checkE2ECanaryConflict()
     }
     // initialSync 必须在 initOnlineListener 之前执行：
@@ -154,8 +171,10 @@ export function useAppLifecycle() {
     // 若 lastSyncAt 先于 initialSync 的 pullChanges(false) 被设置，full-absent-delete 本可
     // 把本地书签全删（幸而 initialSync 走增量 false，不跑 full 对账，无此风险）。
     // 注：initialSync 的 initial pull 是增量(false)；全量 ID 对账只在手动 fullSync 跑。
-    if (auth.isLoggedIn) {
-      sync.initialSync().catch((e: Error) => console.warn('[LinkVault] Cloud sync failed:', e.message))
+    if (auth.isLoggedIn && ownerOk) {
+      sync.initialSync()
+        .then(() => promptAmbiguousStashes())
+        .catch((e: Error) => console.warn('[LinkVault] Cloud sync failed:', e.message))
     }
     sync.initOnlineListener()
 

@@ -15,6 +15,8 @@ import { t } from '../i18n/index.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 import { AppDataSchema } from '../schemas.js'
 import { notifyDataSaved } from '../lib/crossInstance.js'
+import { isWriteAllowed } from '../lib/dataOwner.js'
+import { persistDirty } from './dirtyPersist.js'
 
 /**
  * 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍。
@@ -244,6 +246,9 @@ export const useAppStore = defineStore('app', () => {
       // 但分享态下仍可能有本地路径触发保存，且落盘会连带把 _writeSeq /
       // localStorage 缓存推高。返回 true 表示「无需保存」，避免误报存储失败。
       if (ui().shareMode) return Promise.resolve(true)
+      // 账号分仓围栏：本实例内存数据已不属于当前归属账号（换仓后等待重载），
+      // 绝不能把旧账号快照写进新账号的仓。静默跳过（页面即将重载），不报存储失败。
+      if (!isWriteAllowed()) return Promise.resolve(true)
       const d = ds()
       if (d._saveTimer) {
         clearTimeout(d._saveTimer)
@@ -252,6 +257,8 @@ export const useAppStore = defineStore('app', () => {
       const data = d._dataSnapshot()
       const fp = _fingerprint(data)
       const space = ui().curSpace
+      // 待同步标记随主页数据落盘（未登录时不入队，刷新后靠它补推离线修改）
+      if (space === 'main') persistDirty(d)
       if (fp && fp === _lastSavedFp[space]) return Promise.resolve(true)
       // #56 写入侧 schema 守卫：绝不落盘「读取侧会拒绝」的快照。
       // 读取侧 AppDataSchema 校验失败会回退 DEFAULTS（用户看到整库消失），

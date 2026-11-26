@@ -173,6 +173,39 @@ export async function clearAllSyncOps(): Promise<void> {
 }
 
 /**
+ * 整体替换同步队列（按账号分仓换仓用）：保留每条 op 的 retries，去掉自增 id 重新编号。
+ * 失败返回 false，调用方据此中止换仓。
+ */
+export async function replaceAllSyncOps(ops: SyncOp[]): Promise<boolean> {
+  try {
+    await db.transaction('rw', db.syncOps, async () => {
+      await db.syncOps.clear()
+      if (ops.length) {
+        await db.syncOps.bulkAdd(ops.map(({ id: _id, ...rest }) => ({
+          ...rest,
+          data: rest.data ? cloneDeep(rest.data) : null,
+          retries: typeof rest.retries === 'number' ? rest.retries : 0,
+        })))
+      }
+    })
+    return true
+  } catch (e) {
+    console.warn('[IDB] replaceAllSyncOps error:', e)
+    return false
+  }
+}
+
+/** 按前缀列出 IDB data 表的键（账号分仓索引自检用） */
+export async function idbKeysWithPrefix(prefix: string): Promise<string[]> {
+  try {
+    return (await db.data.where('key').startsWith(prefix).primaryKeys()) as string[]
+  } catch (e) {
+    console.warn('[IDB] idbKeysWithPrefix error:', e)
+    return []
+  }
+}
+
+/**
  * 清空本机全部持久化数据（账号注销用）
  *
  * 注销流程：云端数据由 account 云函数清除后，本机也必须清干净，
@@ -180,8 +213,15 @@ export async function clearAllSyncOps(): Promise<void> {
  * 同时清理 localStorage 中的 lv_* 键（历史版本、偏好、UI 状态等）。
  */
 export async function clearAllLocalData(): Promise<void> {
+  // 注销只清「当前账号」：本机其他账号的分仓（lv_acct_stash:*）是别人尚未上云的本地数据，
+  // 不能连带抹掉；分仓索引同理保留。
   try {
-    await db.data.clear()
+    const keep = await idbKeysWithPrefix('lv_acct_stash:')
+    if (keep.length) {
+      await db.data.where('key').noneOf(keep).delete()
+    } else {
+      await db.data.clear()
+    }
   } catch (e) {
     console.warn('[IDB] clearAllLocalData (data) error:', e)
   }
@@ -194,6 +234,7 @@ export async function clearAllLocalData(): Promise<void> {
     const doomed: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)
+      if (k === 'lv_acct_stash_index') continue
       if (k && (k.startsWith('lv_') || k.startsWith('linkvault_') || k.startsWith('ulink_'))) doomed.push(k)
     }
     for (const k of doomed) localStorage.removeItem(k)
