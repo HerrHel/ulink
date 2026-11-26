@@ -10,7 +10,7 @@ import { useContextMenuStore } from '../stores/contextMenu.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { toggleGroupFocus, removeBmFromGroup, removeGroupRef } from './domain/useGroup.js'
 import { visit } from './domain/useBookmark.js'
-import { openDetail } from './ui/useUI.js'
+import { openQuickLook } from './ui/useUI.js'
 import { buildLongPressItems } from '../lib/menuConfig.js'
 import { useGlobalEvents } from './useGlobalEvents.js'
 import { useScrollHeader } from './interaction/useScrollHeader.js'
@@ -48,7 +48,8 @@ export function useApp() {
   // longPress.fired 已通过上面的 watch 同步到 uiStore.lpFired，useGlobalEvents
   // 直接读 store（不再通过一次性的快照对象传值——快照会失效）。
   useGlobalEvents({
-    onOpenDetail: openDetail,
+    // 组笔记内联卡片的「详」与子书签的「详」一致：打开速览卡片看完整信息（不再塞进暂存架）
+    onOpenDetail: openQuickLook,
     onToggleGroupFocus: toggleGroupFocus,
     onRemoveGroupRef: removeGroupRef,
     onRemoveBmFromGroup: removeBmFromGroup,

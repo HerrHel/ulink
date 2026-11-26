@@ -2318,6 +2318,7 @@ var T = {
     updatedAt: "\u66F4\u65B0\u4E8E {d}",
     cta: "\u4FDD\u5B58\u81F3\u6211\u7684\u5E93",
     ctaN: "\u4FDD\u5B58\u8FD9 {n} \u4E2A\u94FE\u63A5",
+    ctaNote: "\u4FDD\u5B58\u7B14\u8BB0",
     startTitle: "\u8FD9\u4EFD\u6E05\u5355\u7531\u4E0E\u94FE\u6574\u7406",
     startBody: "\u4F60\u4E5F\u53EF\u4EE5 30 \u79D2\u5EFA\u4E00\u4EFD\u81EA\u5DF1\u7684\u4E66\u7B7E\u6E05\u5355\uFF1A\u591A\u8BBE\u5907\u540C\u6B65\uFF0C\u968F\u65F6\u5206\u4EAB\u3002",
     startBtn: "\u514D\u8D39\u5F00\u59CB",
@@ -2390,6 +2391,7 @@ var T = {
     updatedAt: "Updated {d}",
     cta: "Save to my library",
     ctaN: "Save these {n} links",
+    ctaNote: "Save note",
     ctaN_one: "Save this link",
     startTitle: "Made with ulink",
     startBody: "Build your own bookmark list in 30 seconds \u2014 synced across devices, easy to share.",
@@ -2955,8 +2957,9 @@ function buildBody(dict, group, bookmarks, appOrigin) {
   const go = shareGoUrl(appOrigin, "g", group.id);
   return buildAppShell(dict, appOrigin, {
     hdrMeta: "",
-    ctaUrl: count > 0 ? `${go}?to=save` : appUrl,
-    ctaText: count > 0 ? fill(pick(dict, "ctaN", count), { n: count }) : void 0,
+    // 组分享本质是一篇笔记（正文 + 收录书签），保存的是整篇笔记，不只是链接
+    ctaUrl: `${go}?to=save`,
+    ctaText: dict.ctaNote,
     startUrl: `${go}?to=start`,
     inner
   });

@@ -151,6 +151,8 @@ const shareMode = computed(() => ui.shareMode)
 const isCategoryShare = computed(() => share.isCategory)
 const forkLabel = computed(() => {
   if (share.forking) return t('share.saving')
+  // 组分享本质是一篇笔记（正文 + 收录书签）：按钮说「保存笔记」；分类分享仍是「保存到书签库」
+  if (!isCategoryShare.value) return auth.isLoggedIn ? t('share.saveNote') : t('share.loginThenSaveNote')
   return auth.isLoggedIn ? t('share.saveToLibrary') : t('share.loginThenSave')
 })
 function onShareFork() { void share.fork() }

@@ -275,3 +275,46 @@ describe('forkPublicGroup — 悬空 id 过滤', () => {
     expect(newGroup.bookmarkIds).not.toContain('b-ghost')
   })
 })
+
+describe('forkPublicGroup — 笔记内联卡片跟随换 id（2026-11-26）', () => {
+  it('notes 里 data-bm-id 旧 id → 本地 id：新入库的用新 id，去重跳过的用本地已有 id，映射不到的保持原样', async () => {
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+    // 本地已有同 URL 的书签 → fork 时被去重，笔记应引用这条本地书签
+    ds.addBookmark(await makeBookmark({ id: 'b-local', url: 'https://dup.example.com' }))
+    const card = (id: string) => `<span class="group-inline-card" contenteditable="false" data-bm-id="${id}"></span>`
+    const group = {
+      id: 'g-notes', name: '笔记组', categoryId: 'uncategorized', icon: '', order: 0, isExpanded: false,
+      attributes: {}, bookmarkIds: ['b-src-1', 'b-src-dup'],
+      notes: `<p>${card('b-src-1')} ${card('b-src-dup')} ${card('b-missing')} ${card('ref:g-other')}</p>`,
+      useCount: 0, updatedAt: 1, isPublic: true,
+    } as any
+    const bms = [
+      await makeBookmark({ id: 'b-src-1', url: 'https://new.example.com' }),
+      await makeBookmark({ id: 'b-src-dup', url: 'https://dup.example.com' }),
+    ]
+    const forkPublicGroup = await forkCalls()
+
+    await forkPublicGroup(group, bms)
+
+    const newGroup = ds.siblingGroups.find((g: any) => g.name === '笔记组') as any
+    expect(newGroup.notes).toContain('data-bm-id="b-new-0"')
+    expect(newGroup.notes).toContain('data-bm-id="b-local"')
+    expect(newGroup.notes).not.toContain('b-src-1')
+    expect(newGroup.notes).not.toContain('b-src-dup')
+    // 漏拉的书签、本次未复制的组引用：保持原样（编辑器按「已删除」占位）
+    expect(newGroup.notes).toContain('data-bm-id="b-missing"')
+    expect(newGroup.notes).toContain('data-bm-id="ref:g-other"')
+  })
+})
+
+describe('remapNoteRefs', () => {
+  it('书签与组引用分别映射；无引用的笔记原样返回', async () => {
+    const { remapNoteRefs } = await import('../../composables/domain/useDataShare.js')
+    const html = '<span data-bm-id="a"></span><span data-bm-id="ref:g1"></span><span data-bm-id="z"></span>'
+    const out = remapNoteRefs(html, new Map([['a', 'A']]), new Map([['g1', 'G1']]))
+    expect(out).toBe('<span data-bm-id="A"></span><span data-bm-id="ref:G1"></span><span data-bm-id="z"></span>')
+    expect(remapNoteRefs('<p>纯文字</p>', new Map([['a', 'A']]))).toBe('<p>纯文字</p>')
+    expect(remapNoteRefs('', new Map())).toBe('')
+  })
+})

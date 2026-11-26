@@ -89,7 +89,7 @@
           <div class="inspector-actions">
             <!-- Edit Note Button: 抽屉内一键进入聚焦编辑模式 -->
             <button
-              v-if="targetGroup"
+              v-if="targetGroup && !isShareReadonly"
               class="inspector-action-btn edit-note-btn"
               type="button"
               :title="t('cards.focusGroup')"
@@ -98,9 +98,9 @@
               @click.stop="focusTargetGroup"
               v-html="I.edit"
             ></button>
-            <!-- Stage / Unstage button (仅桌面端展示，移动端无拖拽暂存诉求) -->
+            <!-- Stage / Unstage button (仅桌面端展示，移动端无拖拽暂存诉求；分享只读态没有暂存架) -->
             <button
-              v-if="!isMobileScreen"
+              v-if="!isMobileScreen && !isShareReadonly"
               class="inspector-action-btn"
               :class="{ 'is-staged': isStaged }"
               type="button"
@@ -238,6 +238,8 @@ const isStaged = computed(() => {
 })
 
 const isMobileScreen = computed(() => ui.isMobile)
+// 分享只读态：速览只看不改（无暂存架、不进编辑）
+const isShareReadonly = computed(() => !!ui.shareMode)
 
 // 智能吸附定位：桌面端紧贴暂存架左侧（间距 8px），与暂存架高度同步锁定；移动端为标准底部抽屉，无需设置行内 top/right
 const flyoutStyle = computed(() => {

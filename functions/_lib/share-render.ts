@@ -64,6 +64,7 @@ const T = {
     updatedAt: '更新于 {d}',
     cta: '保存至我的库',
     ctaN: '保存这 {n} 个链接',
+    ctaNote: '保存笔记',
     startTitle: '这份清单由与链整理',
     startBody: '你也可以 30 秒建一份自己的书签清单：多设备同步，随时分享。',
     startBtn: '免费开始',
@@ -136,6 +137,7 @@ const T = {
     updatedAt: 'Updated {d}',
     cta: 'Save to my library',
     ctaN: 'Save these {n} links',
+    ctaNote: 'Save note',
     ctaN_one: 'Save this link',
     startTitle: 'Made with ulink',
     startBody: 'Build your own bookmark list in 30 seconds — synced across devices, easy to share.',
@@ -994,8 +996,9 @@ function buildBody(
   const go = shareGoUrl(appOrigin, 'g', group.id)
   return buildAppShell(dict, appOrigin, {
     hdrMeta: "",
-    ctaUrl: count > 0 ? `${go}?to=save` : appUrl,
-    ctaText: count > 0 ? fill(pick(dict, 'ctaN', count), { n: count }) : undefined,
+    // 组分享本质是一篇笔记（正文 + 收录书签），保存的是整篇笔记，不只是链接
+    ctaUrl: `${go}?to=save`,
+    ctaText: dict.ctaNote,
     startUrl: `${go}?to=start`,
     inner,
   })

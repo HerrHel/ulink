@@ -165,6 +165,29 @@ export function parseCategoryShareRoute(route: string): string | null {
 
 // ── Fork 公开组到自己库（A5）──
 
+/**
+ * 把组笔记里内联卡片引用的旧 id 换成本地 id。
+ *
+ * 笔记（TipTap HTML）用 `data-bm-id="<书签id>"` 引用书签、`data-bm-id="ref:<组id>"` 引用组。
+ * fork 时书签 / 组都换了新 id，不同步改写的话这些卡片全都解析不到 → 显示「（已删除）」。
+ * 映射不到的引用保持原样（编辑器照旧按已删除占位，保留恢复的可能）。
+ */
+export function remapNoteRefs(
+  notes: string,
+  bmIds: Map<string, string>,
+  groupIds: Map<string, string> = new Map(),
+): string {
+  if (!notes || notes.indexOf('data-bm-id') === -1) return notes
+  return notes.replace(/data-bm-id="([^"]*)"/g, (m, id: string) => {
+    if (id.startsWith('ref:')) {
+      const g = groupIds.get(id.slice(4))
+      return g ? `data-bm-id="ref:${g}"` : m
+    }
+    const b = bmIds.get(id)
+    return b ? `data-bm-id="${b}"` : m
+  })
+}
+
 export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]) {
   const ds = useDataStore()
   const sync = useCloudSync()
@@ -251,6 +274,8 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   const newGroup: SiblingGroup = {
     ...group,
     id: newGroupId,
+    // 笔记内联卡片跟着换成本地 id（新入库的用新 id，去重跳过的用本地已有书签 id）
+    notes: remapNoteRefs(group.notes, oldToLocal),
     bookmarkIds: newBookmarkIds,
     categoryId: CAT_UNCATEGORIZED,
     isPublic: false,
@@ -366,6 +391,10 @@ export async function forkPublicCategory(data: PublicCategoryData) {
       useCount: 0,
     })
   }
+  // 笔记内联卡片 / 组引用卡片换成本地 id：需等所有组都分到新 id 后再改写（组之间可互相引用）
+  const gidMap = new Map<string, string>()
+  data.groups.forEach((g, i) => { if (newGroups[i]) gidMap.set(g.id, newGroups[i].id) })
+  for (const g of newGroups) g.notes = remapNoteRefs(g.notes, oldToLocal, gidMap)
   for (const g of newGroups) ds.addGroup(g)
 
   saveAppData()

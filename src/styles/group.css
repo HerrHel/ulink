@@ -637,12 +637,32 @@
   font-weight:800;
   letter-spacing:-0.5px;
   line-height:1.25;
+  /* 基类 .card-name 固定 height:20px（为宫格卡片小字号设计），大标题会被裁掉下半截 */
+  height:auto;
   color:var(--text);
 }
+.share-mode-layout .focus-view .group-card-focus .card-titlewrap,
+.share-mode-layout .focus-view .group-card-focus .card-titlewrap-text{
+  height:auto;
+}
 .share-mode-layout .focus-view .group-card-focus .grp-scroll-body,
-.share-mode-layout .focus-view .group-card-focus .card-scroll-wrap{
+.share-mode-layout .focus-view .group-card-focus .card-scroll-wrap,
+.share-mode-layout .focus-view .group-card-focus .card-body{
   overflow:visible !important;
   max-height:none !important;
+}
+/* 分享态是「读一篇笔记」：卡片随内容撑开、整页滚动，不在卡片里套一层被压扁的小滚动区
+   （聚焦态的 .card-body 是 flex:1 + overflow:auto，会被视口高度夹成一截） */
+.share-mode-layout .focus-view .group-card-focus .card-body{
+  flex:none !important;
+  height:auto !important;
+}
+.share-mode-layout .focus-view,
+.share-mode-layout .focus-view .focus-card-wrap,
+.share-mode-layout .focus-view .focus-card-wrap .group-card{
+  flex:none !important;
+  height:auto !important;
+  min-height:0 !important;
 }
 
 /* ── 收录的书签区 ── */

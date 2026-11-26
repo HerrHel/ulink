@@ -24,18 +24,17 @@ describe('shareGoUrl', () => {
 })
 
 describe('组分享转化入口', () => {
-  it('顶栏 CTA：文案带链接数，经 /go?to=save 计数跳转', () => {
+  it('顶栏 CTA：组分享是一篇笔记，文案「保存笔记」，经 /go?to=save 计数跳转', () => {
     const html = page(bms)
-    expect(html).toContain(`<a class="cta" href="${O}/s/grp-1/go?to=save">保存这 3 个链接</a>`)
+    expect(html).toContain(`<a class="cta" href="${O}/s/grp-1/go?to=save">保存笔记</a>`)
   })
 
-  it('英文单复数', () => {
-    expect(page(bms, 'en-US')).toContain('>Save these 3 links</a>')
-    expect(page([bms[0]], 'en-US')).toContain('>Save this link</a>')
+  it('英文文案', () => {
+    expect(page(bms, 'en-US')).toContain('>Save note</a>')
   })
 
-  it('没有书签时回退为原文案并直达应用', () => {
-    expect(page([])).toContain(`<a class="cta" href="${O}/app#share/grp-1">保存至我的库</a>`)
+  it('没有书签的纯笔记同样可保存', () => {
+    expect(page([])).toContain(`<a class="cta" href="${O}/s/grp-1/go?to=save">保存笔记</a>`)
   })
 
   it('文末「免费开始」卡片走 /go?to=start', () => {

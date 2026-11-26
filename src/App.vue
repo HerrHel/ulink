@@ -49,6 +49,8 @@
       </div>
       <BatchPopover v-if="!uiStore.shareMode" />
       <EdgeStagingSidebar v-if="!uiStore.shareMode" />
+      <!-- 分享只读态没有暂存架，速览卡片单独挂载：笔记里点「详」照样能看完整卡片 -->
+      <CornerInspectorCard v-if="uiStore.shareMode" :is-dock-visible="false" :dock-panel-style="{ top: '72px', bottom: 'auto' }" />
     </div>
     <div v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" class="resize-handle" id="resizeRight"></div>
     <DetailPanel v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" />
@@ -146,6 +148,7 @@ import { useExtPanel } from './composables/useExtPanel.js'
 // useResize 以 MutationObserver 等待 #detailPanel 出现，对异步渲染安全。
 const DetailPanel = defineAsyncComponent(() => import('./components/shell/DetailPanel.vue'))
 const EdgeStagingSidebar = defineAsyncComponent(() => import('./components/shell/EdgeStagingSidebar.vue'))
+const CornerInspectorCard = defineAsyncComponent(() => import('./components/shell/CornerInspectorCard.vue'))
 
 const { t, locale: curLocale } = useI18n()
 const isZh = computed(() => curLocale.value === 'zh-CN')

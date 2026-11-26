@@ -34,6 +34,8 @@ export const shareAppZh = {
     saveToLibrary: '保存到书签库',
     saving: '保存中…',
     loginThenSave: '登录后保存',
+    saveNote: '保存笔记',
+    loginThenSaveNote: '登录后保存笔记',
     loading: '正在加载分享内容…',
     backToMine: '返回书签库',
     bookmarksInGroup: '收录的书签',

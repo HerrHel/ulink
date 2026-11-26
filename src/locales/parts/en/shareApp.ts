@@ -43,6 +43,8 @@ export const shareAppEn = {
     saveToLibrary: 'Save to library',
     saving: 'Saving…',
     loginThenSave: 'Sign in to save',
+    saveNote: 'Save note',
+    loginThenSaveNote: 'Sign in to save note',
     loading: 'Loading shared content…',
     backToMine: 'Back to library',
     bookmarksInGroup: 'Bookmarks in this note',
