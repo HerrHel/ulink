@@ -34,7 +34,8 @@ import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead }
 import { buildItemListJsonLd } from '../views/buildItemListJsonLd.js'
 import { deriveShareUrl } from '../views/deriveShareUrl.js'
 import { APP_CANONICAL_BASE } from '../config/urls.js'
-import { toast } from '../lib/toast.js'
+import { toast, toastWithAction } from '../lib/toast.js'
+import { CAT_ALL } from '../config/constants.js'
 import { dbRpc } from '../lib/dbApi.js'
 import { isCloudBaseBackend } from '../lib/cloudbase.js'
 import { t, tN } from '../i18n/index.js'
@@ -100,6 +101,26 @@ export function normalizeSharedGroup(raw: any): SiblingGroup {
 
 /** 每次进入递增；异步 fetch 回包时据此丢弃过期响应（快速切换分享链接） */
 let _enterSeq = 0
+
+/**
+ * 「一键保存」：分享页点「保存笔记」→ /app?save=1#share/<id>，应用载入这份分享后直接保存进访客自己的库，
+ * 不再让人在一模一样的界面上再点一次。登录与否都直接保存（应用本地优先，游客数据首次登录时并入账号，
+ * 见 lib/dataOwner.ts）；未登录时保存后提示「登录后可多设备同步」，不拦截。
+ * 只在内存里记一次：值为分享路由（组 id / cat:<sid>），只对同一份分享生效。
+ */
+let _autosaveRoute = ''
+/** 读取并剥掉 URL 上的 ?save=1（只消费一次，刷新 / 复制链接不会重复触发） */
+function _consumeSaveParam(): boolean {
+  try {
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('save') !== '1') return false
+    url.searchParams.delete('save')
+    history.replaceState(history.state, '', url.pathname + url.search + url.hash)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export const useShareStore = defineStore('share', () => {
   const ui = useUIStore()
@@ -184,6 +205,7 @@ export const useShareStore = defineStore('share', () => {
   async function enter(route: string) {
     const seq = ++_enterSeq
     const catId = parseCategoryShareRoute(route)
+    _autosaveRoute = typeof window !== 'undefined' && _consumeSaveParam() ? route : ''
     _teardown(false)
     _resetData()
 
@@ -227,6 +249,7 @@ export const useShareStore = defineStore('share', () => {
         _applyCategoryHead(winData.data)
         loading.value = false
         error.value = ''
+        _maybeAutosave()
         return
       }
       if (!catId && winData.type === 'group' && winData.id === route && winData.data?.group) {
@@ -239,6 +262,7 @@ export const useShareStore = defineStore('share', () => {
         _applyGroupHead(group.value, bookmarks.value)
         loading.value = false
         error.value = ''
+        _maybeAutosave()
         return
       }
     }
@@ -286,12 +310,14 @@ export const useShareStore = defineStore('share', () => {
     } finally {
       if (seq === _enterSeq) loading.value = false
     }
+    if (seq === _enterSeq && !error.value) _maybeAutosave()
   }
 
   function exit() {
     // 使在途 enter 的 seq 守卫失效：否则退出后旧的 fetch 仍会回填 shadow/head/focusedGroupId，
     // 导致应用标题/canonical 变成他人分享、聚焦到本机不存在的组。
     _enterSeq++
+    _autosaveRoute = ''
     _teardown(true)
   }
 
@@ -324,30 +350,69 @@ export const useShareStore = defineStore('share', () => {
     }
   }
 
+  /** 当前分享的路由（与 enter 的入参同形：组 id / cat:<sid>） */
+  function _currentRoute(): string {
+    const m = ui.shareMode
+    if (!m) return ''
+    return m.kind === 'category' ? `cat:${m.id}` : m.id
+  }
+
+  /**
+   * 有「一键保存」待办且数据已就绪 → 保存。
+   * 登录态还在恢复时先等它落定（见下方 watch）：否则已登录用户会被误提示「已保存到本机」。
+   */
+  function _maybeAutosave(): void {
+    const route = _currentRoute()
+    if (!route || _autosaveRoute !== route) return
+    if (loading.value || error.value || !_payload()) return
+    const auth = useAuth()
+    if (auth.loading) return
+    void fork()
+  }
+
   async function fork() {
     const auth = useAuth()
-    if (!auth.isLoggedIn) {
-      auth.authModalOpen = true
-      toast(t('shareView.loginRequiredToast'), false)
-      return
-    }
     const payload = _payload()
     if (!payload || forking.value) return
     forking.value = true
+    _autosaveRoute = ''
+    // 未登录也直接存进本机（本地优先）；保存后再提示登录同步，而不是先拦一道登录
+    const guest = !auth.isLoggedIn
     // teardown 会清掉 shareMode，先记下分享 id 供保存成功后的转化计数
     const shareRef = ui.shareMode ? { kind: ui.shareMode.kind === 'category' ? 'c' : 'g', id: ui.shareMode.id } : null
     // 关键：fork 写的是访问者自己的库，必须先解锁并清空影子数据
     _teardown(true)
     try {
-      if (payload.kind === 'category') await forkPublicCategory(payload.data)
-      else await forkPublicGroup(payload.group, payload.bookmarks)
+      if (payload.kind === 'category') {
+        const catId = await forkPublicCategory(payload.data, { quiet: guest })
+        // 保存完直接停在存好的分类上
+        if (catId) { ui.focusedGroupId = null; ui.curCat = catId }
+      } else {
+        const gid = await forkPublicGroup(payload.group, payload.bookmarks, { quiet: guest })
+        // 保存完直接打开存好的笔记（而不是回到访客原来的视图，让人找不到存去了哪）
+        if (gid) { ui.curCat = CAT_ALL; ui.focusedGroupId = gid }
+      }
       if (shareRef) _recordFork(shareRef.kind, shareRef.id)
+      if (guest) {
+        // 只提醒、不拦截：按钮直接打开登录，登录后游客数据自动并入账号并同步
+        toastWithAction(t('shareView.savedLocallyToast'), t('shareView.loginToSync'), () => {
+          useAuth().authModalOpen = true
+        }, 10000)
+      }
     } catch (e) {
       toast(t('shareView.copyFailed', { msg: (e as Error).message }), false)
     } finally {
       forking.value = false
     }
   }
+
+  // 登录态恢复落定后再执行「一键保存」（见 _maybeAutosave）
+  watch(
+    () => useAuth().loading,
+    (authLoading) => {
+      if (!authLoading) _maybeAutosave()
+    },
+  )
 
   // ── 视图状态被外部改动即视为「离开分享内容」→ 自动退出分享态 ──
   // 覆盖 AppNav 切分类、搜索、快捷键、命令面板等所有路径，无需逐个埋点。

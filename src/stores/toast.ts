@@ -19,6 +19,8 @@ interface ToastItem {
 interface UndoToast {
   msg: string
   undoFn: () => void
+  /** 动作按钮文字；缺省为「撤销」 */
+  actionLabel?: string
   countdown: number
   cls: string
 }
@@ -75,7 +77,7 @@ export const useToastStore = defineStore('toast', () => {
 
   // ── Undo Toast ──
 
-  function showWithUndo(msg: string, undoFn: () => void, duration = 6000) {
+  function showWithUndo(msg: string, undoFn: () => void, duration = 6000, actionLabel?: string) {
     dismissUndo()
     // dismissUndo 为旧 toast 建的 300ms 退场 timer 占用了 _dismissTimer；
     // 下面要覆盖该引用，必须先取消它，否则旧 timer 会在 300ms 后清掉新 toast。
@@ -88,6 +90,7 @@ export const useToastStore = defineStore('toast', () => {
     undoToast.value = {
       msg,
       undoFn,
+      actionLabel,
       countdown: Math.ceil(duration / 1000),
       cls: '',
     }

@@ -14,6 +14,11 @@ export function toastWithUndo(msg: string, undoFn: () => void, duration = 6000):
   try { useToastStore().showWithUndo(msg, undoFn, duration) } catch { /* Pinia 未初始化 */ }
 }
 
+/** 带一个动作按钮的提示（如「登录」）：复用撤销 toast 的外观，按钮文字自定义 */
+export function toastWithAction(msg: string, actionLabel: string, actionFn: () => void, duration = 8000): void {
+  try { useToastStore().showWithUndo(msg, actionFn, duration, actionLabel) } catch { /* Pinia 未初始化 */ }
+}
+
 export function showConfirm(msg: string): Promise<boolean> {
   try { return useToastStore().showConfirm(msg) } catch { return Promise.resolve(false) }
 }

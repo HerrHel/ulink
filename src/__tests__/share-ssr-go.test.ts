@@ -91,13 +91,13 @@ describe('share-ssr /go 出站跳转', () => {
   it('组分享 to=save → 302 回应用分享态，不缓存、不收录', async () => {
     const res = await req('/s/abc/go?to=save')
     expect(res.status).toBe(302)
-    expect(res.headers.get('location')).toBe('https://ulink.ren/app#share/abc')
+    expect(res.headers.get('location')).toBe('https://ulink.ren/app?save=1#share/abc')
     expect(res.headers.get('cache-control')).toBe('no-store')
     expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow')
   })
 
-  it('分类分享 to=save → /app#share/c/<sid>；to=start → 首页', async () => {
-    expect((await req('/s/c/abc/go?to=save')).headers.get('location')).toBe('https://ulink.ren/app#share/c/abc')
+  it('分类分享 to=save → /app?save=1#share/c/<sid>；to=start → 首页', async () => {
+    expect((await req('/s/c/abc/go?to=save')).headers.get('location')).toBe('https://ulink.ren/app?save=1#share/c/abc')
     expect((await req('/s/c/abc/go?to=start')).headers.get('location')).toBe('https://ulink.ren/?from=share')
     expect((await req('/s/abc/go?to=start')).headers.get('location')).toBe('https://ulink.ren/?from=share')
   })
@@ -106,7 +106,7 @@ describe('share-ssr /go 出站跳转', () => {
     for (const to of ['https://evil.example', '//evil.example', 'javascript:alert(1)']) {
       const res = await req(`/s/abc/go?to=${encodeURIComponent(to)}`)
       expect(res.status).toBe(302)
-      expect(res.headers.get('location')).toBe('https://ulink.ren/app#share/abc')
+      expect(res.headers.get('location')).toBe('https://ulink.ren/app?save=1#share/abc')
     }
   })
 

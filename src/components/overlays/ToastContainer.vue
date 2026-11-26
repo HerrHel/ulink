@@ -10,7 +10,7 @@
 
   <div v-if="store.undoToast" class="undo-toast" :class="store.undoToast.cls" role="status" aria-live="polite">
     <span class="undo-toast-msg">{{ store.undoToast.msg }}</span>
-    <button class="undo-toast-btn undo-toast-undo" @click="onUndoClick">{{ t('toast.undo') }}</button>
+    <button class="undo-toast-btn undo-toast-undo" @click="onUndoClick">{{ store.undoToast.actionLabel || t('toast.undo') }}</button>
     <button class="undo-toast-btn undo-toast-confirm" @click="store.dismissUndo()">{{ t('common.confirm') }}</button>
     <span class="undo-toast-countdown">{{ store.undoToast.countdown }}s</span>
   </div>

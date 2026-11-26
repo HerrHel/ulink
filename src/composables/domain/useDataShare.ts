@@ -188,7 +188,8 @@ export function remapNoteRefs(
   })
 }
 
-export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]) {
+/** 返回新建组的本地 id（调用方据此在保存后直接打开这篇笔记） */
+export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[], opts: { quiet?: boolean } = {}): Promise<string> {
   const ds = useDataStore()
   const sync = useCloudSync()
   const now = Date.now()
@@ -290,7 +291,8 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
 
   // 报告实际入库条数（而非全部 bookmarks 数），避免跳过去重后仍夸大计数。
   const count = actualAdded.length
-  toast(t('msg.forkedGroup', { name: group.name, count }))
+  if (!opts.quiet) toast(t('msg.forkedGroup', { name: group.name, count }))
+  return newGroupId
 }
 
 // ── Fork 公开分类到自己库（C4：分类 + 其下全部书签与组）──
@@ -301,7 +303,8 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
  * - 书签按 URL 去重（同 URL 跳过，沿用本地已有项），不复制密码/用户名
  * - 组整体复制（bookmarkIds 映射到实际入库/本地已有书签 id，丢弃悬空引用）
  */
-export async function forkPublicCategory(data: PublicCategoryData) {
+/** 返回落地分类的本地 id（新建或并入的同名分类） */
+export async function forkPublicCategory(data: PublicCategoryData, opts: { quiet?: boolean } = {}): Promise<string> {
   const ds = useDataStore()
   const sync = useCloudSync()
   const now = Date.now()
@@ -402,5 +405,6 @@ export async function forkPublicCategory(data: PublicCategoryData) {
 
   const count = actualAdded.length
   const groupCount = newGroups.length
-  toast(tN('msg.forkedCategory', count, { name: cat.name, groups: groupCount }))
+  if (!opts.quiet) toast(tN('msg.forkedCategory', count, { name: cat.name, groups: groupCount }))
+  return catId
 }

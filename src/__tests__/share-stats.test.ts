@@ -98,8 +98,8 @@ describe('resolveGoSource', () => {
 describe('goTarget', () => {
   const O = 'https://ulink.ren'
   it('save：组 / 分类分别回到应用内的分享只读态', () => {
-    expect(goTarget('g', 'g1', 'save', O)).toEqual({ event: 'cta', location: `${O}/app#share/g1` })
-    expect(goTarget('c', 's1', 'save', O)).toEqual({ event: 'cta', location: `${O}/app#share/c/s1` })
+    expect(goTarget('g', 'g1', 'save', O)).toEqual({ event: 'cta', location: `${O}/app?save=1#share/g1` })
+    expect(goTarget('c', 's1', 'save', O)).toEqual({ event: 'cta', location: `${O}/app?save=1#share/c/s1` })
   })
 
   it('start：去应用首页并带 from=share', () => {

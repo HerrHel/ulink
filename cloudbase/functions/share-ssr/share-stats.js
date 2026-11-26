@@ -86,6 +86,7 @@ function resolveGoSource(headers) {
 
 /**
  * /go 跳转目标（白名单，绝不接受外部 URL）。
+ * save 带 ?save=1：应用加载完分享后直接保存（未登录则登录后自动继续），访客只需点一次。
  * @param {'g'|'c'} kind
  * @param {string} id 已校验过格式的分享 id
  * @param {string|null} to 'save' | 'start'（其它值按 save 处理）
@@ -97,7 +98,7 @@ function goTarget(kind, id, to, origin) {
   const enc = encodeURIComponent(id)
   return {
     event: 'cta',
-    location: kind === 'c' ? `${origin}/app#share/c/${enc}` : `${origin}/app#share/${enc}`,
+    location: kind === 'c' ? `${origin}/app?save=1#share/c/${enc}` : `${origin}/app?save=1#share/${enc}`,
   }
 }
 
