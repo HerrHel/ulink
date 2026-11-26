@@ -318,3 +318,63 @@ describe('remapNoteRefs', () => {
     expect(remapNoteRefs('', new Map())).toBe('')
   })
 })
+
+describe('forkPublicGroup — 同一份分享再存一次不复制第二份（2026-11-26）', () => {
+  it('第二次保存：返回已有那份的 id，不新建组、不新增书签，提示已在库里', async () => {
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+    const group = {
+      id: 'g-dup', name: '工具箱', categoryId: 'uncategorized', icon: '', order: 0, isExpanded: false,
+      attributes: {}, bookmarkIds: ['b-d1', 'b-d2'], notes: '<p>x</p>', useCount: 0, updatedAt: 1, isPublic: true,
+    } as any
+    const bms = [
+      await makeBookmark({ id: 'b-d1', url: 'https://d1.example.com' }),
+      await makeBookmark({ id: 'b-d2', url: 'https://d2.example.com' }),
+    ]
+    const forkPublicGroup = await forkCalls()
+
+    const first = await forkPublicGroup(group, bms)
+    const groupsAfterFirst = ds.siblingGroups.length
+    const bookmarksAfterFirst = ds.bookmarks.length
+    _toast.toastSpy.mockClear()
+
+    const second = await forkPublicGroup(group, bms)
+
+    expect(second).toBe(first)
+    expect(ds.siblingGroups.length).toBe(groupsAfterFirst)
+    expect(ds.bookmarks.length).toBe(bookmarksAfterFirst)
+    expect(_toast.toastSpy).toHaveBeenCalledWith('「工具箱」已经在你的库里了')
+  })
+
+  it('本地同名组但缺了分享里的书签：不算已存过，照常复制', async () => {
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+    ds.addGroup({
+      id: 'g-mine', name: '工具箱', categoryId: 'uncategorized', icon: '', order: 0, isExpanded: false,
+      attributes: {}, bookmarkIds: [], notes: '', useCount: 0, updatedAt: 1, isPublic: false,
+    } as any)
+    const group = {
+      id: 'g-src', name: '工具箱', categoryId: 'uncategorized', icon: '', order: 0, isExpanded: false,
+      attributes: {}, bookmarkIds: ['b-x'], notes: '', useCount: 0, updatedAt: 1, isPublic: true,
+    } as any
+    const forkPublicGroup = await forkCalls()
+
+    const id = await forkPublicGroup(group, [await makeBookmark({ id: 'b-x', url: 'https://x1.example.com' })])
+
+    expect(id).not.toBe('g-mine')
+    expect(ds.siblingGroups.filter((g: any) => g.name === '工具箱')).toHaveLength(2)
+  })
+
+  it('没有收录书签的纯笔记：同名且正文相同才算已存过', async () => {
+    const { findSavedGroupCopy } = await import('../../composables/domain/useDataShare.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+    ds.addGroup({
+      id: 'g-note', name: '纯笔记', categoryId: 'uncategorized', icon: '', order: 0, isExpanded: false,
+      attributes: {}, bookmarkIds: [], notes: '<p>正文</p>', useCount: 0, updatedAt: 1, isPublic: false,
+    } as any)
+    const base = { id: 'g-s', name: '纯笔记', bookmarkIds: [] } as any
+    expect(findSavedGroupCopy({ ...base, notes: '<p>正文</p>' }, [])?.id).toBe('g-note')
+    expect(findSavedGroupCopy({ ...base, notes: '<p>改过的正文</p>' }, [])).toBeNull()
+  })
+})

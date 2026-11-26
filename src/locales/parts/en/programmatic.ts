@@ -117,6 +117,7 @@ export const programmaticEn = {
     shareLinkLabel: 'Share link',
     forkedGroup: 'Copied "{name}" to your library ({count} bookmarks)',
     forkedGroup_one: 'Copied "{name}" to your library ({count} bookmark)',
+    forkAlreadySaved: '"{name}" is already in your library',
     categoryNotExist: 'Category does not exist',
     exportedCategory: 'Exported category "{name}" ({n} bookmarks · {groups} notes)',
     exportedCategory_one: 'Exported category "{name}" ({n} bookmark · {groups} notes)',

@@ -15,6 +15,7 @@ import {
 } from './useSyncMapping.js'
 import { _getUserId } from './useSyncHistory.js'
 import { isValidShareGroupId } from '../../utils.js'
+import { SHARE_BASE } from '../../config/urls.js'
 
 export async function setGroupPublic(gid: string, isPublic: boolean): Promise<boolean> {
   const userId = _getUserId()
@@ -35,6 +36,43 @@ export async function setGroupPublic(gid: string, isPublic: boolean): Promise<bo
   }
 }
 
+/** 把 RPC / share-ssr 返回的 { group, bookmarks } 转成本地模型（两条取数路径共用） */
+function _parsePublicGroupPayload(data: unknown): { group: SiblingGroup; bookmarks: Bookmark[] } | null {
+  const payload = data as { group?: RemoteGroupRow; bookmarks?: RemoteBookmarkRow[] } | null
+  if (!payload || !payload.group) return null
+  const group = fromRemoteGroup(payload.group)
+  if (!group) return null
+  const bookmarks = (payload.bookmarks || [])
+    .map(fromRemoteBookmark)
+    .filter(Boolean)
+    .map(b => ({ ...b!, username: '', password: '' })) as Bookmark[]
+  return { group, bookmarks }
+}
+
+/**
+ * 设了访问密码的组：get_public_group RPC 一律不返回它（防绕过密码）。访客在分享页 /s/<gid>
+ * 输对密码后，浏览器持有 share-ssr 下发的验密票据 cookie（HttpOnly、Path=/），
+ * 同源请求 /s/<gid>/data 会自动带上，由 share-ssr 验票后返回内容。
+ * 只在同源（生产 ulink.ren）时有意义；开发环境 / 跨源直接跳过。
+ */
+async function _fetchUnlockedGroup(gid: string): Promise<{ group: SiblingGroup; bookmarks: Bookmark[] } | null> {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return null
+  let shareOrigin = ''
+  try { shareOrigin = new URL(SHARE_BASE).origin } catch { return null }
+  if (window.location.origin !== shareOrigin) return null
+  try {
+    const res = await fetch(`/s/${encodeURIComponent(gid)}/data`, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok || !(res.headers.get('content-type') || '').includes('application/json')) return null
+    return _parsePublicGroupPayload(await res.json())
+  } catch (err) {
+    console.warn('[share] unlocked group fetch failed:', err)
+    return null
+  }
+}
+
 export async function fetchPublicGroup(
   gid: string,
 ): Promise<{ group: SiblingGroup; bookmarks: Bookmark[] } | null> {
@@ -50,19 +88,11 @@ export async function fetchPublicGroup(
     const result = await Promise.race([
       (async () => {
         const { data, error } = await dbRpc('get_public_group', { p_gid: gid })
-        if (error || data == null) {
-          if (error) console.warn('[share] get_public_group failed:', error)
-          return null
-        }
-        const payload = data as { group?: RemoteGroupRow; bookmarks?: RemoteBookmarkRow[] }
-        if (!payload.group) return null
-        const group = fromRemoteGroup(payload.group)
-        if (!group) return null
-        const bookmarks = (payload.bookmarks || [])
-          .map(fromRemoteBookmark)
-          .filter(Boolean)
-          .map(b => ({ ...b!, username: '', password: '' })) as Bookmark[]
-        return { group, bookmarks }
+        if (error) console.warn('[share] get_public_group failed:', error)
+        const parsed = error ? null : _parsePublicGroupPayload(data)
+        if (parsed) return parsed
+        // RPC 拿不到：可能是设了访问密码的组 → 凭分享页下发的验密票据走 share-ssr 再试一次
+        return await _fetchUnlockedGroup(gid)
       })(),
       timeout,
     ])

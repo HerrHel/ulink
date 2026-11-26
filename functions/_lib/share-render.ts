@@ -925,9 +925,6 @@ function buildBody(
     bmMap[b.id] = { url: b.url, title: b.title, icon: typeof b.icon === 'string' ? b.icon : '' }
   }
   const notes = notesHtml(dict, group, bmMap, titleInfo.promotedH1)
-  // CTA 跳 App 的 hash 路由（/app#share/<gid>），直达应用主体完成保存
-  const appUrl = `${appOrigin}/app#share/${esc(group.id)}`
-
   const hasNotes = Boolean(notes.html)
   const hasBookmarks = count > 0
 

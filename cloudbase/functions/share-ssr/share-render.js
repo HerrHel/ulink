@@ -2901,7 +2901,6 @@ function buildBody(dict, group, bookmarks, appOrigin) {
     bmMap[b.id] = { url: b.url, title: b.title, icon: typeof b.icon === "string" ? b.icon : "" };
   }
   const notes = notesHtml(dict, group, bmMap, titleInfo.promotedH1);
-  const appUrl = `${appOrigin}/app#share/${esc(group.id)}`;
   const hasNotes = Boolean(notes.html);
   const hasBookmarks = count > 0;
   const sections = [];

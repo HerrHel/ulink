@@ -102,6 +102,7 @@ export const programmaticZh = {
     shareLoginRequired: '分享需要登录云同步，请先登录',
     shareLinkLabel: '分享链接',
     forkedGroup: '已复制「{name}」到你的库（{count} 个书签）',
+    forkAlreadySaved: '「{name}」已经在你的库里了',
     categoryNotExist: '分类不存在',
     exportedCategory: '已导出分类「{name}」（{n} 个书签 · {groups} 个笔记）',
     forkedCategory: '已复制分类「{name}」到你的库（{count} 个书签 · {groups} 个笔记）',

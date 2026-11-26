@@ -262,11 +262,13 @@ const server = http.createServer(async (req, res) => {
   // （安全复查报告中的 SQL 注入高危即疑似此误报）。语义上也更准确：格式非法
   // 与不存在，对访客而言都是「没有这个分享」。此处仍提前 return，不写缓存。
   //
-  // 唯一允许的尾段是 /go（分享页出站跳转计数，见下方 isGo 分支）。
+  // 允许的尾段只有两个：/go（分享页出站跳转计数，见 isGo 分支）与组分享的 /data（见 isData 分支）。
   const baseLen = isCategory ? 3 : 2
-  const isGo = pathParts.length === baseLen + 1 && pathParts[baseLen] === 'go'
+  const tail = pathParts.length === baseLen + 1 ? pathParts[baseLen] : null
+  const isGo = tail === 'go'
+  const isData = tail === 'data' && !isCategory
   if (
-    (pathParts.length !== baseLen && !isGo) ||
+    (pathParts.length !== baseLen && !isGo && !isData) ||
     pathParts[0] !== 's' ||
     !isValidShareId(id) ||
     (isCategory && !id)
@@ -303,6 +305,80 @@ const server = http.createServer(async (req, res) => {
           if (exists) track(kind, id, target.event, source)
         })
         .catch((e) => console.error('[share-ssr] go check threw:', e))
+    }
+    return
+  }
+
+  // ── 组分享数据 /s/<gid>/data（应用内只读态 / 「保存笔记」用）─────────────
+  // 应用平时走 get_public_group RPC，但该 RPC 一律排除设了访问密码的组 → 访客在分享页
+  // 输对密码后点「保存笔记」，进了应用却是「分享不存在」。这里按与分享页完全相同的规则把关：
+  //   - 不存在 / 未公开 / 已删除 → 404；
+  //   - 有密码 → 必须带有效的验密票据 cookie（分享页验密时下发，HttpOnly、Path=/、同源自动携带），
+  //     票据签名绑定当前密码摘要，改密码即失效；无票据 → 401，绝不返回内容；
+  //   - 通过后用 get_public_group_verified（仅 service_role 可调，列级白名单，不含账号密码）取数。
+  // 只允许同源：不发任何 CORS 头，跨站页面读不到响应体。
+  if (isData) {
+    const json = (status, body) => {
+      const s = JSON.stringify(body)
+      res.writeHead(status, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(s),
+        'Cache-Control': 'private, no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+        ...SHARE_SECURITY_HEADERS,
+      })
+      res.end(s)
+    }
+    if (req.method !== 'GET') {
+      sendText(res, 405, 'method not allowed', { Allow: 'GET' })
+      return
+    }
+    const dbx = getDb()
+    let sec
+    try {
+      const r = await dbx.rpc('get_share_secret', { p_gid: id })
+      if (r.error) {
+        console.error('[share-ssr] data get_share_secret failed:', r.error)
+        json(503, { error: 'unavailable' })
+        return
+      }
+      sec = r.data
+    } catch (e) {
+      console.error('[share-ssr] data get_share_secret threw:', e)
+      json(503, { error: 'unavailable' })
+      return
+    }
+    if (!sec) {
+      json(404, { error: 'not_found' })
+      return
+    }
+    if (sec.has_password === true) {
+      if (!SHARE_LOCK_SECRET) {
+        json(503, { error: 'unavailable' })
+        return
+      }
+      const cookies = parseCookies(req.headers.cookie)
+      const ok = checkTicket(cookies[ticketCookieName(id)], id, SHARE_LOCK_SECRET, undefined, ticketVersion(sec.password_hash || null))
+      if (!ok) {
+        json(401, { error: 'locked' })
+        return
+      }
+    }
+    try {
+      const r = await dbx.rpc('get_public_group_verified', { p_gid: id })
+      if (r.error) {
+        console.error('[share-ssr] data rpc failed:', r.error)
+        json(503, { error: 'unavailable' })
+        return
+      }
+      if (!r.data || !r.data.group) {
+        json(404, { error: 'not_found' })
+        return
+      }
+      json(200, { group: r.data.group, bookmarks: r.data.bookmarks || [] })
+    } catch (e) {
+      console.error('[share-ssr] data rpc threw:', e)
+      json(503, { error: 'unavailable' })
     }
     return
   }

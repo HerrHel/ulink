@@ -188,11 +188,49 @@ export function remapNoteRefs(
   })
 }
 
-/** 返回新建组的本地 id（调用方据此在保存后直接打开这篇笔记） */
+/**
+ * 本地是否已经存过这篇分享笔记：同名、未删除，且分享里的每个收录书签（按 URL）都已在这个组里。
+ * 没有收录书签的纯笔记按「同名 + 正文相同」判定。
+ *
+ * 用途：同一份分享再点一次「保存笔记」时不再复制出第二份——书签按 URL 去重后，
+ * 第二份的收录列表会被全部过滤掉，变成一篇「0 个书签」的空壳笔记。
+ */
+export function findSavedGroupCopy(group: SiblingGroup, bookmarks: Bookmark[]): SiblingGroup | null {
+  const ds = useDataStore()
+  const memberIds = new Set(group.bookmarkIds || [])
+  const urls = bookmarks
+    .filter(b => memberIds.has(b.id))
+    .map(b => (b.url || '').toLowerCase())
+    .filter(Boolean)
+  for (const g of ds.siblingGroups) {
+    if (g.deletedAt || g.name !== group.name) continue
+    if (!urls.length) {
+      if (!(g.bookmarkIds || []).length && (g.notes || '') === (group.notes || '')) return g
+      continue
+    }
+    const localUrls = new Set(
+      (g.bookmarkIds || [])
+        .map(id => ds.bookmarkMap[id])
+        .filter((b): b is Bookmark => !!b && !b.deletedAt)
+        .map(b => (b.url || '').toLowerCase()),
+    )
+    if (urls.every(u => localUrls.has(u))) return g
+  }
+  return null
+}
+
+/** 返回新建组的本地 id（调用方据此在保存后直接打开这篇笔记）；已存过则直接返回已有那份的 id */
 export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[], opts: { quiet?: boolean } = {}): Promise<string> {
   const ds = useDataStore()
   const sync = useCloudSync()
   const now = Date.now()
+
+  // 已经存过这篇笔记：不再复制出第二份（第二份会因书签去重变成 0 个书签的空壳），直接打开已有那份
+  const saved = findSavedGroupCopy(group, bookmarks)
+  if (saved) {
+    if (!opts.quiet) toast(t('msg.forkAlreadySaved', { name: saved.name }))
+    return saved.id
+  }
 
   // 为所有书签和组生成新 ID（复制模式）
   const idMap = new Map<string, string>()
@@ -309,6 +347,12 @@ export async function forkPublicCategory(data: PublicCategoryData, opts: { quiet
   const sync = useCloudSync()
   const now = Date.now()
   const cat: Category = data.category
+  // 写入前先认出本地已存过的组（见 findSavedGroupCopy），复制时跳过，避免出现 0 个书签的重复笔记
+  const savedCopies = new Map<string, string>()
+  for (const g of data.groups) {
+    const s = findSavedGroupCopy(g, data.bookmarks)
+    if (s) savedCopies.set(g.id, s.id)
+  }
 
   // ── 1. 目标分类：同名复用，否则新建 ──
   let catId = cat.id
@@ -378,8 +422,12 @@ export async function forkPublicCategory(data: PublicCategoryData, opts: { quiet
 
   // ── 3. 组：整体复制，bookmarkIds 映射到实际 id，丢弃悬空 ──
   const newGroups: SiblingGroup[] = []
+  // 笔记内联卡片 / 组引用卡片换成本地 id：需等所有组都分到 id 后再改写（组之间可互相引用）
+  const gidMap = new Map<string, string>(savedCopies)
   for (const g of data.groups) {
+    if (savedCopies.has(g.id)) continue
     const newGid = genId('g', newGroups.length)
+    gidMap.set(g.id, newGid)
     idMap.set(g.id, newGid)
     const newBookmarkIds = (g.bookmarkIds || [])
       .map(bid => idMap.get(bid))
@@ -394,9 +442,6 @@ export async function forkPublicCategory(data: PublicCategoryData, opts: { quiet
       useCount: 0,
     })
   }
-  // 笔记内联卡片 / 组引用卡片换成本地 id：需等所有组都分到新 id 后再改写（组之间可互相引用）
-  const gidMap = new Map<string, string>()
-  data.groups.forEach((g, i) => { if (newGroups[i]) gidMap.set(g.id, newGroups[i].id) })
   for (const g of newGroups) g.notes = remapNoteRefs(g.notes, oldToLocal, gidMap)
   for (const g of newGroups) ds.addGroup(g)
 
