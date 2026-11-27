@@ -19,6 +19,8 @@ import {
 } from './syncShare.js'
 import { SHARE_BASE } from '../../config/urls.js'
 import { newId as genId } from '../../lib/newId.js'
+// 网址比对与应用其余去重口径一致：结尾斜杠 / http(s) / www. / 大小写 / #锚点 差异视为同一书签
+import { bookmarkUrlKey } from '../../lib/bookmarkDedup.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
@@ -200,7 +202,7 @@ export function findSavedGroupCopy(group: SiblingGroup, bookmarks: Bookmark[]): 
   const memberIds = new Set(group.bookmarkIds || [])
   const urls = bookmarks
     .filter(b => memberIds.has(b.id))
-    .map(b => (b.url || '').toLowerCase())
+    .map(b => bookmarkUrlKey(b.url))
     .filter(Boolean)
   for (const g of ds.siblingGroups) {
     if (g.deletedAt || g.name !== group.name) continue
@@ -212,7 +214,7 @@ export function findSavedGroupCopy(group: SiblingGroup, bookmarks: Bookmark[]): 
       (g.bookmarkIds || [])
         .map(id => ds.bookmarkMap[id])
         .filter((b): b is Bookmark => !!b && !b.deletedAt)
-        .map(b => (b.url || '').toLowerCase()),
+        .map(b => bookmarkUrlKey(b.url)),
     )
     if (urls.every(u => localUrls.has(u))) return g
   }
@@ -269,12 +271,12 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   const urlToLocal = new Map<string, Bookmark>()
   for (const e of ds.bookmarks) {
     if (e.deletedAt) continue
-    const key = e.url?.toLowerCase()
+    const key = bookmarkUrlKey(e.url)
     if (key && !urlToLocal.has(key)) urlToLocal.set(key, e)
   }
   for (const b of newBookmarks) {
     const oldId = reverseIdMap.get(b.id)
-    const urlKey = b.url?.toLowerCase() || ''
+    const urlKey = bookmarkUrlKey(b.url)
     const existing = urlKey ? urlToLocal.get(urlKey) : undefined
     if (!existing) {
       ds.addBookmark(b)
@@ -390,12 +392,12 @@ export async function forkPublicCategory(data: PublicCategoryData, opts: { quiet
   const urlToLocal = new Map<string, Bookmark>()
   for (const e of ds.bookmarks) {
     if (e.deletedAt) continue
-    const key = e.url?.toLowerCase()
+    const key = bookmarkUrlKey(e.url)
     if (key && !urlToLocal.has(key)) urlToLocal.set(key, e)
   }
   for (const b of newBookmarks) {
     const oldId = reverseIdMap.get(b.id)
-    const urlKey = b.url?.toLowerCase() || ''
+    const urlKey = bookmarkUrlKey(b.url)
     const existing = urlKey ? urlToLocal.get(urlKey) : undefined
     if (!existing) {
       ds.addBookmark(b)

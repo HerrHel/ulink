@@ -157,3 +157,28 @@ export function isExactDuplicate(existingUrl: string, newUrl: string): boolean {
     return false
   }
 }
+
+/**
+ * 书签「是不是同一个网站页面」的比对键（从分享保存 / 判断笔记是否已存过时用）。
+ *
+ * 抹掉不改变指向的写法差异：首尾空格、协议（http/https）、www. 前缀、默认端口、#锚点、路径末尾斜杠；
+ * 整体不区分大小写（沿用从分享保存原有的「大小写不敏感」去重口径，见 forkPublicGroup 的 M17 用例）。
+ * 路径与查询参数本身保留（不同页面不能被误判成同一个）。
+ * 缺协议的（如 vert.sh/a）按 https 补全；仍解析不了的退回「去空格 + 小写」的原串。
+ * 空串返回 ''，调用方应把 '' 视为「无法比对」而非彼此相等。
+ */
+export function bookmarkUrlKey(url: string | null | undefined): string {
+  const raw = String(url ?? '').trim()
+  if (!raw) return ''
+  let u: URL
+  try {
+    u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`)
+  } catch {
+    return raw.toLowerCase()
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return u.href
+  const host = u.hostname.toLowerCase().replace(/^www\./, '')
+  const port = u.port ? `:${u.port}` : ''
+  const path = u.pathname.replace(/\/+$/, '')
+  return `${host}${port}${path}${u.search}`.toLowerCase()
+}
