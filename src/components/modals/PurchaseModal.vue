@@ -699,7 +699,11 @@ const displayCards = computed<TierCardView[]>(() => {
       },
       {
         // n 按语言格式化：中文「600」（万字），英文「6M」（百万字，避免「6000k」）
-        text: t('purchase.card.b3', { n: isZh.value ? aiCharsNum : `${aiCharsNum / 100}M` }),
+        // r：每月 AI 次数（plans.features 真源）。迁移上线前 plans 里还没有该键，
+        // 按旧口径展示每日次数，避免页面承诺与服务端实际执行的限额不一致
+        text: f['ai.requests.monthly']
+          ? t('purchase.card.b3', { n: isZh.value ? aiCharsNum : `${aiCharsNum / 100}M`, r: Number(f['ai.requests.monthly']) })
+          : t('purchase.card.b3Legacy', { n: isZh.value ? aiCharsNum : `${aiCharsNum / 100}M`, d: Number(f['ai.requests.daily']) || 100 }),
         sub: t('purchase.card.b3Sub'),
         highlight: true,
       },

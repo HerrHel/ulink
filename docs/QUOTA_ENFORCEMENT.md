@@ -17,6 +17,28 @@
 > 现以每日 100 次为对用户展示的主限制，月度 token 只作防滥用兜底（用满 ≈ ¥3.6/月 < 年付折合 ¥9/月）。
 > 同步修正 mimo-chat 月额度耗尽提示：只有 PRO 会走到该分支，不再引导「升级 PRO」，改为「下月 1 日自动恢复」。
 
+> 2026-11-27：**PRO AI 改为每月 3000 次为主限额**（`ai.requests.monthly`），`ai.requests.daily` 改为 300 次/日的防滥用
+> 上限（平时不展示，接近才提醒），`ai.tokens.monthly` 仍作成本兜底。原「每日 100 次」理论月上限约 3000 次，
+> 改为每月 3000 次不缩水存量订阅权益且可随用随取。执行点不变：仍是 `consume_daily_feature_quota(uid, 'ai.requests.daily')`，
+> 其内部在单日放行后再扣月度键 `feature:ai.requests.monthly:<uid>:<账号时区年月>`，月度不足时退还单日次数并返回
+> `scope:'monthly'`（mimo-chat 提示「本月 AI 次数已用完」、ai-api 返回 `monthly_exhausted`）；`refund_daily_feature_quota`
+> 对 `ai.requests.daily` 同步退还月度。云函数只改了提示文案，不部署也能正确拦截（只是文案仍说「今日」）。
+>
+> 同日：**每日额度按账号时区 0 点刷新**（迁移 `20261127000002_quota_timezone.sql` → `…000003_quota_monthly.sql` →
+> `…000004_my_ai_access_usage.sql`，因 `tcb db execute` 单批 ≤10KB 拆为 3 批，须按序执行；PRO 月度次数在第 2 批启用）。账号绑定 IANA 时区
+> （`public.user_quota_tz`，首次登录由浏览器 `Intl` 时区自动上报，`set_my_timezone(p_tz, p_initial)`）；
+> `consume_daily_feature_quota` / `refund_daily_feature_quota` 的日期键改由 `_quota_today(uid)` 计算（两者必须同口径）。
+> 防钻空子：改时区只登记 pending，到**当前时区下一个 0 点**才生效（当天用量照算）；手动修改 30 天一次；首次上报若当天
+> 已有用量同样延后生效。未登记账号沿用 Asia/Shanghai。**不在范围**（仍按北京时间，界面不展示）：extract-video uid 日配额、
+> check-link 自动巡检上限（JS 拼日期键）、月度 token（`usage_ledger.period` 由 mimo-chat 按北京年月写入）。
+>
+> 同日：**额度对用户可见**。`my_ai_access` 返回额度时区状态与 `daily_resets_at`；对 PRO 还返回 `daily_used / daily_limit`
+> （`ai.requests.daily`，读当日键，取 `least(count, limit)`）与 `monthly_used_tokens / monthly_limit_tokens /
+> monthly_resets_at`（同 `ai_quota_check` 口径），只读不改计数。前端
+> `useEntitlement.aiQuotaView` 统一展示：AI 助手输入框下 `AiQuotaChip`（免费常驻剩余次数；PRO 仅今日剩余 ≤10 或
+> 本月 ≥80% 时出现）+ 设置「会员与权益」的「AI 试用 / 今日 AI 次数 / 额度刷新时区」行（恢复时刻经
+> `lib/quotaTime.ts` 换算为用户本地时间）；每次 AI 对话 / 整理后 `refreshAiAccessSoon` 以服务端为准刷新。
+
 ## 一、总览
 
 | 额度键 | 是否强制 | 强制点 | 备注 |

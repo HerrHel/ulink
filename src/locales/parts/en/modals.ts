@@ -50,6 +50,7 @@ export const modalsEn = {
       aiTrialExhausted: 'AI trial used up; filled in the page title instead. Upgrade to PRO to keep using AI prefill',
       aiLoginRequired: 'Sign in to use AI prefill (new users get free trial uses)',
       aiDailyExhausted: "Today's AI limit is reached; filled in the page title instead",
+      aiMonthlyExhausted: "This month's AI uses are used up (resets on the 1st); filled in the page title instead",
       multiAccounts: 'History Accounts',
       parentSearchPlaceholder: 'Search by name or URL…',
     }, // BookmarkModal

@@ -127,6 +127,9 @@
             </div>
           </div>
 
+          <!-- AI 额度标签（免费试用剩余 / 未登录引导；PRO 不显示） -->
+          <AiQuotaChip />
+
           <!-- 最近对话轻量单行底座（严格单行不换行，保持极简呼吸感） -->
           <div v-if="historySessions.length > 0" class="ai-hero-recent-shelf">
             <span class="recent-shelf-label">
@@ -289,6 +292,7 @@
           </button>
         </div>
       </div>
+      <AiQuotaChip dock />
     </div>
 
     <!-- 历史会话滑动抽屉（Raycast / Perplexity 级滑出抽屉） -->
@@ -411,6 +415,7 @@ import { classifyReply } from '../../lib/ai/suggestedReplies.js'
 import ChatStream from './ChatStream.vue'
 import ChatConvHeader from './ChatConvHeader.vue'
 import ChatTurnRail from './ChatTurnRail.vue'
+import AiQuotaChip from './AiQuotaChip.vue'
 import { buildTurnAnchors } from '../../lib/ai/turnAnchors.js'
 import { extractSessionTitle, isDefaultSessionTitle } from '../../lib/ai/chatSessions.js'
 import { matchesSessionQuery } from '../../lib/ai/sessionSearch.js'

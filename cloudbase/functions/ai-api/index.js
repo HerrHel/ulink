@@ -185,7 +185,7 @@ const server = http.createServer(async (req, res) => {
     if (action === 'candidates' && !access.allowed) {
       const status = access.reason === 'login_required' ? 401
         : access.reason === 'quota_unavailable' ? 503
-          : access.reason === 'daily_exhausted' ? 429 : 402
+          : access.reason === 'daily_exhausted' || access.reason === 'monthly_exhausted' ? 429 : 402
       sendJson(res, status, { success: false, error: access.reason })
       return
     }

@@ -28,7 +28,7 @@ export interface SmartIntakeResult {
   reason?: string
   /** 服务端本次是否真正用到了 AI（used / skipped / failed）；未经服务端（降级链）时为 undefined */
   ai?: 'used' | 'skipped' | 'failed'
-  /** 服务端未放行 AI 的原因：ai_trial_exhausted / login_required / daily_exhausted / quota_unavailable */
+  /** 服务端未放行 AI 的原因：ai_trial_exhausted / login_required / daily_exhausted / monthly_exhausted / quota_unavailable */
   aiGate?: string | null
 }
 

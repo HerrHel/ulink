@@ -16,8 +16,65 @@
           <span v-if="entitlement.isPaid && entitlement.expiresAt" class="hidden" data-testid="lv-entitlement-expiry">{{ entitlement.expiresAt }}</span>
         </div>
       </div>
+      <!-- 免费用户：AI 终身试用剩余次数（与 AI 助手输入框标签同一数据源） -->
+      <div v-if="trialRow" class="sp-card-row" data-testid="lv-ai-trial">
+        <div class="sp-row-meta">
+          <span class="sp-row-title">{{ t('settings.aiTrialTitle') }}</span>
+          <span class="sp-row-desc">{{ trialRow.desc }}</span>
+        </div>
+        <div class="sp-row-ctrl">
+          <div class="sp-quota-bar" role="progressbar" :aria-valuenow="trialRow.pct" aria-valuemin="0" aria-valuemax="100">
+            <div class="sp-quota-fill" :class="{ warn: trialRow.warn }" :style="{ width: trialRow.pct + '%' }"></div>
+          </div>
+        </div>
+      </div>
+      <!-- PRO：本月 AI 次数（主限额，按账号时区自然月；旧服务端无此数据则不显示） -->
+      <div v-if="proMonthRow" class="sp-card-row" data-testid="lv-ai-month">
+        <div class="sp-row-meta">
+          <span class="sp-row-title">{{ t('settings.aiMonthTitle') }}</span>
+          <span class="sp-row-desc">{{ t('settings.aiMonthDesc', { used: proMonthRow.used, limit: proMonthRow.limit, reset: monthResetText }) }}</span>
+        </div>
+        <div class="sp-row-ctrl">
+          <div class="sp-quota-bar" role="progressbar" :aria-valuenow="proMonthRow.pct" aria-valuemin="0" aria-valuemax="100">
+            <div class="sp-quota-fill" :class="{ warn: proMonthRow.warn }" :style="{ width: proMonthRow.pct + '%' }"></div>
+          </div>
+        </div>
+      </div>
+      <!-- PRO：单日上限（防滥用）——有月度主限额时只在接近上限才显示；旧套餐无月度键时作为主行 -->
+      <div v-if="proDailyRow" class="sp-card-row" data-testid="lv-ai-daily">
+        <div class="sp-row-meta">
+          <span class="sp-row-title">{{ proMonthRow ? t('settings.aiDailyCapTitle') : t('settings.aiDailyTitle') }}</span>
+          <span class="sp-row-desc">{{ t('settings.aiDailyDesc', { used: proDailyRow.used, limit: proDailyRow.limit, reset: dailyResetText }) }}</span>
+        </div>
+        <div class="sp-row-ctrl">
+          <div class="sp-quota-bar" role="progressbar" :aria-valuenow="proDailyRow.pct" aria-valuemin="0" aria-valuemax="100">
+            <div class="sp-quota-fill" :class="{ warn: proDailyRow.warn }" :style="{ width: proDailyRow.pct + '%' }"></div>
+          </div>
+        </div>
+      </div>
+      <!-- 额度刷新时区：每日额度按该时区 0 点恢复；改时区到下一个 0 点生效、30 天一次 -->
+      <div v-if="tzRow" class="sp-card-row" data-testid="lv-quota-tz">
+        <div class="sp-row-meta">
+          <span class="sp-row-title">{{ t('settings.quotaTzTitle') }}</span>
+          <span class="sp-row-desc">{{ tzRow.desc }}</span>
+        </div>
+        <div class="sp-row-ctrl">
+          <button
+            v-if="tzRow.action"
+            type="button"
+            class="btn btn-secondary btn-sm"
+            data-testid="lv-quota-tz-btn"
+            :disabled="tzBusy"
+            :title="tzRow.actionTitle"
+            @click="onTzAction"
+          >
+            {{ tzRow.actionLabel }}
+          </button>
+        </div>
+      </div>
       <!-- 本月 AI 用量进度条（enforce 拦截前用户可见的消耗） -->
-      <div v-if="aiQuota && aiQuota.limit > 0" class="sp-card-row" data-testid="lv-ai-quota">
+      <!-- 有每月次数主限额时，token 只是成本兜底：接近 80% 才显示，免得两种口径并列让人困惑 -->
+      <div v-if="aiQuota && aiQuota.limit > 0 && (!proMonthRow || quotaPct >= 80)" class="sp-card-row" data-testid="lv-ai-quota">
         <div class="sp-row-meta">
           <span class="sp-row-title">{{ t('settings.aiQuota') }}</span>
           <span class="sp-row-desc">{{ t('settings.aiQuotaUsed', { used: aiQuota.used, limit: aiQuota.limit }) }}</span>
@@ -186,7 +243,7 @@
 /** 设置面板 ·「会员与账单（权益 / AI 用量 / 兑换码 / 交易明细）」标签页。共享实例经 settingsContext 注入，见该文件说明。 */
 import { computed, ref, onBeforeUnmount } from 'vue'
 import { I } from '../../../config/icons.js'
-import { toast } from '../../../lib/toast.js'
+import { toast, showConfirm } from '../../../lib/toast.js'
 import { copyToClipboard } from '../../../utils.js'
 import {
   redeemCode,
@@ -195,6 +252,8 @@ import {
 } from '../../../composables/domain/useRedeem.js'
 import { t, useI18n } from '../../../i18n/index.js'
 import { useSettingsContext } from './settingsContext.js'
+import { useEntitlement, changeQuotaTimezone } from '../../../composables/domain/useEntitlement.js'
+import { browserTimeZone, timeZoneLabel, formatLocalMoment } from '../../../lib/quotaTime.js'
 
 const { fetchTransactions, formatTxTime, prevTxPage, nextTxPage, hasNextTx, hasPrevTx, txPageSize, txPage, totalTx, loadingTx, transactions, refreshEntitlement, entitlement, auth, showPurchase, aiQuota } = useSettingsContext()
 
@@ -247,6 +306,112 @@ async function copyOrderNo(orderId: string) {
 const redeemInput = ref('')
 
 const redeeming = ref(false)
+
+const { aiQuotaView, aiAccess } = useEntitlement()
+
+/** 试用行：只对登录的免费用户显示（PRO 看下方月度 token 用量；未登录 / 未知不显示） */
+const trialRow = computed(() => {
+  const v = aiQuotaView.value
+  if (v.kind !== 'trial' && v.kind !== 'low' && v.kind !== 'exhausted') return null
+  const used = Math.max(0, v.total - v.remaining)
+  return {
+    desc: v.kind === 'exhausted'
+      ? t('settings.aiTrialExhausted', { total: v.total })
+      : t('settings.aiTrialRemaining', { remaining: v.remaining, total: v.total }),
+    pct: v.total > 0 ? Math.min(100, Math.round((used / v.total) * 100)) : 100,
+    warn: v.kind !== 'trial',
+  }
+})
+
+const quotaTz = computed(() => aiAccess.value.tz)
+const deviceTz = browserTimeZone()
+
+/** 每日额度恢复时刻（本地时间说法）；旧服务端没有时区信息时沿用固定说法 */
+const dailyResetText = computed(() =>
+  formatLocalMoment(quotaTz.value?.dailyResetsAt) || t('settings.aiDailyResetFallback'),
+)
+
+/**
+ * 时区行：
+ *  - 有待生效修改 → 说明何时切换，按钮「撤销」（改回当前时区，不占冷却）；
+ *  - 本设备时区与账号不同 → 按钮「改为本设备时区」；
+ *  - 一致 → 只展示。
+ */
+const tzRow = computed(() => {
+  const z = quotaTz.value
+  if (!z || !auth.isLoggedIn) return null
+  const cur = timeZoneLabel(z.zone)
+  if (z.pendingZone) {
+    return {
+      desc: t('settings.quotaTzPending', { cur, next: timeZoneLabel(z.pendingZone), when: formatLocalMoment(z.pendingAt) }),
+      action: 'cancel' as const,
+      actionLabel: t('settings.quotaTzCancel'),
+      actionTitle: t('settings.quotaTzCancelTitle', { cur }),
+    }
+  }
+  const desc = t('settings.quotaTzDesc', { cur })
+  if (deviceTz && deviceTz !== z.zone) {
+    return {
+      desc,
+      action: 'change' as const,
+      actionLabel: t('settings.quotaTzUseDevice'),
+      actionTitle: t('settings.quotaTzUseDeviceTitle', { device: timeZoneLabel(deviceTz) }),
+    }
+  }
+  return { desc, action: null, actionLabel: '', actionTitle: '' }
+})
+
+const tzBusy = ref(false)
+
+async function onTzAction() {
+  const row = tzRow.value
+  const z = quotaTz.value
+  if (!row?.action || !z || tzBusy.value) return
+  if (row.action === 'change') {
+    const ok = await showConfirm(t('settings.quotaTzConfirm', {
+      device: timeZoneLabel(deviceTz),
+      when: formatLocalMoment(z.dailyResetsAt),
+    }))
+    if (!ok) return
+  }
+  tzBusy.value = true
+  try {
+    const r = await changeQuotaTimezone(row.action === 'cancel' ? z.zone : deviceTz)
+    if (r.ok) {
+      toast(row.action === 'cancel' ? t('settings.quotaTzCancelled') : t('settings.quotaTzScheduled', {
+        when: formatLocalMoment(r.tz?.pendingAt) || formatLocalMoment(z.dailyResetsAt),
+      }))
+    } else if (r.reason === 'cooldown') {
+      toast(t('settings.quotaTzCooldown', { date: formatLocalMoment(r.nextAllowedAt) }), false)
+    } else {
+      toast(t('settings.quotaTzFailed'), false)
+    }
+  } finally {
+    tzBusy.value = false
+  }
+}
+
+const pct = (used: number, limit: number) => Math.min(100, Math.round((used / limit) * 100))
+
+/** 本月次数恢复时刻（账号时区下个月 1 日 0 点，本地时间说法） */
+const monthResetText = computed(() =>
+  formatLocalMoment(aiAccess.value.pro?.requestsMonthResetsAt) || t('settings.aiMonthResetFallback'),
+)
+
+/** PRO 本月次数行（主限额） */
+const proMonthRow = computed(() => {
+  const p = aiQuotaView.value.pro
+  if (aiQuotaView.value.kind !== 'pro' || !p || p.monthLimit <= 0) return null
+  return { used: p.monthUsed, limit: p.monthLimit, pct: pct(p.monthUsed, p.monthLimit), warn: p.monthNear }
+})
+
+/** PRO 单日行：有月度主限额时只在接近单日上限才出现（防滥用上限，正常用户碰不到） */
+const proDailyRow = computed(() => {
+  const p = aiQuotaView.value.pro
+  if (aiQuotaView.value.kind !== 'pro' || !p || p.dailyLimit <= 0) return null
+  if (p.monthLimit > 0 && !p.dailyNear) return null
+  return { used: p.dailyUsed, limit: p.dailyLimit, pct: pct(p.dailyUsed, p.dailyLimit), warn: p.dailyNear }
+})
 
 const quotaPct = computed(() => {
   const q = aiQuota.value

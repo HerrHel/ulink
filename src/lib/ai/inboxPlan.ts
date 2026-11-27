@@ -19,6 +19,7 @@ import {
   type ParentChildLink,
 } from './localClustering.js'
 import { classifyWithLlm } from './inboxLlmClassify.js'
+import { refreshAiAccessSoon } from '../../composables/domain/useEntitlement.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { getLocale } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
@@ -100,6 +101,8 @@ export async function planInboxZero(
     )
     aiError = llm.error || ''
     aiSentCount = llm.sentCount
+    // 送审过大模型就可能消耗了 AI 试用次数：以服务端为准刷新剩余次数（额度标签随之更新）
+    if (llm.sentCount > 0) refreshAiAccessSoon()
     const byCat = new Map<string, Bookmark[]>()
     for (const b of leftoverBookmarks) {
       const catId = llm.assignments.get(`b:${b.id}`)

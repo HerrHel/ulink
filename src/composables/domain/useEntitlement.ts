@@ -8,11 +8,22 @@
  * 3. AI 语义搜索权限校验
  */
 import { ref, computed } from 'vue'
-import { fetchMyEntitlement, fetchMyAiAccess, type MyEntitlement, type MyAiAccess } from './useRedeem.js'
+import {
+  fetchMyEntitlement,
+  fetchMyAiAccess,
+  setMyTimezone,
+  type MyEntitlement,
+  type MyAiAccess,
+  type SetTimezoneResult,
+} from './useRedeem.js'
+import { browserTimeZone } from '../../lib/quotaTime.js'
 
 /** AI 访问状态未知的默认值（本地定义：模块加载即用，不依赖 useRedeem 的运行时导出，mock 友好） */
 const UNKNOWN_AI_ACCESS: MyAiAccess = { tier: 'unknown', used: 0, limit: 0, remaining: 0 }
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../../lib/storageSafe.js'
+import { toastWithAction } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
+import { useUIStore } from '../../stores/ui.js'
 
 export const ENTITLEMENT_CACHE_KEY = 'ulink_entitlement_v1'
 export const LEGACY_ENTITLEMENT_CACHE_KEY = 'lv_entitlement_v1'
@@ -167,7 +178,10 @@ export function useEntitlement() {
     // 旧版按天计数（lv_ai_enrich_YYYY-MM-DD）已废弃：传空串把历史键全部清掉
     pruneOldAiEnrichKeys('')
     const a = await fetchMyAiAccess()
-    if (gen === refreshGeneration) aiAccess.value = a
+    if (gen === refreshGeneration) {
+      aiAccess.value = a
+      void reportInitialTimezone(a, gen)
+    }
     return aiAccess.value
   }
 
@@ -216,9 +230,159 @@ export function useEntitlement() {
     refresh,
     clear,
     aiAccess,
+    aiQuotaView,
     refreshAiAccess,
+    refreshAiAccessSoon,
     checkAiEnrichQuota,
     consumeAiEnrichQuota,
     markAiTrialExhausted,
   }
+}
+
+/** 本代次（账号）是否已尝试过首次上报时区：每个登录会话最多一次 */
+let _tzReportedGen = -1
+
+/**
+ * 首次自动上报额度时区：账号还没登记时，把本设备时区报上去（服务端 initial 模式：
+ * 已登记则不改，所以多设备 / 并发上报不会互相改写；当天已有用量会延到下一个 0 点生效）。
+ * 成功后用返回的时区状态更新镜像，界面立即显示正确的恢复时刻。
+ */
+async function reportInitialTimezone(a: MyAiAccess, gen: number): Promise<void> {
+  if (!a.tz || a.tz.isSet || _tzReportedGen === gen) return
+  const zone = browserTimeZone()
+  if (!zone) return
+  _tzReportedGen = gen
+  const r = await setMyTimezone(zone, true)
+  if (gen === refreshGeneration && r.tz) aiAccess.value = { ...aiAccess.value, tz: r.tz }
+}
+
+/**
+ * 手动修改额度时区（设置面板）：成功 / 冷却都会带回最新时区状态，写回镜像。
+ */
+export async function changeQuotaTimezone(zone: string): Promise<SetTimezoneResult> {
+  const gen = refreshGeneration
+  const r = await setMyTimezone(zone, false)
+  if (gen === refreshGeneration && r.tz) aiAccess.value = { ...aiAccess.value, tz: r.tz }
+  return r
+}
+
+let _exhaustedNotifiedAt = 0
+/**
+ * 服务端回报「AI 试用已用完」的统一出口：归零本地镜像，并给出带「升级 PRO」按钮的提示。
+ * 同一分钟内多处同时命中（对话 + 自动预填）只提示一次，避免连弹。
+ */
+export function notifyAiTrialExhausted(): void {
+  useEntitlement().markAiTrialExhausted()
+  const now = Date.now()
+  if (now - _exhaustedNotifiedAt < 60_000) return
+  _exhaustedNotifiedAt = now
+  toastWithAction(t('ai.trialExhaustedToast'), t('ai.trialExhaustedAction'), () => useUIStore().openPurchase())
+}
+
+/** 试用剩余 ≤ 该值时进入提醒态（标签变色 + 升级入口） */
+export const AI_TRIAL_LOW_THRESHOLD = 5
+
+export type AiQuotaKind = 'pro' | 'trial' | 'low' | 'exhausted' | 'anonymous' | 'unknown'
+
+/**
+ * PRO 提醒阈值（输入框标签只在接近上限时出现）：
+ *  - 每月次数（主限额）剩余 ≤ 上限的 PRO_NEAR_RATIO；
+ *  - 每日防滥用上限剩余 ≤ 上限的 PRO_NEAR_RATIO（正常用户几乎碰不到）；
+ *  - 本月 token 兜底用量 ≥ PRO_MONTH_WARN_PCT%。
+ */
+export const PRO_NEAR_RATIO = 0.1
+export const PRO_MONTH_WARN_PCT = 80
+
+export interface ProQuotaView {
+  /** 每月请求次数（主限额）；limit 0 = 旧套餐未配置，此时以每日次数为主 */
+  monthUsed: number
+  monthLimit: number
+  monthRemaining: number
+  monthNear: boolean
+  /** 每日防滥用上限；limit 0 = 未配置 */
+  dailyUsed: number
+  dailyLimit: number
+  dailyRemaining: number
+  dailyNear: boolean
+  /** 本月 token 兜底用量百分比；未配置上限为 -1 */
+  tokenPct: number
+  tokenNear: boolean
+  /** 任一接近上限：决定输入框标签是否出现 */
+  near: boolean
+}
+
+function proQuotaView(p: NonNullable<MyAiAccess['pro']>): ProQuotaView {
+  const nearBy = (remaining: number, limit: number) => limit > 0 && remaining <= Math.max(1, Math.floor(limit * PRO_NEAR_RATIO))
+  const monthRemaining = p.requestsMonthLimit > 0 ? Math.max(0, p.requestsMonthLimit - p.requestsMonthUsed) : 0
+  const dailyRemaining = p.dailyLimit > 0 ? Math.max(0, p.dailyLimit - p.dailyUsed) : 0
+  const tokenPct = p.monthlyLimitTokens > 0
+    ? Math.min(100, Math.round((p.monthlyUsedTokens / p.monthlyLimitTokens) * 100))
+    : -1
+  const monthNear = nearBy(monthRemaining, p.requestsMonthLimit)
+  const dailyNear = nearBy(dailyRemaining, p.dailyLimit)
+  const tokenNear = tokenPct >= PRO_MONTH_WARN_PCT
+  return {
+    monthUsed: p.requestsMonthUsed,
+    monthLimit: p.requestsMonthLimit,
+    monthRemaining,
+    monthNear,
+    dailyUsed: p.dailyUsed,
+    dailyLimit: p.dailyLimit,
+    dailyRemaining,
+    dailyNear,
+    tokenPct,
+    tokenNear,
+    near: monthNear || dailyNear || tokenNear,
+  }
+}
+
+export interface AiQuotaView {
+  kind: AiQuotaKind
+  remaining: number
+  total: number
+  /** 仅 PRO 且服务端返回了用量时存在 */
+  pro?: ProQuotaView
+}
+
+/**
+ * 面向展示的 AI 额度视图（AI 助手输入框标签、设置面板共用，口径唯一）：
+ * - pro：每月次数（主限额）/ 每日防滥用上限 / 月度 token 见 pro 字段（旧服务端不返回则无）
+ * - trial / low / exhausted：免费终身试用剩余 remaining / total
+ * - anonymous：未登录，登录后才有试用次数
+ * - unknown：尚未拉到服务端状态（不展示，避免闪出错误数字）
+ */
+const aiQuotaView = computed<AiQuotaView>(() => {
+  const a = aiAccess.value
+  if (serverVerifiedPaid || a.tier === 'pro') {
+    if (a.tier !== 'pro' || !a.pro) return { kind: 'pro', remaining: 0, total: 0 }
+    const pv = proQuotaView(a.pro)
+    // remaining / total：主限额（每月次数；旧套餐无月度键时退回每日次数）
+    return pv.monthLimit > 0
+      ? { kind: 'pro', remaining: pv.monthRemaining, total: pv.monthLimit, pro: pv }
+      : { kind: 'pro', remaining: pv.dailyRemaining, total: pv.dailyLimit, pro: pv }
+  }
+  if (a.tier === 'anonymous') return { kind: 'anonymous', remaining: 0, total: 0 }
+  if (a.tier !== 'trial') return { kind: 'unknown', remaining: 0, total: 0 }
+  const kind: AiQuotaKind = a.remaining <= 0 ? 'exhausted' : a.remaining <= AI_TRIAL_LOW_THRESHOLD ? 'low' : 'trial'
+  return { kind, remaining: a.remaining, total: a.limit }
+})
+
+let _refreshSoonTimer: ReturnType<typeof setTimeout> | null = null
+/**
+ * 一次 AI 调用结束后（成功、失败退还都可能改变次数）合并刷新服务端剩余次数。
+ * 对话 / 整理未分类等入口不一定走 consumeAiEnrichQuota 的本地扣减，以服务端为准最稳；
+ * 800ms 内多次调用只发一次请求。
+ */
+export function refreshAiAccessSoon(): void {
+  if (_refreshSoonTimer) clearTimeout(_refreshSoonTimer)
+  _refreshSoonTimer = setTimeout(() => {
+    _refreshSoonTimer = null
+    const gen = refreshGeneration
+    void fetchMyAiAccess()
+      .then((a) => {
+        // unknown = 拉取失败：保留现有镜像，不把已知次数刷成「未知」
+        if (gen === refreshGeneration && a.tier !== 'unknown') aiAccess.value = a
+      })
+      .catch(() => {})
+  }, 800)
 }

@@ -656,6 +656,8 @@ function _handleAiGate(gate: string | null | undefined, isManual: boolean): void
     toast(t('modal.bookmark.aiLoginRequired'), false)
   } else if (gate === 'daily_exhausted' && isManual) {
     toast(t('modal.bookmark.aiDailyExhausted'), false)
+  } else if (gate === 'monthly_exhausted' && isManual) {
+    toast(t('modal.bookmark.aiMonthlyExhausted'), false)
   }
 }
 export async function triggerAiFetch(targetUrl?: string, isManual = false) {

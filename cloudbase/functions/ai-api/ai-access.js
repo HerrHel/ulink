@@ -29,7 +29,11 @@ async function checkAiAccess(db, uid) {
       console.error('[ai-api] daily quota failed (fail-closed):', String(daily.error))
       return { allowed: false, consumed: null, reason: 'quota_unavailable' }
     }
-    if (!daily.data || daily.data.ok !== true) return { allowed: false, consumed: null, reason: 'daily_exhausted' }
+    if (!daily.data || daily.data.ok !== true) {
+      // scope=monthly：PRO 每月次数（主限额）用完；否则为每日防滥用上限
+      const reason = daily.data && daily.data.scope === 'monthly' ? 'monthly_exhausted' : 'daily_exhausted'
+      return { allowed: false, consumed: null, reason }
+    }
     return { allowed: true, consumed: 'daily', reason: null }
   } catch (err) {
     console.error('[ai-api] ai access check threw (fail-closed):', String(err))

@@ -40,6 +40,7 @@ import {
   type ToolExecStatus,
 } from '../../lib/ai/toolResult.js'
 import { toast } from '../../lib/toast.js'
+import { refreshAiAccessSoon } from './useEntitlement.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
 import type { AbortControllerSlot, ChatTurnsChangeReason } from './useAiChatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
@@ -1051,6 +1052,12 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         if (inputHistory.value.length > 30) inputHistory.value.shift()
       }
       historyCursor.value = inputHistory.value.length
+
+      // 对话会消耗（或失败退还）AI 次数：免费为终身试用、PRO 为今日次数与本月 token。
+      // 结束后以服务端为准刷新，输入框下方的额度标签与设置面板随之更新。
+      try {
+        refreshAiAccessSoon()
+      } catch { /* 测试沙箱无 pinia 时忽略 */ }
 
       // 仅当本次请求仍持有控制器时才收尾共享状态；
       // 若已被停止/切会话接管（abortInFlight 已收尾持久化），不得覆盖其状态

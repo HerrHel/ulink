@@ -64,6 +64,14 @@ describe('checkAiAccess', () => {
     expect(await checkAiAccess(db, 'u2')).toMatchObject({ allowed: false, reason: 'daily_exhausted' })
   })
 
+  it('PRO 本月次数用完：不放行（monthly_exhausted），不占任何额度', async () => {
+    const db = fakeDb({
+      consume_ai_access: { data: { ok: true, tier: 'pro' } },
+      consume_daily_feature_quota: { data: { ok: false, limited: true, limit: 3000, scope: 'monthly' } },
+    })
+    expect(await checkAiAccess(db, 'u2')).toEqual({ allowed: false, consumed: null, reason: 'monthly_exhausted' })
+  })
+
   it.each([
     ['访问权 RPC 报错', { consume_ai_access: { error: { message: 'db down' } } }],
     ['访问权 RPC 抛异常', { consume_ai_access: () => { throw new Error('boom') } }],

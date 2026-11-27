@@ -716,12 +716,18 @@ const server = http.createServer(async (req, res) => {
         if (daily.error) {
           logEvent('warn', 'daily_quota_rpc_failed', { errorKind: 'quota_rpc_failed' })
         } else if (daily.data && daily.data.ok === false && daily.data.limited === true) {
-          logEvent('warn', 'daily_quota_exceeded', { status: 429, errorKind: 'quota_exceeded', quota: 'ai.requests.daily' })
+          // scope=monthly：每月次数（PRO 主限额）用完；否则为每日防滥用上限。次数取自返回值，不写死
+          const monthly = daily.data.scope === 'monthly'
+          const quotaKey = monthly ? 'ai.requests.monthly' : 'ai.requests.daily'
+          const lim = Number(daily.data.limit) || 0
+          logEvent('warn', 'daily_quota_exceeded', { status: 429, errorKind: 'quota_exceeded', quota: quotaKey })
           sendJson(res, 429, {
             error: 'quota_exceeded',
-            quota: 'ai.requests.daily',
+            quota: quotaKey,
             limit: daily.data.limit,
-            message: '今日 AI 请求次数已用完（PRO 每日 100 次），请明天再试。',
+            message: monthly
+              ? `本月 AI 次数已用完（每月 ${lim} 次），下月 1 日自动恢复。可在设置「会员与权益」查看用量。`
+              : `今日 AI 请求次数已达单日上限（${lim} 次），明天 0 点自动恢复。`,
           }, cors)
           return
         } else {
