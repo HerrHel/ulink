@@ -341,6 +341,20 @@ export function renameSession(
   return loadSessions()
 }
 
+/**
+ * 会话退回草稿：清空消息与标题（首问被撤回后用）。
+ * 标题是从已撤回的首问提炼的，留着会让历史里出现「有标题、0 条消息」的空壳，
+ * 且重新提问时因标题非默认而不再按新首问命名。会话不存在时原样返回。
+ */
+export function resetSessionToDraft(sessionId: string): AiChatSession[] {
+  const all = loadSessions()
+  const idx = all.findIndex((s) => s.id === sessionId)
+  if (idx === -1) return all
+  all[idx] = { ...all[idx], title: '', turns: [], updatedAt: Date.now() }
+  saveSessions(all)
+  return all
+}
+
 /** 删除指定会话 */
 export function deleteSessionById(sessionId: string): AiChatSession[] {
   const all = loadSessions().filter((s) => s.id !== sessionId)

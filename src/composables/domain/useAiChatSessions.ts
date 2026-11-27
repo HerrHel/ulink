@@ -70,6 +70,16 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
 
   const isCurrentSessionEmpty = computed(() => chatTurns.value.length === 0)
 
+  /**
+   * 历史列表展示用：只列有消息的会话。空会话是草稿（新建未发言、或首问被撤回到空），
+   * 列出来只会是「0 条消息」、点了也没反应的空壳；当前会话以内存 chatTurns 为准。
+   */
+  const historySessions = computed(() =>
+    sessions.value.filter((s) =>
+      s.id === currentSessionId.value ? chatTurns.value.length > 0 : s.turns.length > 0,
+    ),
+  )
+
   // 初始化当前会话
   if (!currentSessionId.value || !sessions.value.some((s) => s.id === currentSessionId.value)) {
     if (sessions.value.length > 0) {
@@ -269,6 +279,7 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
 
   return {
     sessions,
+    historySessions,
     currentSessionId,
     chatTurns,
     isCurrentSessionEmpty,

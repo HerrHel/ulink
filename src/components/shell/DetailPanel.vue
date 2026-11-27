@@ -177,7 +177,7 @@ const {
 // ── AI 调度逻辑抽至 useAiChat（会话管理 / 提交调度 / 行动卡片 / 斜杠命令）；
 //    DOM 副作用（滚动到底、输入框聚焦/高度、会话菜单收起）由本组件回调注入 ──
 const {
-  sessions,
+  historySessions: sessions,
   currentSessionId,
   chatTurns,
   isCurrentSessionEmpty,

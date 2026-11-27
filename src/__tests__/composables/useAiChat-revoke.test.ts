@@ -111,6 +111,30 @@ describe('useAiChat — revokeUserMessage 级联截断与回滚测试', () => {
     expect(focusInput).toHaveBeenCalled()
   })
 
+  it('撤回首条消息后会话退回草稿：清掉旧标题，且不出现在历史列表里', async () => {
+    const ai = useAiChat()
+    const now = Date.now()
+    const u1: ChatTurn = { id: 'u1', role: 'user', content: '帮我整理未分类', timestamp: now }
+    const a1: ChatTurn = { id: 'a1', role: 'assistant', content: '好的', timestamp: now + 1 }
+    ai.chatTurns.value = [u1, a1]
+    // 模拟已提问落盘：会话按首问命名、进入历史
+    const { updateSession, loadSessions } = await import('../../lib/ai/chatSessions.js')
+    ai.sessions.value = updateSession(ai.currentSessionId.value, ai.chatTurns.value)
+    expect(ai.historySessions.value.map((s) => s.id)).toContain(ai.currentSessionId.value)
+
+    ai.revokeUserMessage(u1)
+
+    const cur = loadSessions().find((s) => s.id === ai.currentSessionId.value)
+    expect(cur?.title).toBe('')
+    expect(cur?.turns).toHaveLength(0)
+    expect(ai.historySessions.value.some((s) => s.id === ai.currentSessionId.value)).toBe(false)
+
+    // 重新提问后按新首问命名
+    ai.chatTurns.value = [{ id: 'u2', role: 'user', content: '推荐几个设计网站', timestamp: now + 5 }]
+    const next = updateSession(ai.currentSessionId.value, ai.chatTurns.value)
+    expect(next.find((s) => s.id === ai.currentSessionId.value)?.title).toContain('推荐几个设计网站')
+  })
+
   it('撤回消息时若有在途请求，应先触发 abortInFlight 中止流式生成', () => {
     const ai = useAiChat()
 

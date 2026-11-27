@@ -171,9 +171,10 @@ describe('AI 专属栏与沉浸式视图状态流', () => {
 
     const allBtn = wrapper.find('.recent-shelf-all-btn')
     expect(allBtn.exists()).toBe(true)
-    expect(allBtn.find('.shelf-count-tag').text()).toBe('4')
+    // 当前空草稿会话不计入历史（只列有消息的会话）
+    expect(allBtn.find('.shelf-count-tag').text()).toBe('3')
 
-    // 2. 点击「全部会话 (4)」打开抽屉
+    // 2. 点击「全部会话 (3)」打开抽屉
     await allBtn.trigger('click')
     await nextTick()
 
@@ -182,7 +183,7 @@ describe('AI 专属栏与沉浸式视图状态流', () => {
 
     // 抽屉头部包含会话总数 badge
     const badge = drawer!.querySelector('.drawer-count-badge')
-    expect(badge?.textContent?.trim()).toBe('4')
+    expect(badge?.textContent?.trim()).toBe('3')
 
     // 3. 实时搜索过滤功能：输入 TS
     const searchInput = drawer!.querySelector('.history-search-input') as HTMLInputElement
@@ -202,7 +203,7 @@ describe('AI 专属栏与沉浸式视图状态流', () => {
     await nextTick()
 
     cards = drawer!.querySelectorAll('.drawer-session-card')
-    expect(cards.length).toBe(4)
+    expect(cards.length).toBe(3)
 
     // 4. 点击某个会话卡片：切换并自动关闭抽屉
     const vueCard = Array.from(cards).find(c => c.textContent?.includes('Vue3')) as HTMLElement

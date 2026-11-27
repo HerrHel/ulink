@@ -128,7 +128,7 @@
           </div>
 
           <!-- 最近对话轻量单行底座（严格单行不换行，保持极简呼吸感） -->
-          <div v-if="sessions.length > 0" class="ai-hero-recent-shelf">
+          <div v-if="historySessions.length > 0" class="ai-hero-recent-shelf">
             <span class="recent-shelf-label">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
@@ -152,7 +152,7 @@
                 :title="isZh ? '查看全部历史会话' : 'View all history'"
               >
                 <span>{{ isZh ? '全部' : 'All' }}</span>
-                <span class="shelf-count-tag">{{ sessions.length }}</span>
+                <span class="shelf-count-tag">{{ historySessions.length }}</span>
                 <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
@@ -210,7 +210,7 @@
         v-if="!isCurrentSessionEmpty"
         :title="convHeaderTitle"
         :session-id="currentSessionId"
-        :session-count="sessions.length"
+        :session-count="historySessions.length"
         @open-history="openHistoryDrawer"
         @new-chat="onNewConversation"
         @rename="onRenameSession"
@@ -304,7 +304,7 @@
             <div class="history-drawer-header">
               <div class="header-title-row">
                 <span class="drawer-title">{{ isZh ? '历史会话' : 'Chat History' }}</span>
-                <span class="drawer-count-badge">{{ sessions.length }}</span>
+                <span class="drawer-count-badge">{{ historySessions.length }}</span>
               </div>
               <div class="header-action-row">
                 <button
@@ -387,7 +387,7 @@
             </div>
 
             <!-- 抽屉底部 -->
-            <div v-if="sessions.length > 1" class="history-drawer-footer">
+            <div v-if="historySessions.length > 1" class="history-drawer-footer">
               <button class="drawer-clear-all-btn" @click="clearAllFromDrawer">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -483,6 +483,7 @@ function adjustTextareaHeight() {
 
 const {
   sessions,
+  historySessions,
   currentSessionId,
   chatTurns,
   isCurrentSessionEmpty,
@@ -637,7 +638,7 @@ const hasSubmittableContent = computed(() => !!aiQuery.value.trim() || hasAttach
 
 // 最近历史会话（最多取前 5 条，方便一键续聊）
 const recentSessionsList = computed(() => {
-  return sessions.value.slice(0, 5)
+  return historySessions.value.slice(0, 5)
 })
 
 /**
@@ -665,10 +666,10 @@ const historySearchQuery = ref('')
 
 const filteredHistorySessions = computed(() => {
   const q = historySearchQuery.value
-  if (!q.trim()) return sessions.value
+  if (!q.trim()) return historySessions.value
   // 匹配逻辑抽到 lib/ai/sessionSearch（类型收窄 + 可单测，审计 #17）：
   // 坏数据里的非字符串 content/title 不再让整个抽屉列表渲染中断。
-  return sessions.value.filter((s) => matchesSessionQuery(s, q))
+  return historySessions.value.filter((s) => matchesSessionQuery(s, q))
 })
 
 function openHistoryDrawer() {

@@ -18,7 +18,7 @@ import { toast } from '../../lib/toast.js'
 import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { saveAppData } from '../../stores/app.js'
-import { updateSession, type ChatTurn } from '../../lib/ai/chatSessions.js'
+import { updateSession, resetSessionToDraft, type ChatTurn } from '../../lib/ai/chatSessions.js'
 export type { ChatTurn } from '../../lib/ai/chatSessions.js'
 import type { AiSearchPreference } from '../../types/ai.js'
 import { useAiChatSessions, type ChatTurnsChangeReason } from './useAiChatSessions.js'
@@ -69,6 +69,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
   // ── 多会话管理层（useAiChatSessions）──
   const {
     sessions,
+    historySessions,
     currentSessionId,
     chatTurns,
     isCurrentSessionEmpty,
@@ -236,8 +237,11 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     // 2. 从对话流中截断移除该条消息及其后续所有消息（因果链回滚到该轮发起前，对齐主流 Agent 标准行为）
     chatTurns.value.splice(idx)
 
-    // 3. 持久化当前会话
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    // 3. 持久化当前会话；撤回到空时清掉由旧首问提炼的标题，
+    //    否则会话退回草稿后仍挂着旧标题，重新提问也不会按新首问命名
+    sessions.value = chatTurns.value.length === 0
+      ? resetSessionToDraft(currentSessionId.value)
+      : updateSession(currentSessionId.value, chatTurns.value)
 
     // 4. 通知对话流变化
     onTurnsChanged?.('revoke')
@@ -275,6 +279,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
   return {
     // 会话状态与管理
     sessions,
+    historySessions,
     currentSessionId,
     chatTurns,
     isCurrentSessionEmpty,
