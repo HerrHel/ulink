@@ -7,7 +7,7 @@
  * 4. 仅应用用户确认勾选的差异项，并自动向 siteUndoStack 注册可撤销事务。
  */
 
-import type { Bookmark, Category } from '../../types.js'
+import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import type { DuplicateCluster } from './localClustering.js'
 import { pushUndoAction } from './siteUndoStack.js'
 import { t, tN } from '../../i18n/index.js'
@@ -94,11 +94,27 @@ export function createInboxZeroDraftDiff(params: {
     bookmarks: Bookmark[]
   }>
   relations: Array<{ parentId: string; childId: string }>
+  /** 未分类笔记组的归类建议（id 前缀 diff-gmove-，应用时改组的 categoryId） */
+  groupMoves?: Array<{ group: SiblingGroup; categoryId: string; categoryName?: string }>
   bookmarkMap?: Record<string, Bookmark>
   categoryMap?: Record<string, Category>
 }): DraftDiffPayload {
-  const { assignableClusters, relations, bookmarkMap = {}, categoryMap = {} } = params
+  const { assignableClusters, relations, groupMoves = [], bookmarkMap = {}, categoryMap = {} } = params
   const items: DraftDiffItem[] = []
+
+  // 0. 笔记组分类调整项 (modify, itemType: group)
+  for (const { group: g, categoryId, categoryName } of groupMoves) {
+    if (!g || g.deletedAt || !categoryId) continue
+    items.push({
+      id: `diff-gmove-${g.id}`,
+      itemType: 'group',
+      changeType: 'modify',
+      title: g.name || t('cat.uncategorized'),
+      before: { categoryId: g.categoryId, categoryName: t('cat.uncategorized') },
+      after: { categoryId, categoryName: categoryName || categoryMap[categoryId]?.name },
+      selected: true,
+    })
+  }
 
   // 1. 分类调整项 (modify)
   for (const cluster of assignableClusters) {
@@ -252,12 +268,20 @@ export async function applyDraftDiff(
   }>()
   const revertGroupMap = new Map<string, string[]>()
   const revertChildParentMap = new Map<string, string | null>()
+  const revertGroupCatMap = new Map<string, string>()
 
   for (const item of selectedItems) {
-    // 提取真实的实体 ID（去掉 `diff-move-` / `diff-nest-` / `diff-dup-` 前缀）
-    const entityId = item.id.replace(/^diff-(move|nest|dup)-/, '')
+    // 提取真实的实体 ID（去掉 `diff-move-` / `diff-gmove-` / `diff-nest-` / `diff-dup-` 前缀）
+    const entityId = item.id.replace(/^diff-(move|gmove|nest|dup)-/, '')
 
-    if (item.changeType === 'modify') {
+    if (item.changeType === 'modify' && item.itemType === 'group') {
+      const g = ds.groupMap?.[entityId] ?? (ds.siblingGroups || []).find((x) => x.id === entityId)
+      if (g && !g.deletedAt && item.after?.categoryId) {
+        if (!revertGroupCatMap.has(g.id)) revertGroupCatMap.set(g.id, g.categoryId)
+        ds.updateGroup(g.id, { categoryId: item.after.categoryId })
+        appliedCount++
+      }
+    } else if (item.changeType === 'modify') {
       const bm = ds.bookmarkMap[entityId]
       if (bm && !bm.deletedAt && item.after?.categoryId) {
         revertMap.push({
@@ -378,8 +402,12 @@ export async function applyDraftDiff(
         for (const [gid, ids] of revertGroupMap.entries()) {
           ds.updateGroup(gid, { bookmarkIds: ids })
         }
+        // 5. 恢复笔记组原分类
+        for (const [gid, catId] of revertGroupCatMap.entries()) {
+          ds.updateGroup(gid, { categoryId: catId })
+        }
         app.save()
-        return tN('ai.undoDraftDiffRevert', revertMap.length)
+        return tN('ai.undoDraftDiffRevert', revertMap.length + revertGroupCatMap.size)
       },
     })
   }

@@ -195,7 +195,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           return { success: true, output: res.reply }
         } else if (step.actionName === 'inbox_zero') {
           const res = await applyInboxZeroClustering({ ds, ui, app })
-          const ok = (res.movedCount > 0 || res.nestedCount > 0) || !res.message.includes('取消')
+          const ok = res.movedCount > 0 || res.nestedCount > 0 || res.remaining === 0
           return { success: ok, output: res.message }
         } else if (step.actionName === 'merge_duplicates') {
           const res = await mergeDuplicateBookmarks({ ds, ui, app })
@@ -261,7 +261,8 @@ export function useAiActionCards(context: AiActionCardsContext) {
               return { success: true, output: res.reply }
             } else if (step.actionName === 'inbox_zero') {
               const res = await applyInboxZeroClustering({ ds, ui, app })
-              const ok = (res.movedCount > 0 || res.nestedCount > 0) || !res.message.includes('取消')
+              // 真有归类落盘，或未分类本就清零，才算这一步成功；取消 / 一项没动但仍有剩余 → 如实判失败
+              const ok = res.movedCount > 0 || res.nestedCount > 0 || res.remaining === 0
               return { success: ok, output: res.message }
             } else if (step.actionName === 'merge_duplicates') {
               const res = await mergeDuplicateBookmarks({ ds, ui, app })
@@ -330,9 +331,11 @@ export function useAiActionCards(context: AiActionCardsContext) {
         persistTurns()
       } else if (card.actionName === 'apply_inbox_zero') {
         const res = await applyInboxZeroClustering({ ds, ui, app })
-        card.completed = true
-        toast(res.message, true)
-        turnsAtStart.push({
+        const applied = res.movedCount > 0 || res.nestedCount > 0
+        // 取消或一项未动时卡片保持可再次执行，提示不报成功
+        if (applied) card.completed = true
+        if (res.message) toast(res.message, applied)
+        if (res.message) turnsAtStart.push({
           id: 'turn-' + Date.now() + '-assistant',
           role: 'assistant',
           content: res.message,

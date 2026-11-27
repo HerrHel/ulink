@@ -15,13 +15,11 @@ import { useAppStore } from '../../stores/app.js'
 import { esc, gid, favicon, displayText, fixUrl } from '../../utils.js'
 import {
   findDuplicateCandidates,
-  isUncategorized,
-  clusterUncategorizedBookmarks,
-  detectParentChildRelations,
   normalizeUrlForDedup,
 } from './localClustering.js'
 import { CAT_UNCATEGORIZED, CAT_ALL, ATTR_IS_GROUP } from '../../config/constants.js'
 import { candidateToBookmark } from './candidateSave.js'
+import { planInboxZero, inboxPlanMoveCount } from './inboxPlan.js'
 import { inlineCardHTML } from '../../composables/useInlineCard.js'
 import { searchWebsitesByIntent } from './cloudAiClient.js'
 import {
@@ -191,54 +189,40 @@ export async function mergeDuplicateBookmarks(
  */
 export async function applyInboxZeroClustering(
   context?: SiteCommanderContext,
-): Promise<{ movedCount: number; nestedCount: number; message: string }> {
+): Promise<{ movedCount: number; nestedCount: number; remaining: number; message: string }> {
   const ds = context?.ds ?? useDataStore()
   const app = context?.app ?? useAppStore()
 
-  const groupedIds = new Set<string>()
-  for (const g of ds.siblingGroups || []) {
-    if (!g.deletedAt && g.bookmarkIds?.length) {
-      for (const id of g.bookmarkIds) groupedIds.add(id)
-    }
-  }
+  // 归类预案与 /inbox 指令块同源（本地规则 + 大模型兜底，含笔记组），报数口径对齐侧栏
+  const plan = await planInboxZero(ds, { signal: context?.signal })
+  if (context?.signal?.aborted) return { movedCount: 0, nestedCount: 0, remaining: plan.left.total, message: '' }
+  const { relations, groupMoves, left, aiError } = plan
+  const clusters = [...plan.localClusters, ...plan.aiClusters]
+  const totalMoveCount = inboxPlanMoveCount(plan)
 
-  // 1. 同站子页从属关系：待整理顶层书签中识别「同一站点下的子页」，归入其主页面下
-  const uncatIds = new Set(
-    ds.bookmarks.filter((b) => isUncategorized(b, groupedIds)).map((b) => b.id),
-  )
-  const relations = detectParentChildRelations(ds.bookmarks).filter((r) => uncatIds.has(r.childId))
-  const nestedChildIds = new Set(relations.map((r) => r.childId))
-
-  // 2. 聚类归类：已识别为子页的书签不再参与分类聚类，分类跟随父卡片归属
-  const clusters = clusterUncategorizedBookmarks(
-    ds.bookmarks.filter((b) => !nestedChildIds.has(b.id)),
-    ds.categories,
-    groupedIds,
-  )
-  const assignableClusters = clusters.filter(
-    (c) => c.suggestedCategoryId && c.suggestedCategoryId !== CAT_UNCATEGORIZED && c.id !== 'cluster_unassigned',
-  )
-
-  const totalMoveCount = assignableClusters.reduce(
-    (n, c) => n + c.bookmarks.filter((b) => b && !b.deletedAt).length,
-    0,
-  )
   if (totalMoveCount === 0 && relations.length === 0) {
-    return { movedCount: 0, nestedCount: 0, message: t('aiCmd.inboxNone') }
+    let message = left.total === 0
+      ? t('aiCmd.inboxZeroDone')
+      : t('aiCmd.inboxNoSuggestion', { n: left.total, b: left.bookmarks, g: left.groups })
+    if (left.total > 0 && aiError) {
+      message += ' ' + t('aiCmd.inboxAiFailed', { reason: aiError === 'disabled' ? t('aiCmd.inboxAiDisabled') : aiError })
+    }
+    return { movedCount: 0, nestedCount: 0, remaining: left.total, message }
   }
 
   // 函数级 HITL：批量改写分类与父子从属均属危险操作，必须显式确认（不依赖调用方自律）
   const confirmed = await askConfirm(buildInboxZeroConfirmMessage(totalMoveCount, relations.length))
-  if (context?.signal?.aborted) return { movedCount: 0, nestedCount: 0, message: '' }
+  if (context?.signal?.aborted) return { movedCount: 0, nestedCount: 0, remaining: left.total, message: '' }
   if (!confirmed) {
-    return { movedCount: 0, nestedCount: 0, message: t('aiCmd.inboxCancelled') }
+    return { movedCount: 0, nestedCount: 0, remaining: left.total, message: t('aiCmd.inboxCancelled') }
   }
 
   let movedCount = 0
   let nestedCount = 0
   const revertMap: Array<{ id: string; prevCatId?: string; prevParentId?: string | null }> = []
+  const revertGroupMap: Array<{ id: string; prevCatId: string }> = []
 
-  for (const cluster of assignableClusters) {
+  for (const cluster of clusters) {
     const targetCatId = cluster.suggestedCategoryId!
     for (const bm of cluster.bookmarks) {
       if (bm && bm.id && !bm.deletedAt) {
@@ -249,7 +233,15 @@ export async function applyInboxZeroClustering(
     }
   }
 
-  // 3. 建立同站子页嵌套：子页归入主页面下并同步父级分类（子书签归属父卡片）
+  // 笔记组归类
+  for (const m of groupMoves) {
+    if (m.group.deletedAt) continue
+    revertGroupMap.push({ id: m.group.id, prevCatId: m.group.categoryId })
+    ds.updateGroup(m.group.id, { categoryId: m.categoryId })
+    movedCount++
+  }
+
+  // 建立同站子页嵌套：子页归入主页面下并同步父级分类（子书签归属父卡片）
   for (const rel of relations) {
     const parent = ds.bookmarkMap[rel.parentId]
     const child = ds.bookmarkMap[rel.childId]
@@ -270,8 +262,11 @@ export async function applyInboxZeroClustering(
         for (const item of revertMap) {
           ds.updateBookmark(item.id, { categoryId: item.prevCatId, parentId: item.prevParentId })
         }
+        for (const g of revertGroupMap) {
+          ds.updateGroup(g.id, { categoryId: g.prevCatId })
+        }
         app.save()
-        const parts = [tN('aiCmd.undoInboxRevert', revertMap.length)]
+        const parts = [tN('aiCmd.undoInboxRevert', revertMap.length + revertGroupMap.length)]
         if (nestedCount > 0) parts.push(tN('aiCmd.undoInboxNestRevert', nestedCount))
         return parts.join(' ')
       },
@@ -281,7 +276,8 @@ export async function applyInboxZeroClustering(
   const parts: string[] = []
   if (movedCount > 0) parts.push(tN('aiCmd.inboxDone', movedCount))
   if (nestedCount > 0) parts.push(tN('aiCmd.inboxNestDone', nestedCount))
-  return { movedCount, nestedCount, message: parts.join(' ') }
+  if (left.total > 0) parts.push(tN('aiCmd.inboxLeftLine', left.total).replace(/^-\s*/, ''))
+  return { movedCount, nestedCount, remaining: left.total, message: parts.join(' ') }
 }
 
 /** 主题笔记名称后缀识别 token（含旧称「工作台」与英文变体，仅用于避免重复追加，不作输出文案） */

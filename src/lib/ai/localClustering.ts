@@ -315,6 +315,19 @@ export function isUncategorizedGroup(g: SiblingGroup): boolean {
 }
 
 /**
+ * 未分类项计数 —— 口径与侧栏「未分类」徽标一致：顶层书签（不含子书签、官方示例）+ 笔记组。
+ * 所有对用户报告「未分类还有多少」的地方都必须用它，不能只数书签（否则笔记积压时会谎报清零）。
+ */
+export function countUncategorizedItems(
+  bookmarks: Bookmark[],
+  groups?: SiblingGroup[],
+): { bookmarks: number; groups: number; total: number } {
+  const b = bookmarks.filter(x => isUncategorized(x)).length
+  const g = (groups || []).filter(x => isUncategorizedGroup(x)).length
+  return { bookmarks: b, groups: g, total: b + g }
+}
+
+/**
  * 检索并分析未分类笔记组，并基于组内书签或标题关键词匹配现有分类
  */
 export function findUncategorizedGroups(

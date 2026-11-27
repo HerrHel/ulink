@@ -368,7 +368,7 @@ export const aiEn = {
     // ── Ambient Grooming & Serendipity ──
     ambientBadge: 'Ambient Insights',
     ambientInboxTitle: 'Inbox Overflow ({count} uncategorized)',
-    ambientInboxDesc: '{count} uncategorized bookmarks are queued. Recommended to run smart triage.',
+    ambientInboxDesc: '{count} uncategorized bookmarks and notes are queued. Recommended to run smart triage.',
     ambientDriftTitle: 'Category "{name}" is growing large ({count} items)',
     ambientDriftDesc: 'This category has accumulated many items. Consider extracting a topic note.',
     ambientVagueTitle: 'Found {count} untitled or raw URL cards',

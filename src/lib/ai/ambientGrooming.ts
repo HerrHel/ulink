@@ -11,7 +11,7 @@
 
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
-import { findDuplicateCandidates, isUncategorized } from './localClustering.js'
+import { findDuplicateCandidates, countUncategorizedItems } from './localClustering.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { displayText } from '../../utils.js'
 import { t } from '../../i18n/index.js'
@@ -42,24 +42,18 @@ export function runAmbientGroomingScan(params: {
   const validBookmarks = bookmarks.filter((b) => !b.deletedAt)
   const insights: GroomingInsight[] = []
 
-  const groupedIds = new Set<string>()
-  for (const g of groups) {
-    if (!g.deletedAt && g.bookmarkIds?.length) {
-      for (const id of g.bookmarkIds) groupedIds.add(id)
-    }
-  }
-
   // 1. 收件箱积压扫描 (Inbox Overflow)
-  const uncatBookmarks = validBookmarks.filter((b) => isUncategorized(b, groupedIds))
-  if (uncatBookmarks.length >= 8) {
+  // 口径对齐侧栏（书签 + 笔记组），笔记积压同样触发提醒
+  const uncatCount = countUncategorizedItems(validBookmarks, groups).total
+  if (uncatCount >= 8) {
     insights.push({
       // 稳定 id：dismissedIds 才能跨扫描生效（旧实现拼 Date.now() → 每次都是新 id，
       // 用户点掉后下一次扫描立刻复活）。
       id: 'groom-inbox',
       type: 'inbox',
-      title: t('ai.ambientInboxTitle', { count: uncatBookmarks.length }),
-      description: t('ai.ambientInboxDesc', { count: uncatBookmarks.length }),
-      count: uncatBookmarks.length,
+      title: t('ai.ambientInboxTitle', { count: uncatCount }),
+      description: t('ai.ambientInboxDesc', { count: uncatCount }),
+      count: uncatCount,
       suggestedActionCommand: '/inbox',
       suggestedActionName: 'inbox_zero',
       severity: 'attention',

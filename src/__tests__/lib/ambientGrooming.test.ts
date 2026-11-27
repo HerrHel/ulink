@@ -33,6 +33,19 @@ function mockCategory(partial: Partial<Category>): Category {
 }
 
 describe('ambientGrooming', () => {
+  it('未分类笔记组也计入收件箱积压（口径对齐侧栏）', () => {
+    const bookmarks: Bookmark[] = [
+      mockBookmark({ id: 'b1', categoryId: CAT_UNCATEGORIZED }),
+      mockBookmark({ id: 'b2', categoryId: CAT_UNCATEGORIZED }),
+    ]
+    const groups = Array.from({ length: 6 }, (_, i) => ({
+      id: `g${i}`, name: `笔记${i}`, categoryId: CAT_UNCATEGORIZED, bookmarkIds: [],
+    })) as unknown as SiblingGroup[]
+    const insights = runAmbientGroomingScan({ bookmarks, groups, categories: [mockCategory({ id: 'cat1' })] })
+    const inbox = insights.find((i) => i.type === 'inbox')
+    expect(inbox?.count).toBe(8)
+  })
+
   it('returns no insights for a clean balanced library', () => {
     const bookmarks: Bookmark[] = [
       mockBookmark({

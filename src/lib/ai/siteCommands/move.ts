@@ -14,7 +14,7 @@
 
 import { parseMoveIntent } from '../siteIntents.js'
 import { askConfirm, buildMoveConfirmMessage } from '../siteHitl.js'
-import { isOfficialBookmark } from '../localClustering.js'
+import { isOfficialBookmark, isUncategorizedGroup } from '../localClustering.js'
 import { CAT_UNCATEGORIZED } from '../../../config/constants.js'
 import { pushUndoAction } from '../siteUndoStack.js'
 import { t, tN } from '../../../i18n/index.js'
@@ -55,7 +55,11 @@ export const moveBlock: SiteCommandBlock = async (
         !isOfficialBookmark(b),
     )
 
-    if (uncatBms.length === 0) {
+    // 笔记组同样属于「未分类」（侧栏计数含组），一并移动，否则命令执行后侧栏仍有残留
+    const uncatGroups = (ds.siblingGroups || []).filter((g) => isUncategorizedGroup(g))
+    const total = uncatBms.length + uncatGroups.length
+
+    if (total === 0) {
       return {
         handled: true,
         action: 'move_uncategorized',
@@ -65,9 +69,9 @@ export const moveBlock: SiteCommandBlock = async (
     }
 
     // 若未分类数量较大（例如 > 5 个），进行二次确认保护
-    if (uncatBms.length > 5) {
+    if (total > 5) {
       const confirmed = await askConfirm(
-        buildMoveConfirmMessage(uncatBms.length, targetCat.name),
+        buildMoveConfirmMessage(total, targetCat.name),
       )
       if (ctx.signal?.aborted) {
         return { handled: true, action: 'move_uncategorized', success: false, reply: '' }
@@ -84,20 +88,27 @@ export const moveBlock: SiteCommandBlock = async (
     }
 
     const previousMap = uncatBms.map((b) => ({ id: b.id, prevCatId: b.categoryId }))
+    const previousGroups = uncatGroups.map((g) => ({ id: g.id, prevCatId: g.categoryId }))
     for (const b of uncatBms) {
       ds.updateBookmark(b.id, { categoryId: targetCat.id })
+    }
+    for (const g of uncatGroups) {
+      ds.updateGroup(g.id, { categoryId: targetCat.id })
     }
     app.save()
 
     pushUndoAction({
       type: 'move_uncategorized',
-      description: tN('aiCmd.undoMoveUncatDesc', uncatBms.length, { cat: targetCat.name }),
+      description: tN('aiCmd.undoMoveUncatDesc', total, { cat: targetCat.name }),
       revert: () => {
         for (const item of previousMap) {
           ds.updateBookmark(item.id, { categoryId: item.prevCatId })
         }
+        for (const item of previousGroups) {
+          ds.updateGroup(item.id, { categoryId: item.prevCatId })
+        }
         app.save()
-        return tN('aiCmd.undoMoveRevert', previousMap.length)
+        return tN('aiCmd.undoMoveRevert', previousMap.length + previousGroups.length)
       },
     })
 
@@ -106,10 +117,10 @@ export const moveBlock: SiteCommandBlock = async (
       action: 'move_uncategorized',
       success: true,
       steps: [
-        { text: tN('aiCmd.stepFilterUncat', uncatBms.length), done: true },
+        { text: tN('aiCmd.stepFilterUncat', total), done: true },
         { text: t('aiCmd.stepMoveUncat', { cat: targetCat.name }), done: true },
       ],
-      reply: tN('aiCmd.moveDone', uncatBms.length, { cat: targetCat.name }),
+      reply: tN('aiCmd.moveDone', total, { cat: targetCat.name }),
     }
   }
 

@@ -20,6 +20,12 @@ vi.mock('../lib/toast.js', () => ({
   toastWithUndo: vi.fn(),
 }))
 
+// 大模型兜底归类：默认无结果（不出网），个别用例按需覆写
+const llmClassifyMock = vi.hoisted(() => vi.fn())
+vi.mock('../lib/ai/inboxLlmClassify.js', () => ({
+  classifyWithLlm: llmClassifyMock,
+}))
+
 vi.mock('../utils.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../utils.js')>()
   return {
@@ -40,6 +46,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearUndoStack()
+    llmClassifyMock.mockResolvedValue({ assignments: new Map(), sentCount: 0 })
 
     mockDs = {
       bookmarks: [
@@ -293,7 +300,58 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(mockDs.updateBookmark).toHaveBeenCalledWith('b2', { categoryId: 'c1' })
     expect(mockDs.updateBookmark).toHaveBeenCalledWith('b3', { categoryId: 'c1' })
     expect(mockApp.save).toHaveBeenCalled()
-    expect(resMove.reply).toContain('已成功将 2 个未分类书签移入「前端开发」分类')
+    // 未分类笔记组（g1 无 categoryId）一并移动，侧栏不再残留
+    expect(mockDs.updateGroup).toHaveBeenCalledWith('g1', { categoryId: 'c1' })
+    expect(resMove.reply).toContain('已成功将 3 项未分类移入「前端开发」分类')
+  })
+
+  it('/health 只有未分类笔记时不报「已清零」，并给出整理卡片', async () => {
+    const ds = {
+      ...mockDs,
+      bookmarks: [{ id: 'b1', title: 'Vue', url: 'https://vuejs.org', categoryId: 'c1' }],
+      siblingGroups: [
+        { id: 'g1', name: '笔记一', categoryId: 'uncategorized', bookmarkIds: ['b1'] },
+        { id: 'g2', name: '笔记二', bookmarkIds: [] },
+      ],
+    }
+    const res = await dispatchSiteCommand('/health', { ds: ds as any, ui: mockUi, app: mockApp })
+    expect(res.reply).toContain('待整理未分类：2 个')
+    expect(res.reply).not.toContain('已清零')
+    expect(res.actionCard?.actionName).toBe('inbox_zero')
+  })
+
+  it('applyInboxZeroClustering 一项都归不了时如实返回剩余数，不弹确认', async () => {
+    const { showConfirm } = await import('../lib/toast.js')
+    const ds = {
+      ...mockDs,
+      categories: [{ id: 'c1', name: '前端开发' }],
+      bookmarks: [{ id: 'u1', title: 'Zqxv', url: 'https://zqxv-unknown.example/', categoryId: 'uncategorized' }],
+      siblingGroups: [],
+    }
+    const res = await applyInboxZeroClustering({ ds: ds as any, ui: mockUi, app: mockApp })
+    expect(res.movedCount).toBe(0)
+    expect(res.remaining).toBe(1)
+    expect(res.message).not.toContain('为零')
+    expect(showConfirm).not.toHaveBeenCalled()
+  })
+
+  it('applyInboxZeroClustering 采纳大模型建议并归类笔记组，撤销可还原', async () => {
+    llmClassifyMock.mockResolvedValue({ assignments: new Map([['g:g9', 'c1']]), sentCount: 1 })
+    const group = { id: 'g9', name: 'Qrst', categoryId: 'uncategorized', bookmarkIds: [] as string[] }
+    const ds = {
+      ...mockDs,
+      categories: [{ id: 'c1', name: '前端开发' }],
+      bookmarks: [],
+      siblingGroups: [group],
+      updateGroup: vi.fn((_id: string, ch: any) => Object.assign(group, ch)),
+    }
+    const res = await applyInboxZeroClustering({ ds: ds as any, ui: mockUi, app: mockApp })
+    expect(res.movedCount).toBe(1)
+    expect(res.remaining).toBe(0)
+    expect(group.categoryId).toBe('c1')
+    const undo = await dispatchSiteCommand('/undo', { ds: ds as any, ui: mockUi, app: mockApp })
+    expect(undo.handled).toBe(true)
+    expect(group.categoryId).toBe('uncategorized')
   })
 
   // ── 10. 孤儿清理与自检 ──
@@ -467,6 +525,84 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(res.action).toBe('inbox_zero')
     expect(res.reply).toContain('智能归拢分析完成')
     expect(res.actionCard?.actionName).toBe('apply_inbox_zero')
+  })
+
+  it('/inbox 有未分类但无可归建议时如实报数，不谎称「未分类为零」', async () => {
+    const ds = {
+      ...mockDs,
+      categories: [
+        { id: 'all', name: '全部' },
+        { id: 'uncategorized', name: '未分类' },
+        { id: 'cat-x', name: '邮箱' },
+      ],
+      bookmarks: [
+        { id: 'u1', title: 'Zqxv', url: 'https://zqxv-unknown.example/', categoryId: 'uncategorized' },
+        { id: 'u2', title: 'Wplm', url: 'https://wplm-unknown.example/', categoryId: '' },
+      ],
+      siblingGroups: [{ id: 'g1', name: 'Qrst', categoryId: 'uncategorized', bookmarkIds: [] }],
+    }
+    const res = await dispatchSiteCommand('/inbox', { ds: ds as any, ui: mockUi, app: mockApp })
+    expect(res.action).toBe('inbox_zero')
+    expect(res.reply).not.toContain('未分类为零')
+    expect(res.reply).toContain('3 项')
+    expect(res.actionCard).toBeUndefined()
+  })
+
+  it('/inbox 规则未命中的书签与笔记交给大模型，建议并入同一张草稿卡片', async () => {
+    llmClassifyMock.mockResolvedValue({
+      assignments: new Map([['b:u1', 'cat-x'], ['g:g1', 'cat-x']]),
+      sentCount: 3,
+    })
+    const groups = [{ id: 'g1', name: 'Qrst', categoryId: 'uncategorized', bookmarkIds: [] }]
+    const ds = {
+      ...mockDs,
+      categories: [
+        { id: 'all', name: '全部' },
+        { id: 'uncategorized', name: '未分类' },
+        { id: 'cat-x', name: '邮箱' },
+      ],
+      categoryMap: { 'cat-x': { id: 'cat-x', name: '邮箱' } },
+      bookmarks: [
+        { id: 'u1', title: 'Zqxv', url: 'https://zqxv-unknown.example/', categoryId: 'uncategorized' },
+        { id: 'u2', title: 'Wplm', url: 'https://wplm-unknown.example/', categoryId: '' },
+      ],
+      siblingGroups: groups,
+      groupMap: { g1: groups[0] },
+    }
+    const res = await dispatchSiteCommand('/inbox', { ds: ds as any, ui: mockUi, app: mockApp })
+    // 只把规则未命中的项送审：2 个书签 + 1 个笔记组
+    const sent = llmClassifyMock.mock.calls[0][0].map((x: any) => x.id)
+    expect(sent).toEqual(['b:u1', 'b:u2', 'g:g1'])
+    expect(res.reply).toContain('AI 建议')
+    expect(res.reply).toContain('笔记「Qrst」归入「邮箱」')
+    expect(res.reply).toContain('另有 1 项')
+    const items = (res.actionCard?.payload as any).diffPayload.items
+    expect(items.map((i: any) => i.id).sort()).toEqual(['diff-gmove-g1', 'diff-move-u1'])
+  })
+
+  it('/inbox 大模型失败时如实报数并说明原因', async () => {
+    llmClassifyMock.mockResolvedValue({ assignments: new Map(), sentCount: 1, error: '额度已用完' })
+    const ds = {
+      ...mockDs,
+      categories: [{ id: 'all', name: '全部' }, { id: 'uncategorized', name: '未分类' }, { id: 'cat-x', name: '邮箱' }],
+      bookmarks: [{ id: 'u1', title: 'Zqxv', url: 'https://zqxv-unknown.example/', categoryId: 'uncategorized' }],
+      siblingGroups: [],
+    }
+    const res = await dispatchSiteCommand('/inbox', { ds: ds as any, ui: mockUi, app: mockApp })
+    expect(res.reply).toContain('1 项')
+    expect(res.reply).toContain('额度已用完')
+    expect(res.actionCard).toBeUndefined()
+  })
+
+  it('/inbox 真正没有未分类时才回复「未分类为零」', async () => {
+    const ds = {
+      ...mockDs,
+      categories: [{ id: 'all', name: '全部' }, { id: 'uncategorized', name: '未分类' }, { id: 'cat-x', name: '邮箱' }],
+      bookmarks: [{ id: 'b1', title: 'Mail', url: 'https://mail.example/', categoryId: 'cat-x' }],
+      siblingGroups: [],
+    }
+    const res = await dispatchSiteCommand('/inbox', { ds: ds as any, ui: mockUi, app: mockApp })
+    expect(res.reply).toContain('未分类为零')
   })
 
   // ── 19. applyInboxZeroClustering 执行归拢与撤销 ──

@@ -6,7 +6,7 @@
  */
 
 import { parseHealthIntent } from '../siteIntents.js'
-import { calculateVaultHealth, isOfficialBookmark } from '../localClustering.js'
+import { calculateVaultHealth, countUncategorizedItems, isOfficialBookmark } from '../localClustering.js'
 import {
   buildHealthInboxCard,
   buildHealthDedupCard,
@@ -31,12 +31,15 @@ export const healthBlock: SiteCommandBlock = (
       }
     }
 
-    const healthStats = calculateVaultHealth(
+    const vault = calculateVaultHealth(
       ds.bookmarks,
       ds.categories,
       groupedIds,
       ds.siblingGroups,
     )
+    // 未分类报数统一用侧栏口径（书签 + 笔记组）：只数书签会在笔记积压时谎报「已清零」
+    const uncat = countUncategorizedItems(ds.bookmarks, ds.siblingGroups)
+    const healthStats = { ...vault, uncategorizedCount: uncat.total }
 
     const activeBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && !isOfficialBookmark(b))
     const totalCount = activeBookmarks.length

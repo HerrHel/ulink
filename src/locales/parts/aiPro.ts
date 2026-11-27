@@ -362,7 +362,7 @@ export const aiZh = {
     // ── 环境智能与知识偶遇 (Ambient Grooming & Serendipity) ──
     ambientBadge: '环境洞察',
     ambientInboxTitle: '收件箱积压警戒 ({count} 项未分类)',
-    ambientInboxDesc: '未分类书签已堆积 {count} 项，建议启动一键智能归类。',
+    ambientInboxDesc: '未分类的书签和笔记已堆积 {count} 项，建议启动一键智能归类。',
     ambientDriftTitle: '分类「{name}」较庞大 ({count} 项)',
     ambientDriftDesc: '这个分类的条目较多，建议整理成主题笔记或拆分为子分类。',
     ambientVagueTitle: '发现 {count} 个未命名/纯网址卡片',
