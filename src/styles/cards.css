@@ -777,6 +777,16 @@
   .focus-view .card-foot{opacity:0}
   .card:hover .card-foot,
   .card:focus-within .card-foot{opacity:1}
+  /* 宫格组卡片：底栏隐藏时不占位，正文一直铺到底边。
+     否则透明底栏仍占 ~34px，正文在其上方被硬切成半行，下面再空一截。 */
+  .grid-view .group-card .card-foot{
+    position:absolute;left:16px;right:16px;bottom:10px;z-index:3;
+    height:36px;box-sizing:border-box;
+  }
+  /* 底栏浮现时不盖正文，而是把正文区收短让出位置（被盖住的半行字会在底栏边线处露残影）。
+     收短量 = 底栏固定高度，正文底边正好贴着底栏边线，中间不留缝 */
+  .grid-view .group-card:hover .grp-scroll-body,
+  .grid-view .group-card:focus-within .grp-scroll-body{margin-bottom:36px}
 }
 .card-stat{
   display:flex;align-items:center;gap:3px;
