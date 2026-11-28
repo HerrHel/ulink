@@ -7,6 +7,10 @@
  * 1. 本地规则（域名历史 / 内置词表 / 分类名命中）+ 同站子页嵌套，零成本、离线可用；
  * 2. 规则归不进现有分类的书签与笔记组，交给大模型（inboxLlmClassify）在现有分类里挑，
  *    失败 / 未启用 fail-open，只影响「还剩多少没归类」的如实报数。
+ *
+ * 笔记引用的书签（笔记组 bookmarkIds，如随分享笔记一起保存的网址）仍按自身分类显示在列表里、
+ * 侧栏也计入未分类，所以同样要归类：笔记组有了去处时，组内未分类书签随笔记一起归入同一分类；
+ * 笔记组已在某个分类里时同理；笔记组没去处时，它们按普通书签参与规则与大模型归类。
  */
 
 import {
@@ -48,33 +52,16 @@ export async function planInboxZero(
   opts?: { signal?: AbortSignal; useLlm?: boolean },
 ): Promise<InboxPlan> {
   const groups = data.siblingGroups || []
-  const groupedIds = new Set<string>()
-  for (const g of groups) {
-    if (!g.deletedAt && g.bookmarkIds?.length) {
-      for (const id of g.bookmarkIds) groupedIds.add(id)
-    }
-  }
   const activeCats = (data.categories || []).filter(
     (c) => !c.deletedAt && c.id !== CAT_ALL && c.id !== CAT_UNCATEGORIZED,
   )
   const catById = new Map(activeCats.map((c) => [c.id, c]))
 
   // ── 第 1 段：本地规则 ──
-  const uncatIds = new Set(
-    data.bookmarks.filter((b) => isUncategorized(b, groupedIds)).map((b) => b.id),
-  )
+  const bmById = new Map(data.bookmarks.map((b) => [b.id, b]))
+  const uncatIds = new Set(data.bookmarks.filter((b) => isUncategorized(b)).map((b) => b.id))
   const relations = detectParentChildRelations(data.bookmarks).filter((r) => uncatIds.has(r.childId))
   const nestedChildIds = new Set(relations.map((r) => r.childId))
-
-  const clusters = clusterUncategorizedBookmarks(
-    data.bookmarks.filter((b) => !nestedChildIds.has(b.id)),
-    data.categories,
-    groupedIds,
-  )
-  const localClusters = clusters.filter(
-    (c) => c.suggestedCategoryId && c.suggestedCategoryId !== CAT_UNCATEGORIZED && c.id !== 'cluster_unassigned',
-  )
-  const leftoverBookmarks = clusters.find((c) => c.id === 'cluster_unassigned')?.bookmarks || []
 
   const groupMoves: InboxGroupMove[] = []
   const leftoverGroups: SiblingGroup[] = []
@@ -85,6 +72,49 @@ export async function planInboxZero(
       leftoverGroups.push(gi.group)
     }
   }
+
+  // 随笔记组归类的书签：组内未分类、非子页嵌套的书签跟随笔记组去处（一个书签只跟第一个有去处的组）
+  const followTarget = new Map<string, string>()
+  const addFollowers = (moves: InboxGroupMove[]) => {
+    for (const m of moves) {
+      for (const id of m.group.bookmarkIds || []) {
+        if (uncatIds.has(id) && !nestedChildIds.has(id) && !followTarget.has(id)) followTarget.set(id, m.categoryId)
+      }
+    }
+  }
+  const followerClusters = (ids: Iterable<string>, prefix: string): BookmarkCluster[] => {
+    const byCat = new Map<string, Bookmark[]>()
+    for (const id of ids) {
+      const b = bmById.get(id)
+      const catId = followTarget.get(id)
+      if (b && catId) byCat.set(catId, [...(byCat.get(catId) || []), b])
+    }
+    let n = 1
+    return [...byCat].map(([catId, bms]) => {
+      const cat = catById.get(catId)!
+      return { id: `${prefix}${n++}`, name: cat.name, suggestedCategoryId: cat.id, suggestedCategoryName: cat.name, bookmarks: bms }
+    })
+  }
+  // 已归类的笔记组同样带走组内仍未分类的书签（例如上次只归了笔记本身），再看本次要归的组
+  addFollowers(
+    groups
+      .filter((g) => !g.deletedAt && !isUncategorizedGroup(g) && catById.has(g.categoryId))
+      .map((g) => ({ group: g, categoryId: g.categoryId, ai: false })),
+  )
+  addFollowers(groupMoves)
+  const ruleFollowerIds = new Set(followTarget.keys())
+
+  const clusters = clusterUncategorizedBookmarks(
+    data.bookmarks.filter((b) => !nestedChildIds.has(b.id) && !ruleFollowerIds.has(b.id)),
+    data.categories,
+  )
+  const localClusters = [
+    ...clusters.filter(
+      (c) => c.suggestedCategoryId && c.suggestedCategoryId !== CAT_UNCATEGORIZED && c.id !== 'cluster_unassigned',
+    ),
+    ...followerClusters(ruleFollowerIds, 'cluster_follow_'),
+  ]
+  const leftoverBookmarks = clusters.find((c) => c.id === 'cluster_unassigned')?.bookmarks || []
 
   // ── 第 2 段：大模型兜底（仅规则未命中项） ──
   const aiClusters: BookmarkCluster[] = []
@@ -103,8 +133,20 @@ export async function planInboxZero(
     aiSentCount = llm.sentCount
     // 送审过大模型就可能消耗了 AI 试用次数：以服务端为准刷新剩余次数（额度标签随之更新）
     if (llm.sentCount > 0) refreshAiAccessSoon()
+    const aiGroupMoves: InboxGroupMove[] = []
+    for (const g of leftoverGroups) {
+      const catId = llm.assignments.get(`g:${g.id}`)
+      const cat = catId ? catById.get(catId) : undefined
+      if (cat) aiGroupMoves.push({ group: g, categoryId: cat.id, categoryName: cat.name, ai: true })
+    }
+    groupMoves.push(...aiGroupMoves)
+    addFollowers(aiGroupMoves)
+    const aiFollowerIds = [...followTarget.keys()].filter((id) => !ruleFollowerIds.has(id))
+    const aiFollowerSet = new Set(aiFollowerIds)
+
     const byCat = new Map<string, Bookmark[]>()
     for (const b of leftoverBookmarks) {
+      if (aiFollowerSet.has(b.id)) continue
       const catId = llm.assignments.get(`b:${b.id}`)
       if (catId && catById.has(catId)) byCat.set(catId, [...(byCat.get(catId) || []), b])
     }
@@ -119,11 +161,7 @@ export async function planInboxZero(
         bookmarks: bms,
       })
     }
-    for (const g of leftoverGroups) {
-      const catId = llm.assignments.get(`g:${g.id}`)
-      const cat = catId ? catById.get(catId) : undefined
-      if (cat) groupMoves.push({ group: g, categoryId: cat.id, categoryName: cat.name, ai: true })
-    }
+    aiClusters.push(...followerClusters(aiFollowerIds, 'cluster_ai_follow_'))
   }
 
   // 本预案覆盖不到的剩余项（口径对齐侧栏计数：顶层书签 + 笔记组）

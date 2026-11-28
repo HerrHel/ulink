@@ -580,6 +580,49 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(items.map((i: any) => i.id).sort()).toEqual(['diff-gmove-g1', 'diff-move-u1'])
   })
 
+  it('/inbox 笔记引用的未分类网址随笔记一起归类，不再漏在未分类', async () => {
+    // 笔记组靠关键词命中「工具」，组内网址都是陌生域名、规则归不了
+    llmClassifyMock.mockResolvedValue({ assignments: new Map(), sentCount: 0 })
+    const groups = [{ id: 'g1', name: '文件格式转换 工具', categoryId: 'uncategorized', bookmarkIds: ['u1', 'u2'] }]
+    const ds = {
+      ...mockDs,
+      categories: [{ id: 'all', name: '全部' }, { id: 'uncategorized', name: '未分类' }, { id: 'cat-t', name: '工具' }],
+      categoryMap: { 'cat-t': { id: 'cat-t', name: '工具' } },
+      bookmarks: [
+        { id: 'u1', title: 'Zqxv', url: 'https://zqxv-unknown.example/', categoryId: 'uncategorized' },
+        { id: 'u2', title: 'Wplm', url: 'https://wplm-unknown.example/', categoryId: 'uncategorized' },
+      ],
+      siblingGroups: groups,
+      groupMap: { g1: groups[0] },
+    }
+    const res = await dispatchSiteCommand('/inbox', { ds: ds as any, ui: mockUi, app: mockApp })
+    expect(res.reply).toContain('笔记「文件格式转换 工具」归入「工具」')
+    expect(res.reply).not.toContain('另有')
+    const items = (res.actionCard?.payload as any).diffPayload.items
+    expect(items.map((i: any) => i.id).sort()).toEqual(['diff-gmove-g1', 'diff-move-u1', 'diff-move-u2'])
+  })
+
+  it('applyInboxZeroClustering 笔记已归类时，组内仍未分类的网址跟随笔记分类', async () => {
+    const bms = [
+      { id: 'u1', title: 'Zqxv', url: 'https://zqxv-unknown.example/', categoryId: 'uncategorized' },
+      { id: 'u2', title: 'Wplm', url: 'https://wplm-unknown.example/', categoryId: 'uncategorized' },
+    ]
+    const ds = {
+      ...mockDs,
+      categories: [{ id: 'c1', name: '工具' }],
+      bookmarks: bms,
+      bookmarkMap: Object.fromEntries(bms.map((b) => [b.id, b])),
+      siblingGroups: [{ id: 'g1', name: '文件格式转换', categoryId: 'c1', bookmarkIds: ['u1', 'u2'] }],
+      updateBookmark: vi.fn((id: string, ch: any) => Object.assign(bms.find((b) => b.id === id)!, ch)),
+    }
+    const res = await applyInboxZeroClustering({ ds: ds as any, ui: mockUi, app: mockApp })
+    // 跟随已有笔记分类，不必再问大模型
+    expect(llmClassifyMock).not.toHaveBeenCalled()
+    expect(res.movedCount).toBe(2)
+    expect(res.remaining).toBe(0)
+    expect(bms.map((b) => b.categoryId)).toEqual(['c1', 'c1'])
+  })
+
   it('/inbox 大模型失败时如实报数并说明原因', async () => {
     llmClassifyMock.mockResolvedValue({ assignments: new Map(), sentCount: 1, error: '额度已用完' })
     const ds = {
