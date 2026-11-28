@@ -127,9 +127,12 @@ async function checkDailyQuota(req, db, mode) {
         return { ok: false, status: 503, error: 'quota_unavailable' }
       }
       const d = daily.data || {}
-      return d.ok === false && d.limited === true
-        ? { ok: false, status: 429, limit: d.limit }
-        : { ok: true }
+      if (d.ok !== true) {
+        return d.limited === true
+          ? { ok: false, status: 429, limit: d.limit }
+          : { ok: false, status: 503, error: 'quota_unavailable' }
+      }
+      return { ok: true }
     }
 
     // 带了令牌但验签失败：fail-closed 回 401，绝不静默降级成匿名额度（对齐 extract-video）

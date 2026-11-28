@@ -467,6 +467,70 @@ describe('Universal Agent Operations & Undo Stack (universalAgent.ts)', () => {
       expect(resRemove.success).toBe(true)
       expect(mockDs.groupMap['grp-vue'].bookmarkIds).not.toContain('bm-3')
     })
+
+    it('按含大写字母的 URL 或 ID 装配/移出工作台书签不应因大小写折叠失配', async () => {
+      mockDs.bookmarks.push({
+        id: 'bm-MixedId',
+        title: 'GitHub Repo',
+        url: 'https://github.com/VueJs/Core',
+        username: '',
+        password: '',
+        notes: '',
+        icon: '',
+        categoryId: 'cat-dev',
+        parentId: null,
+        order: 4,
+        useCount: 0,
+        attributes: {},
+        isExpanded: false,
+        createdAt: 1000,
+        updatedAt: 1000,
+      })
+      mockDs.bookmarkMap['bm-MixedId'] = mockDs.bookmarks[mockDs.bookmarks.length - 1]
+
+      const created = await executeManageWorkspaces(
+        {
+          action: 'create',
+          name: 'MixedCase WS',
+          bookmarkQueries: ['https://github.com/VueJs/Core'],
+        },
+        { ds: mockDs, app: mockApp, ui: mockUi },
+      )
+      expect(created.success).toBe(true)
+      expect(created.data?.bookmarkIds).toEqual(['bm-MixedId'])
+
+      const rm = await executeManageWorkspaces(
+        {
+          action: 'remove_bookmarks',
+          workspaceId: created.data!.id,
+          bookmarkIds: ['bm-MixedId'],
+        },
+        { ds: mockDs, app: mockApp, ui: mockUi },
+      )
+      expect(rm.success).toBe(true)
+      expect(created.data?.bookmarkIds).toEqual([])
+    })
+
+    it('move / navigate 定位分类时精确名/ID 优先于排在前面的包含匹配', async () => {
+      mockDs.categories.unshift({ id: 'cat-dev-tools', name: 'Dev Tools', order: 0, color: '#000', icon: 'code' })
+      mockDs.categories.push({ id: 'cat-dev-exact', name: 'Dev', order: 3, color: '#111', icon: 'code' })
+      mockDs.categoryMap['cat-dev-tools'] = mockDs.categories[0]
+      mockDs.categoryMap['cat-dev-exact'] = mockDs.categories[mockDs.categories.length - 1]
+
+      const moved = await executeManageBookmarks(
+        { action: 'move', bookmarkId: 'bm-1', targetCategory: 'Dev' },
+        { ds: mockDs, app: mockApp, ui: mockUi },
+      )
+      expect(moved.success).toBe(true)
+      expect(mockDs.bookmarkMap['bm-1'].categoryId).toBe('cat-dev-exact')
+
+      const nav = await executeManageSettings(
+        { action: 'navigate', navigateTarget: 'category', targetName: 'Dev' },
+        { ds: mockDs, app: mockApp, ui: mockUi },
+      )
+      expect(nav.success).toBe(true)
+      expect(mockUi.curCat).toBe('cat-dev-exact')
+    })
   })
 
   describe('5. 偏好与系统调度 (manage_settings)', () => {

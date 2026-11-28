@@ -370,6 +370,7 @@ export function useE2E() {
     const newRkIt = PBKDF2_ITERATIONS
     const newRkKey = await deriveKey(_parseRecoveryKey(recoveryKey), newRkSalt, newRkIt)
 
+    const prevLocalCanary = _readLocalCanary()
     const ok2 = await _saveCanaryData({
       canary: newCanary,
       salt: Array.from(newSalt),
@@ -378,7 +379,11 @@ export function useE2E() {
       recovery_salt: Array.from(newRkSalt),
       recovery_it: newRkIt,
     })
-    if (!ok2) return false
+    if (!ok2) {
+      if (prevLocalCanary) _writeLocalCanary(prevLocalCanary)
+      else _removeLocalCanary()
+      return false
+    }
 
     e2eStore.setEnabled(true)
     _setKey(newKey)

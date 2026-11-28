@@ -165,17 +165,15 @@ const server = http.createServer(async (req, res) => {
     }
     const raw = body.password
     const clearing = raw === null || raw === ''
-    let hash = null
     if (!clearing) {
       const policy = validatePasswordInput(raw)
       if (!policy.ok) {
         sendJson(res, 400, { error: 'weak_password', reason: policy.reason }, cors)
         return
       }
-      hash = hashPassword(raw)
     }
 
-    // 3) 限流（fail-closed）
+    // 3) 限流（fail-closed：先限流再执行 scryptSync 派生，避免被刷慢哈希打满 CPU）
     const db = getDb()
     const rl = await db.rpc('consume_rate_limit', {
       // 只按 uid 计数：uid 已验签可信；旧 key 拼了可伪造的请求头 IP，换头即得新桶
@@ -193,6 +191,8 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 429, { error: 'rate_limited' }, { ...cors, 'Retry-After': '60' })
       return
     }
+
+    const hash = clearing ? null : hashPassword(raw)
 
     // 4) 写库：RPC 内按 (gid, user_id) 匹配，非本人返回 false
     const r = await db.rpc('set_share_password', {

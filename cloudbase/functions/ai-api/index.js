@@ -135,17 +135,48 @@ async function writeWebResponse(webRes, res) {
   res.end(buffer)
 }
 
-function sendJson(res, status, payload) {
+const DEFAULT_CORS_ORIGINS = new Set([
+  'https://ulink.ren',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+])
+
+function wrapperCorsHeaders(req) {
+  const origin = req && req.headers ? req.headers.origin : ''
+  if (!origin) return {}
+  let parsed
+  try {
+    parsed = new URL(origin).origin
+  } catch {
+    return {}
+  }
+  const envOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)
+  const allowed = envOrigins.length ? envOrigins.includes(parsed) : DEFAULT_CORS_ORIGINS.has(parsed)
+  if (!allowed) return {}
+  return {
+    'access-control-allow-origin': origin,
+    vary: 'Origin',
+    'access-control-allow-headers': 'Content-Type, Authorization, X-Ulink-Trace-Id',
+  }
+}
+
+function sendJson(res, status, payload, req) {
   const body = Buffer.from(JSON.stringify(payload))
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'content-length': String(body.length),
+    ...(req ? wrapperCorsHeaders(req) : {}),
   })
   res.end(body)
 }
 
 const server = http.createServer(async (req, res) => {
+  let db = null
+  let uid = null
+  let access = null
   try {
     const url = new URL(req.url || '/', 'https://ulink.ren')
     const action = (url.searchParams.get('action') || '').toLowerCase()
@@ -159,38 +190,40 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (!process.env.MIMO_API_KEY) {
-      sendJson(res, 503, { success: false, error: 'mimo_key_not_configured' })
+      sendJson(res, 503, { success: false, error: 'mimo_key_not_configured' }, req)
       return
     }
 
     if (action !== 'candidates' && action !== 'extract') {
-      sendJson(res, 400, { success: false, error: 'invalid_action' })
+      sendJson(res, 400, { success: false, error: 'invalid_action' }, req)
       return
     }
+
+    // 先读体校验上限，再扣全球限流与个人额度，避免 413 超大请求白扣次数
+    const bodyBuffer = req.method === 'POST' ? await readBody(req) : undefined
 
     // 全局硬闸：先于转发到 MIMO，避免匿名/伪造 IP 无限消耗上游额度
     const quota = await checkGlobalQuota(req, action)
     if (!quota.ok) {
-      sendJson(res, quota.status, { success: false, error: quota.error })
+      sendJson(res, quota.status, { success: false, error: quota.error }, req)
       return
     }
 
     // 验签取 uid（handler 内的 cf-guard 也会再验一次 token 是否有效）
     const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID }).catch(() => null)
-    const uid = auth && auth.ok ? auth.uid : null
-    const db = getDb()
-    const access = await checkAiAccess(db, uid)
+    uid = auth && auth.ok ? auth.uid : null
+    db = getDb()
+    access = await checkAiAccess(db, uid)
 
     // candidates 是纯 AI 能力：无访问权直接拒绝（402 = 需付费 / 试用用完；401 = 需登录）
     if (action === 'candidates' && !access.allowed) {
       const status = access.reason === 'login_required' ? 401
         : access.reason === 'quota_unavailable' ? 503
           : access.reason === 'daily_exhausted' || access.reason === 'monthly_exhausted' ? 429 : 402
-      sendJson(res, status, { success: false, error: access.reason })
+      sendJson(res, status, { success: false, error: access.reason }, req)
       return
     }
 
-    const bodyBuffer = req.method === 'POST' ? await readBody(req) : undefined
     const webReq = toWebRequest(req, bodyBuffer)
     const context = {
       request: webReq,
@@ -203,8 +236,12 @@ const server = http.createServer(async (req, res) => {
         : await extract.onRequest(context)
 
     if (!webRes) {
-      if (access.consumed) await refundAiAccess(db, uid, access.consumed)
-      sendJson(res, 500, { success: false, error: 'internal_error' })
+      if (access.consumed) {
+        const c = access.consumed
+        access.consumed = null
+        await refundAiAccess(db, uid, c)
+      }
+      sendJson(res, 500, { success: false, error: 'internal_error' }, req)
       return
     }
 
@@ -213,7 +250,11 @@ const server = http.createServer(async (req, res) => {
       const text = await webRes.text()
       let data = null
       try { data = JSON.parse(text) } catch { /* 非 JSON 原样透传 */ }
-      if (access.consumed && (!data || data.ai !== 'used')) await refundAiAccess(db, uid, access.consumed)
+      if (access.consumed && (!data || data.ai !== 'used')) {
+        const c = access.consumed
+        access.consumed = null
+        await refundAiAccess(db, uid, c)
+      }
       if (data && typeof data === 'object') {
         data.aiGate = access.allowed ? null : access.reason
         const headers = {}
@@ -226,9 +267,16 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    if (access.consumed && webRes.status >= 400) await refundAiAccess(db, uid, access.consumed)
+    if (access.consumed && webRes.status >= 400) {
+      const c = access.consumed
+      access.consumed = null
+      await refundAiAccess(db, uid, c)
+    }
     await writeWebResponse(webRes, res)
   } catch (err) {
+    if (access && access.consumed && db) {
+      await refundAiAccess(db, uid, access.consumed).catch(() => {})
+    }
     const message = String((err && err.message) || err)
     console.error('[ai-api] error:', message)
     if (!res.headersSent) {
@@ -236,7 +284,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, status, {
         success: false,
         error: status === 413 ? 'body_too_large' : 'internal_error',
-      })
+      }, req)
     }
   }
 })

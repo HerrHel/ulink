@@ -203,4 +203,36 @@ describe('useEntitlement (会员权益与功能分层门控)', () => {
     await refresh()
     expect(isProUser()).toBe(true) // 服务端确认后才放行
   })
+
+  it('长驻页面跨到期时间点：expiresAt 已过时 isProUser/isPaid/checkAiEnrichQuota 立即失效', async () => {
+    const soonExpired: MyEntitlement = {
+      planId: 'plus_monthly',
+      planName: 'PRO 月付',
+      status: 'active',
+      expiresAt: new Date(Date.now() + 80).toISOString(),
+      features: { 'ai.tokens.monthly': 3000000 },
+      isPaid: true,
+    }
+    mockFetchMyEntitlement.mockResolvedValueOnce(soonExpired)
+    const { refresh, isPaid, isPro, checkAiEnrichQuota } = useEntitlement()
+    await refresh()
+    expect(isProUser()).toBe(true)
+    expect(isPaid.value).toBe(true)
+
+    await new Promise((r) => setTimeout(r, 110))
+    expect(isProUser()).toBe(false)
+    expect(isPaid.value).toBe(false)
+    expect(isPro.value).toBe(false)
+    expect(checkAiEnrichQuota().isPro).toBe(false)
+  })
+
+  it('PRO 状态期间若服务端回报 ai_trial_exhausted，markAiTrialExhausted 同时撤销决策态 PRO', async () => {
+    mockFetchMyEntitlement.mockResolvedValueOnce(proEntitlement)
+    const { refresh, checkAiEnrichQuota, markAiTrialExhausted } = useEntitlement()
+    await refresh()
+    expect(checkAiEnrichQuota().isPro).toBe(true)
+
+    markAiTrialExhausted()
+    expect(checkAiEnrichQuota()).toMatchObject({ allowed: false, isPro: false, remaining: 0 })
+  })
 });

@@ -109,7 +109,7 @@ export function createInboxZeroDraftDiff(params: {
       id: `diff-gmove-${g.id}`,
       itemType: 'group',
       changeType: 'modify',
-      title: g.name || t('cat.uncategorized'),
+      title: (g.name || '').trim() || t('cards.unnamedGroup'),
       before: { categoryId: g.categoryId, categoryName: t('cat.uncategorized') },
       after: { categoryId, categoryName: categoryName || categoryMap[categoryId]?.name },
       selected: true,

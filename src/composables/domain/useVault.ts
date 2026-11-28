@@ -212,6 +212,7 @@ export function useVault() {
     const newRkKey = await deriveKey(_parseRecoveryKey(recoveryKey), newRkSalt, newRkIt)
     if (gen !== _setupGen) return 'cancelled'
 
+    const prevLocalCanary = _readLocalCanary()
     const ok2 = await _saveCanaryData({
       canary: newCanary,
       salt: Array.from(newSalt),
@@ -221,10 +222,15 @@ export function useVault() {
       recovery_it: newRkIt,
     })
     if (gen !== _setupGen) {
-      _removeLocalCanary()
+      if (prevLocalCanary) _writeLocalCanary(prevLocalCanary)
+      else _removeLocalCanary()
       return 'cancelled'
     }
-    if (!ok2) return false
+    if (!ok2) {
+      if (prevLocalCanary) _writeLocalCanary(prevLocalCanary)
+      else _removeLocalCanary()
+      return false
+    }
 
     vaultStore.setEnabled(true)
     _setKey(newKey)

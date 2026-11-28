@@ -9,6 +9,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { useAuthStore } from '../../stores/auth.js'
 import * as syncShare from '../../composables/domain/syncShare.js'
+import * as sharePw from '../../composables/domain/useSharePassword.js'
 import * as toastLib from '../../lib/toast.js'
 import * as utils from '../../utils.js'
 
@@ -163,5 +164,48 @@ describe('ShareModal.vue — 分享管理弹窗', () => {
     // 验证未调用远程接口，且按钮未激活
     expect(setGroupPublicSpy).not.toHaveBeenCalled()
     expect(wrapper.find('.switch-toggle-btn').classes()).not.toContain('active')
+  })
+
+  it('快速切换分享组时，旧的访问密码状态请求晚返回不覆盖新目标状态', async () => {
+    ds.addGroup({
+      id: 'g-test-2',
+      name: '第二个公开组',
+      categoryId: 'uncategorized',
+      icon: '',
+      order: 1,
+      isExpanded: false,
+      attributes: {},
+      bookmarkIds: [],
+      notes: '',
+      useCount: 0,
+      isPublic: true,
+      updatedAt: 1000,
+    } as any)
+    ds.groupMap['g-test-1'].isPublic = true
+
+    let resolveFirst!: (val: any) => void
+    const firstPromise = new Promise((r) => { resolveFirst = r })
+    const stateSpy = vi.spyOn(sharePw, 'getSharePasswordState')
+      .mockReturnValueOnce(firstPromise as any)
+      .mockResolvedValueOnce({ ok: true, hasPassword: false })
+
+    ui.openShareModal('group', 'g-test-1')
+    const wrapper = mount(ShareModal, {
+      global: { plugins: [pinia] }
+    })
+    await wrapper.vm.$nextTick()
+
+    // 切换到 g-test-2（无密码）并先返回
+    ui.openShareModal('group', 'g-test-2')
+    await wrapper.vm.$nextTick()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(wrapper.find('.share-password-state').classes()).not.toContain('on')
+
+    // g-test-1 的旧响应晚返回 hasPassword: true，不应污染 g-test-2
+    resolveFirst({ ok: true, hasPassword: true })
+    await wrapper.vm.$nextTick()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(stateSpy).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.share-password-state').classes()).not.toContain('on')
   })
 })

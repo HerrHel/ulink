@@ -472,7 +472,7 @@ export function useCloudSync() {
 
   function _onOnline() {
     if (!isLoggedIn.value) return
-    enqueueDirtyAsOps()
+    const enqueuePromise = enqueueDirtyAsOps()
     if (syncStore.realtimeStatus !== 'connected') {
       // 断线重连：subscribeRealtime 不传回调，避免 SUBSCRIBED 再触发一次 pullChanges。
       // 显式 pullChanges 已做全面拉取，重连后靠 Realtime 增量事件即可。
@@ -485,6 +485,7 @@ export function useCloudSync() {
     // pull 让 dirty/pending 项经 decideRemoteApply 转 conflict/soft-delete，再推剩余
     // op；服务端 032 触发器对残留的旧快照复活做最终兜底。
     void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
+      await enqueuePromise
       await reenqueueDeadDeletes()
       await pullChanges()
       await pushFromQueue()

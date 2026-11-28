@@ -89,6 +89,9 @@ function getInitialEntitlement(): MyEntitlement {
 // 展示态：可来自 localStorage 缓存，仅用于 UI 显示昵称/套餐/状态（离线体验保留）。
 const currentEntitlement = ref<MyEntitlement>(getInitialEntitlement())
 const loadingEntitlement = ref(false)
+/** 到期响应式刻度：订阅临期/到期时触发 computed 重算，无需轮询 */
+const expiryTick = ref(0)
+let _expiryTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
  * #36 决策态：配额 / 权限门禁的唯一依据，与展示态严格分离。
@@ -106,14 +109,56 @@ let serverVerifiedPaid = false
  */
 let refreshGeneration = 0
 
-/** 语义搜索等门禁：只认服务端已确认的付费状态，绝不认展示态/缓存 */
+/** 校验会员截止时间戳是否仍在有效期内（长驻页面跨到期时间点自动失效，不残留 PRO 状态） */
+function isNotExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return true
+  const ts = new Date(expiresAt).getTime()
+  return Number.isNaN(ts) || ts > Date.now()
+}
+
+function isEntitlementActive(e: MyEntitlement): boolean {
+  return Boolean(e.isPaid) && e.status === 'active' && isNotExpired(e.expiresAt)
+}
+
+function scheduleExpiryTimer(expiresAt: string | null | undefined): void {
+  if (_expiryTimer) {
+    clearTimeout(_expiryTimer)
+    _expiryTimer = null
+  }
+  if (!expiresAt) return
+  const ms = new Date(expiresAt).getTime() - Date.now()
+  if (!Number.isFinite(ms)) return
+  if (ms <= 0) {
+    expiryTick.value++
+    return
+  }
+  // 仅在 32 位 setTimeout 安全范围内（~24.8 天）挂载一次性到期定时器
+  if (ms <= 2_147_483_647) {
+    _expiryTimer = setTimeout(() => {
+      _expiryTimer = null
+      serverVerifiedPaid = false
+      expiryTick.value++
+    }, ms + 5)
+    if (typeof _expiryTimer === 'object' && 'unref' in _expiryTimer) {
+      (_expiryTimer as { unref?: () => void }).unref?.()
+    }
+  }
+}
+
+/** 语义搜索等门禁：只认服务端已确认的付费状态且未过期，绝不认展示态/缓存 */
 export function isProUser(): boolean {
-  return serverVerifiedPaid
+  return serverVerifiedPaid && isNotExpired(currentEntitlement.value.expiresAt)
 }
 
 export function useEntitlement() {
-  const isPaid = computed(() => currentEntitlement.value.isPaid)
-  const isPro = computed(() => currentEntitlement.value.isPaid)
+  const isPaid = computed(() => {
+    void expiryTick.value
+    return isEntitlementActive(currentEntitlement.value)
+  })
+  const isPro = computed(() => {
+    void expiryTick.value
+    return isEntitlementActive(currentEntitlement.value)
+  })
   const planId = computed(() => currentEntitlement.value.planId)
   const planName = computed(() => currentEntitlement.value.planName)
   const expiresAt = computed(() => currentEntitlement.value.expiresAt)
@@ -141,7 +186,8 @@ export function useEntitlement() {
       if (gen !== refreshGeneration) return currentEntitlement.value
       currentEntitlement.value = e
       // #36：决策态只在服务端明确返回 isPaid 时放行；缓存 / 展示态赋值影响不了它
-      serverVerifiedPaid = e.isPaid === true
+      serverVerifiedPaid = e.isPaid === true && isNotExpired(e.expiresAt)
+      scheduleExpiryTimer(e.isPaid ? e.expiresAt : null)
       // 顺带刷新 AI 试用状态；失败不影响权益刷新本身
       void refreshAiAccess().catch(() => {})
       try {
@@ -157,6 +203,10 @@ export function useEntitlement() {
 
   function clear(): void {
     ++refreshGeneration
+    if (_expiryTimer) {
+      clearTimeout(_expiryTimer)
+      _expiryTimer = null
+    }
     loadingEntitlement.value = false
     serverVerifiedPaid = false // 门禁一并失效（退出登录/切换账号不得残留 PRO 决策态）
     aiAccess.value = { ...UNKNOWN_AI_ACCESS }
@@ -192,8 +242,8 @@ export function useEntitlement() {
    * - 未登录：不可用（试用次数记在账号上）
    */
   function checkAiEnrichQuota(): { allowed: boolean; remaining: number; total: number; isPro: boolean } {
-    // #36：门禁只认服务端 refresh 确认的决策态，不认展示态/缓存的 isPaid
-    if (serverVerifiedPaid || aiAccess.value.tier === 'pro') {
+    // #36：门禁只认服务端 refresh 确认的决策态，不认展示态/缓存的 isPaid；长驻过期一并回收
+    if ((serverVerifiedPaid && isNotExpired(currentEntitlement.value.expiresAt)) || aiAccess.value.tier === 'pro') {
       return { allowed: true, remaining: 999999, total: 999999, isPro: true }
     }
     const a = aiAccess.value
@@ -204,7 +254,7 @@ export function useEntitlement() {
 
   /** 一次 AI 调用成功后同步本地镜像（服务端已扣次，这里只让展示即时更新） */
   function consumeAiEnrichQuota(): boolean {
-    if (serverVerifiedPaid || aiAccess.value.tier === 'pro') return true
+    if ((serverVerifiedPaid && isNotExpired(currentEntitlement.value.expiresAt)) || aiAccess.value.tier === 'pro') return true
     const a = aiAccess.value
     if (a.tier !== 'trial') return true
     if (a.remaining <= 0) return false
@@ -212,8 +262,9 @@ export function useEntitlement() {
     return true
   }
 
-  /** 服务端明确回报试用已用完（aiGate=ai_trial_exhausted）：本地镜像立即归零 */
+  /** 服务端明确回报试用已用完（aiGate=ai_trial_exhausted）：本地镜像立即归零并撤销决策态 PRO */
   function markAiTrialExhausted(): void {
+    serverVerifiedPaid = false
     const a = aiAccess.value
     aiAccess.value = { tier: 'trial', used: a.limit || a.used, limit: a.limit, remaining: 0 }
   }
@@ -352,8 +403,9 @@ export interface AiQuotaView {
  * - unknown：尚未拉到服务端状态（不展示，避免闪出错误数字）
  */
 const aiQuotaView = computed<AiQuotaView>(() => {
+  void expiryTick.value
   const a = aiAccess.value
-  if (serverVerifiedPaid || a.tier === 'pro') {
+  if ((serverVerifiedPaid && isNotExpired(currentEntitlement.value.expiresAt)) || a.tier === 'pro') {
     if (a.tier !== 'pro' || !a.pro) return { kind: 'pro', remaining: 0, total: 0 }
     const pv = proQuotaView(a.pro)
     // remaining / total：主限额（每月次数；旧套餐无月度键时退回每日次数）

@@ -543,6 +543,7 @@ export function useDeadLinkChecker() {
     toCheck: Bookmark[],
     representativeMap: Map<string, { representative: Bookmark; others: Bookmark[] }>,
     intervalMs: number,
+    mode: 'manual' | 'auto' = 'manual',
   ): Promise<number> {
     /** 「没测通」类原因：重试很可能给出确定结论 */
     const RETRYABLE: ReadonlySet<string> = new Set([
@@ -576,7 +577,7 @@ export function useDeadLinkChecker() {
       for (let i = 0; i < capped.length; i += RETRY_CONCURRENCY) {
         if (_abort?.signal.aborted) break
         const batch = capped.slice(i, i + RETRY_CONCURRENCY)
-        const settled = await Promise.allSettled(batch.map((bm) => checkUrl(bm.url, bm.id, 'auto')))
+        const settled = await Promise.allSettled(batch.map((bm) => checkUrl(bm.url, bm.id, mode)))
         for (let j = 0; j < batch.length; j++) {
           const res = settled[j]
           if (res.status !== 'fulfilled') continue
@@ -612,7 +613,7 @@ export function useDeadLinkChecker() {
     return capped.length
   }
 
-  async function checkAll(batchSize = 5, intervalMs = 200, maxCount = 0): Promise<void> {
+  async function checkAll(batchSize = 5, intervalMs = 200, maxCount = 0, mode: 'manual' | 'auto' = 'manual'): Promise<void> {
     if (checking.value) return
     const ds = useDataStore()
     // RE-11：排除软删与 ignored，避免污染回收站项
@@ -687,7 +688,7 @@ export function useDeadLinkChecker() {
 
       const batch = toCheck.slice(i, i + batchSize)
       const batchResults = await Promise.allSettled(
-        batch.map(b => checkUrl(b.url, b.id, 'auto'))
+        batch.map(b => checkUrl(b.url, b.id, mode))
       )
 
       for (let j = 0; j < batch.length; j++) {
@@ -722,7 +723,7 @@ export function useDeadLinkChecker() {
     }
 
     // 失败项复核：把「瞬时抖动」与「真的没了」区分开
-    await _retryTransientFailures(toCheck, representativeMap, intervalMs)
+    await _retryTransientFailures(toCheck, representativeMap, intervalMs, mode)
 
     _flushDeadLinkHistory()
     checking.value = false
@@ -920,7 +921,7 @@ export function useDeadLinkChecker() {
     // 检查是否已到检测时间
     const last = parseInt(safeGetItem(AUTO_CHECK_KEY) || '0', 10)
     if (Date.now() - last > AUTO_INTERVAL_MS && !checking.value) {
-      checkAll(5, 200, autoScanLimit.value)
+      checkAll(5, 200, autoScanLimit.value, 'auto')
       // DLC-4：只在检测实际运行时更新时间戳。旧实现无条件更新——跳过本次检测时
       // 仍刷时间戳，导致「启动即检测」意图被破坏（需再等 7 天才触发）。
       safeSetItem(AUTO_CHECK_KEY, String(Date.now()))
@@ -930,7 +931,7 @@ export function useDeadLinkChecker() {
     _autoCheckTimer = setInterval(() => {
       const last2 = parseInt(safeGetItem(AUTO_CHECK_KEY) || '0', 10)
       if (Date.now() - last2 > AUTO_INTERVAL_MS && !checking.value) {
-        checkAll(5, 200, autoScanLimit.value)
+        checkAll(5, 200, autoScanLimit.value, 'auto')
         safeSetItem(AUTO_CHECK_KEY, String(Date.now()))
       }
     }, 6 * 60 * 60 * 1000)

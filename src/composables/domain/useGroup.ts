@@ -119,10 +119,27 @@ export function createGroup(catId?: string): string {
   return g.id;
 }
 
-/** 空笔记：无标题（或默认「未命名」）、正文无文字/图片/媒体/书签卡片、无成员书签、无图标 */
+const UNNAMED_GROUP_PLACEHOLDERS = new Set([
+  '未命名',
+  '未命名笔记',
+  '未命名分组',
+  '未命名组',
+  'untitled',
+  'untitled note',
+  'untitled group',
+])
+
+/** 判定组/笔记标题是否为空或未命名占位（兼容中英文与历史变体） */
+export function isUnnamedGroupName(name?: string | null): boolean {
+  const n = (name || '').trim()
+  if (!n) return true
+  if (n === t('common.unnamed') || n === t('cards.unnamedGroup')) return true
+  return UNNAMED_GROUP_PLACEHOLDERS.has(n.toLowerCase())
+}
+
+/** 空笔记：无标题（或默认「未命名」/「未命名笔记」）、正文无文字/图片/媒体/书签卡片、无成员书签、无图标 */
 export function isEmptyNote(sg: SiblingGroup): boolean {
-  const name = (sg.name || '').trim();
-  if (name && name !== t('common.unnamed') && name !== '未命名' && name !== 'Untitled') return false;
+  if (!isUnnamedGroupName(sg.name)) return false;
   if ((sg.bookmarkIds || []).length || (sg.icon || '').trim()) return false;
   const notes = sg.notes || '';
   if (/<(img|video|audio|iframe)\b|data-bm-id/i.test(notes)) return false;
@@ -147,7 +164,7 @@ function _watchFreshNote(gid: string) {
     if (!sg || sg.deletedAt) return;
     saveGroupBody(gid);
     const liveTitle = (document.querySelector<HTMLElement>('.focus-title-input')?.textContent || '').trim();
-    const titled = !!liveTitle && liveTitle !== t('common.unnamed') && liveTitle !== '未命名' && liveTitle !== 'Untitled';
+    const titled = !isUnnamedGroupName(liveTitle);
     // 标题已输入但还没 blur 落库（如光标在标题里直接后退）：顺手存下，免得留下笔记却丢了标题
     if (titled && liveTitle !== (sg.name || '').trim()) ds.updateGroup(gid, { name: liveTitle });
     if (titled || !isEmptyNote(ds.groupMap[gid])) return;

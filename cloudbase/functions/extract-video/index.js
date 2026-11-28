@@ -432,9 +432,10 @@ async function checkDailyQuota(req, db, ipHash) {
       return { ok: false, status: 503, error: 'quota_unavailable' }
     }
     const features = (ent.data && ent.data.features) || {}
-    const expired = ent.data && ent.data.status === 'expired'
-    // 订阅过期回落免费额度，不沿用过期档位的额度
-    const limit = expired ? FREE_DAILY_FALLBACK : Number(features[QUOTA_METRIC] ?? FREE_DAILY_FALLBACK)
+    const status = (ent.data && ent.data.status) || 'active'
+    // 订阅过期或已退款均回落免费额度，不沿用付费档位额度
+    const downgraded = !ent.data || status !== 'active'
+    const limit = downgraded ? FREE_DAILY_FALLBACK : Number(features[QUOTA_METRIC] ?? FREE_DAILY_FALLBACK)
     if (!Number.isFinite(limit) || limit <= 0) {
       return { ok: false, status: 429, scope: 'user', limit: 0 }
     }
@@ -529,9 +530,10 @@ async function checkDeepQuota(req, db) {
     return { ok: false, status: 503, code: 'quota_unavailable' }
   }
   const features = (ent.data && ent.data.features) || {}
-  const expired = ent.data && ent.data.status === 'expired'
-  // 权益过期回落 free（深度 0），不沿用过期 PRO 额度
-  const limit = expired ? 0 : deepDailyLimit(features)
+  const status = (ent.data && ent.data.status) || 'active'
+  // 权益过期或已退款回落 free（深度 0），不沿用付费 PRO 额度
+  const downgraded = !ent.data || status !== 'active'
+  const limit = downgraded ? 0 : deepDailyLimit(features)
   if (!Number.isFinite(limit) || limit <= 0) {
     return { ok: false, status: 429, code: 'deep_quota_exceeded', limit: 0 }
   }

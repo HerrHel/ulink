@@ -357,12 +357,21 @@ export async function askMiMoStream(
     const errText = await response.text().catch(() => '')
     // 云函数返回的中文业务文案（如额度超限）优先透出，比 JSON 原文可读
     let friendly = ''
+    let errCode = ''
     try {
-      friendly = (JSON.parse(errText) as { message?: string }).message || ''
+      const parsed = JSON.parse(errText) as { message?: string; error?: string }
+      friendly = parsed.message || ''
+      errCode = parsed.error || ''
     } catch {
       /* 非 JSON 保持原文 */
     }
-    throw new Error(friendly || `MiMo API request failed (${response.status}): ${errText || response.statusText}`)
+    const err = new Error(friendly || `MiMo API request failed (${response.status}): ${errText || response.statusText}`) as Error & {
+      status?: number
+      code?: string
+    }
+    err.status = response.status
+    if (errCode) err.code = errCode
+    throw err
   }
 
   let accumulatedReasoning = ''
@@ -655,12 +664,21 @@ export async function askMiMoRaw(
     const errText = await response.text().catch(() => '')
     // 云函数返回的中文业务文案（如额度超限）优先透出，比 JSON 原文可读
     let friendly = ''
+    let errCode = ''
     try {
-      friendly = (JSON.parse(errText) as { message?: string }).message || ''
+      const parsed = JSON.parse(errText) as { message?: string; error?: string }
+      friendly = parsed.message || ''
+      errCode = parsed.error || ''
     } catch {
       /* 非 JSON 保持原文 */
     }
-    throw new Error(friendly || `MiMo API request failed (${response.status}): ${errText || response.statusText}`)
+    const err = new Error(friendly || `MiMo API request failed (${response.status}): ${errText || response.statusText}`) as Error & {
+      status?: number
+      code?: string
+    }
+    err.status = response.status
+    if (errCode) err.code = errCode
+    throw err
   }
 
   const data = await response.json().catch(() => ({}))

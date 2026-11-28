@@ -40,7 +40,7 @@ import {
   type ToolExecStatus,
 } from '../../lib/ai/toolResult.js'
 import { toast } from '../../lib/toast.js'
-import { refreshAiAccessSoon } from './useEntitlement.js'
+import { refreshAiAccessSoon, notifyAiTrialExhausted } from './useEntitlement.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
 import type { AbortControllerSlot, ChatTurnsChangeReason } from './useAiChatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
@@ -132,7 +132,17 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     turn.isThinking = false
     turn.candidates = []
     const raw = err instanceof Error ? err.message : ''
-    const streamErr = err as { isStreamError?: boolean; partialContent?: string; partialReasoning?: string } | null
+    const streamErr = err as {
+      isStreamError?: boolean
+      partialContent?: string
+      partialReasoning?: string
+      code?: string
+      status?: number
+    } | null
+    if (streamErr?.code === 'ai_trial_exhausted' || streamErr?.status === 402) {
+      // 统一处理：归零本地镜像 + 带「升级 PRO」按钮的提示（不再只有一句失败文案）
+      try { notifyAiTrialExhausted() } catch { /* ignore in test sandbox */ }
+    }
     // 流式中断：已生成的思考/正文一律保留，正文后追加中断说明（可重试补齐）
     if (streamErr?.isStreamError) {
       if (streamErr.partialReasoning) turn.reasoning = streamErr.partialReasoning

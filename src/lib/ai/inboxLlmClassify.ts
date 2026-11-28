@@ -48,19 +48,43 @@ function describe(item: LlmClassifyItem): string | null {
   return host ? `${title || host} (${host})` : title
 }
 
-/** 解析模型回复：取首个 JSON 数组，元素形如 {"i":1,"c":"分类名"} */
+/** 解析模型回复：取首个合法 JSON 数组，元素形如 {"i":1,"c":"分类名"} */
 export function parseLlmClassifyReply(text: string): Array<{ i: number; c: string }> {
-  const m = (text || '').match(/\[[\s\S]*\]/)
-  if (!m) return []
-  try {
-    const arr = JSON.parse(m[0])
-    if (!Array.isArray(arr)) return []
-    return arr
-      .filter((x) => x && typeof x === 'object' && Number.isInteger(x.i) && typeof x.c === 'string')
-      .map((x) => ({ i: x.i as number, c: (x.c as string).trim() }))
-  } catch {
-    return []
+  const s = text || ''
+  const tryParse = (raw: string): Array<{ i: number; c: string }> | null => {
+    try {
+      const arr = JSON.parse(raw)
+      if (!Array.isArray(arr)) return null
+      return arr
+        .filter((x) => x && typeof x === 'object' && Number.isInteger(x.i) && typeof x.c === 'string')
+        .map((x) => ({ i: x.i as number, c: (x.c as string).trim() }))
+    } catch {
+      return null
+    }
   }
+  // 逐个从 '[' 扫描括号配对（忽略 JSON 字符串内部括号），避免贪婪正则被前后的 [注释]/[1] 截坏
+  for (let start = s.indexOf('['); start !== -1; start = s.indexOf('[', start + 1)) {
+    let depth = 0
+    let inStr = false
+    let escaped = false
+    for (let pos = start; pos < s.length; pos++) {
+      const ch = s[pos]
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\' && inStr) { escaped = true; continue }
+      if (ch === '"') { inStr = !inStr; continue }
+      if (inStr) continue
+      if (ch === '[') depth++
+      else if (ch === ']') {
+        depth--
+        if (depth === 0) {
+          const parsed = tryParse(s.slice(start, pos + 1))
+          if (parsed) return parsed
+          break
+        }
+      }
+    }
+  }
+  return []
 }
 
 export async function classifyWithLlm(

@@ -41,6 +41,43 @@ export interface AgentExecutionResult<T = unknown> {
   data?: T
 }
 
+function _findActiveCategory(
+  ds: Pick<ReturnType<typeof useDataStore>, 'categories'>,
+  identifier?: string,
+): Category | undefined {
+  const clean = (identifier || '').trim()
+  if (!clean) return undefined
+  const active = ds.categories.filter((c: Category) => !c.deletedAt)
+  const byId = active.find((c: Category) => c.id === clean)
+  if (byId) return byId
+  const lower = clean.toLowerCase()
+  const byExactName = active.find((c: Category) => c.name.trim().toLowerCase() === lower)
+  if (byExactName) return byExactName
+  return active.find((c: Category) => c.name.toLowerCase().includes(lower))
+}
+
+function _findActiveBookmarkByQuery(
+  ds: Pick<ReturnType<typeof useDataStore>, 'bookmarks'>,
+  query: string,
+): Bookmark | undefined {
+  const raw = String(query || '').trim()
+  if (!raw) return undefined
+  const active = ds.bookmarks.filter((b: Bookmark) => !b.deletedAt)
+  const byId = active.find((b: Bookmark) => b.id === raw)
+  if (byId) return byId
+  const byUrl = active.find((b: Bookmark) => b.url === raw)
+  if (byUrl) return byUrl
+  const norm = normalizeUrlForDedup(raw)
+  if (norm) {
+    const byNorm = active.find((b: Bookmark) => normalizeUrlForDedup(b.url) === norm)
+    if (byNorm) return byNorm
+  }
+  const lower = raw.toLowerCase()
+  const byExactTitle = active.find((b: Bookmark) => b.title?.trim().toLowerCase() === lower)
+  if (byExactTitle) return byExactTitle
+  return active.find((b: Bookmark) => b.title?.toLowerCase().includes(lower))
+}
+
 // ─────────────────────────────────────────────────────────────
 // 1. 分类管理 (manage_categories)
 // ─────────────────────────────────────────────────────────────
@@ -467,10 +504,7 @@ export async function executeManageBookmarks(
     let targetCatId = CAT_UNCATEGORIZED
     const catInput = params.targetCategory || params.category
     if (catInput) {
-      const catQuery = catInput.trim().toLowerCase()
-      const foundCat = ds.categories.find(
-        (c: Category) => !c.deletedAt && (c.id === catQuery || c.name.toLowerCase() === catQuery || c.name.toLowerCase().includes(catQuery)),
-      )
+      const foundCat = _findActiveCategory(ds, catInput)
       if (foundCat) targetCatId = foundCat.id
     }
 
@@ -611,11 +645,9 @@ export async function executeManageBookmarks(
   }
 
   if (action === 'move') {
-    const catQuery = (params.targetCategory || params.category || '').trim().toLowerCase()
-    if (!catQuery) return { success: false, message: '移动失败：未指明目标分类。' }
-    const targetCat = ds.categories.find(
-      (c: Category) => !c.deletedAt && (c.name.toLowerCase() === catQuery || c.name.toLowerCase().includes(catQuery)),
-    )
+    const rawCat = (params.targetCategory || params.category || '').trim()
+    if (!rawCat) return { success: false, message: '移动失败：未指明目标分类。' }
+    const targetCat = _findActiveCategory(ds, rawCat)
     if (!targetCat) return { success: false, message: `未找到目标分类「${params.targetCategory || params.category}」。` }
 
     const prevCatId = bm.categoryId
@@ -826,10 +858,7 @@ export async function executeManageWorkspaces(
     let catId = CAT_UNCATEGORIZED
     const catInput = params.targetCategory || params.category
     if (catInput) {
-      const cQ = catInput.trim().toLowerCase()
-      const found = ds.categories.find(
-        (c: Category) => !c.deletedAt && (c.name.toLowerCase() === cQ || c.name.toLowerCase().includes(cQ)),
-      )
+      const found = _findActiveCategory(ds, catInput)
       if (found) catId = found.id
     }
 
@@ -838,16 +867,7 @@ export async function executeManageWorkspaces(
     const queries = params.bookmarkQueries || params.bookmarkIds || []
     if (Array.isArray(queries)) {
       for (const bq of queries) {
-        const cleanQ = String(bq).trim().toLowerCase()
-        if (!cleanQ) continue
-        const matched = ds.bookmarks.find(
-          (b: Bookmark) =>
-            !b.deletedAt &&
-            (b.id === cleanQ ||
-              b.url === cleanQ ||
-              b.title?.toLowerCase() === cleanQ ||
-              b.title?.toLowerCase().includes(cleanQ)),
-        )
+        const matched = _findActiveBookmarkByQuery(ds, String(bq))
         if (matched && !matchedIds.includes(matched.id)) {
           matchedIds.push(matched.id)
         }
@@ -947,15 +967,7 @@ export async function executeManageWorkspaces(
 
     if (Array.isArray(queries)) {
       for (const bq of queries) {
-        const cleanQ = String(bq).trim().toLowerCase()
-        const targetBm = ds.bookmarks.find(
-          (b: Bookmark) =>
-            !b.deletedAt &&
-            (b.id === cleanQ ||
-              b.url === cleanQ ||
-              b.title?.toLowerCase() === cleanQ ||
-              b.title?.toLowerCase().includes(cleanQ)),
-        )
+        const targetBm = _findActiveBookmarkByQuery(ds, String(bq))
         if (targetBm) {
           if (action === 'add_bookmarks') curIdsSet.add(targetBm.id)
           else curIdsSet.delete(targetBm.id)
@@ -1115,12 +1127,9 @@ export async function executeManageSettings(
 
   if (action === 'navigate') {
     const targetType = params.navigateTarget || 'category'
-    const nameQ = (params.targetName || '').trim().toLowerCase()
 
     if (targetType === 'category') {
-      const cat = ds.categories.find(
-        (c: Category) => !c.deletedAt && (c.id === nameQ || c.name.toLowerCase() === nameQ || c.name.toLowerCase().includes(nameQ)),
-      )
+      const cat = _findActiveCategory(ds, params.targetName)
       if (cat) {
         ui.curCat = cat.id
         ui.focusedGroupId = null
@@ -1131,9 +1140,14 @@ export async function executeManageSettings(
     }
 
     if (targetType === 'workspace') {
-      const grp = ds.siblingGroups.find(
-        (g: SiblingGroup) => !g.deletedAt && (g.id === nameQ || g.name.toLowerCase() === nameQ || g.name.toLowerCase().includes(nameQ)),
-      )
+      const rawQ = (params.targetName || '').trim()
+      const nameQ = rawQ.toLowerCase()
+      const activeGrps = ds.siblingGroups.filter((g: SiblingGroup) => !g.deletedAt)
+      const grp = rawQ
+        ? (activeGrps.find((g: SiblingGroup) => g.id === rawQ)
+          || activeGrps.find((g: SiblingGroup) => g.name.trim().toLowerCase() === nameQ)
+          || activeGrps.find((g: SiblingGroup) => g.name.toLowerCase().includes(nameQ)))
+        : undefined
       if (grp) {
         ui.focusedGroupId = grp.id
         if (grp.categoryId) ui.curCat = grp.categoryId

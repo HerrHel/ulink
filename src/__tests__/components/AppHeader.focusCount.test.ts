@@ -40,6 +40,12 @@ describe('AppHeader 笔记聚焦模式下书签计数与光标交互', () => {
     expect(w.find('.panel-count').exists()).toBe(false)
     expect(w.text()).not.toContain('0 个书签')
     expect(w.text()).not.toContain('0 bookmarks')
+
+    // 未命名笔记占位兼容：带 focus-title-unnamed 样式且聚焦时清空占位
+    const titleEl = w.find('.focus-title-input')
+    expect(titleEl.classes()).toContain('focus-title-unnamed')
+    await titleEl.trigger('focus')
+    expect(titleEl.text()).toBe('')
     w.unmount()
   })
 

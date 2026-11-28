@@ -6,7 +6,7 @@ import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { saveAppData } from '../stores/app.js'
 import { useAttrDropdownStore } from '../stores/attrDropdown.js'
-import { exitGroupFocus, editGroup, searchInFocusedGroup } from './domain/useGroup.js'
+import { exitGroupFocus, editGroup, searchInFocusedGroup, isUnnamedGroupName } from './domain/useGroup.js'
 import { openBmModal } from './domain/useBookmark.js'
 import { showBatchMovePopover, batchDelete } from './domain/useBatch.js'
 import { importData } from './domain/useDataIO.js'
@@ -23,11 +23,16 @@ export function useAppHandlers() {
       if (!ui.focusedGroupId) return
       const target = e.target as HTMLElement
       const raw = (target.textContent || '').trim()
-      // 空标题使用当前语言的「未命名」，避免英文界面把中文占位名持久化进组数据
-      const name = raw || t('cards.unnamedGroup')
-      target.textContent = name
-      target.classList.toggle('focus-title-unnamed', !raw)
-      ds.updateGroup(ui.focusedGroupId, { name }); saveAppData()
+      const isPlaceholder = isUnnamedGroupName(raw)
+      const persistedName = isPlaceholder ? '' : raw
+      target.textContent = isPlaceholder ? t('common.unnamed') : raw
+      target.classList.toggle('focus-title-unnamed', isPlaceholder)
+      const curName = (ds.groupMap[ui.focusedGroupId]?.name || '').trim()
+      // 占位名统一存空串，避免「未命名笔记」阻断空笔记自动清理、摘要标题与语言切换；无变更则不写脏
+      if (persistedName !== curName) {
+        ds.updateGroup(ui.focusedGroupId, { name: persistedName })
+        saveAppData()
+      }
     },
     onSearch() { if (ui.focusedGroupId) searchInFocusedGroup() },
     onFocusAddBm(e?: Event) {

@@ -793,13 +793,28 @@ const server = http.createServer(async (req, res) => {
             message: '本月 AI 额度已用完，将于下月 1 日自动恢复。',
           }, cors)
           return
+        } else if (r.data?.ok !== true) {
+          logEvent('error', 'reserve_error', {
+            tokens: reserveAmount, errorKind: 'reserve_bad_response',
+          })
+          sendJson(res, 503, {
+            error: 'quota_unavailable',
+            message: '额度服务暂时不可用，请稍后重试',
+          }, cors)
+          return
         } else {
           // 预扣成功：标记 reserved，断连时 finalize 必须按 ref 结算冲正
           reserved = true
           logEvent('info', 'reserve_ok', { tokens: reserveAmount })
         }
       } catch (e) {
-        logEvent('warn', 'reserve_error', { tokens: reserveAmount, errorKind: 'reserve_exception', error: String((e && e.message) || e) })
+        // 抛异常同样 fail-closed：绝不跳过月度 token 配额放行上游（且 status=503 触发 finalize 退还 dailyConsumed）
+        logEvent('error', 'reserve_error', { tokens: reserveAmount, errorKind: 'reserve_exception', error: String((e && e.message) || e) })
+        sendJson(res, 503, {
+          error: 'quota_unavailable',
+          message: '额度服务暂时不可用，请稍后重试',
+        }, cors)
+        return
       }
     }
     // 预扣之后若连接已关闭：在此结算冲正（reserved=true），避免预扣挂账

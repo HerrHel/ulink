@@ -57,7 +57,7 @@ export const inboxBlock: SiteCommandBlock = async (
   for (const c of localClusters) pushClusterLine(c, false)
   for (const c of aiClusters) pushClusterLine(c, true)
   for (const m of groupMoves) {
-    lines.push(t('aiCmd.inboxGroupPlanLine', { name: m.group.name || t('cat.uncategorized'), cat: m.categoryName || '' }) + (m.ai ? t('aiCmd.inboxAiTag') : ''))
+    lines.push(t('aiCmd.inboxGroupPlanLine', { name: (m.group.name || '').trim() || t('cards.unnamedGroup'), cat: m.categoryName || '' }) + (m.ai ? t('aiCmd.inboxAiTag') : ''))
   }
   if (relations.length > 0) {
     lines.push(tN('aiCmd.inboxNestPlanLine', relations.length))

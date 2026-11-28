@@ -196,7 +196,9 @@ async function fetchEnrich() {
     diff.value = result
     // 只有服务端真正用到了 AI 才同步本地试用镜像；试用用完则立即切到升级提示
     if (result.aiGate === 'ai_trial_exhausted') ent.markAiTrialExhausted()
+    else if (result.aiGate === 'daily_exhausted') toast(t('modal.bookmark.aiDailyExhausted'), false)
     else if (result.aiGate === 'monthly_exhausted') toast(t('modal.bookmark.aiMonthlyExhausted'), false)
+    else if (result.aiGate === 'login_required') toast(t('modal.bookmark.aiLoginRequired'), false)
     if (result.ai === 'used') {
       ent.consumeAiEnrichQuota()
       rememberAiSuggestion(result.suggestedNotes)

@@ -719,6 +719,28 @@ describe('autoCheck 定时检测契约', () => {
     expect(checking.value).toBe(false)
   })
 
+  it('手动全量检测 checkAll 默认传 mode=manual，定时自动巡检 startAutoCheck 才传 mode=auto', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'm1', url: 'https://manual.example' })
+    invokeMock.mockResolvedValue(edge('ok', 200))
+    const { checkAll, startAutoCheck, autoCheckAllowed } = useDeadLinkChecker()
+
+    // 两种后端调用形态不同：Supabase 为 invoke(name, { body })，CloudBase 为 invokeCbFunction(name, payload, …)
+    const checkLinkPayloads = () => invokeMock.mock.calls
+      .filter((c) => c[0] === 'check-link')
+      .map((c) => (c[1] && typeof c[1] === 'object' && 'body' in c[1] ? c[1].body : c[1]))
+
+    await checkAll(5, 0)
+    expect(checkLinkPayloads()).toContainEqual(expect.objectContaining({ mode: 'manual', url: 'https://manual.example' }))
+
+    invokeMock.mockClear()
+    localStorageMock.setItem('lv_autoDeadCheck', String(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000))
+    autoCheckAllowed.value = true
+    startAutoCheck()
+    await new Promise(r => setTimeout(r, 50))
+    expect(checkLinkPayloads()).toContainEqual(expect.objectContaining({ mode: 'auto', url: 'https://manual.example' }))
+  })
+
   it('startAutoCheck 未到期（last 在 7 天内）不立即触发 checkAll', () => {
     // 锁：未到期时 startAutoCheck 不立即 checkAll，时间戳保持不变（不刷无谓触发）
     const ds = useDataStore()

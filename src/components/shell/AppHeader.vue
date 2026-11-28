@@ -135,6 +135,7 @@ import SearchSuggest from '../overlays/SearchSuggest.vue'
 const SettingsPanel = defineAsyncComponent(() => import('./SettingsPanel.vue'))
 import SyncStatusPopover from '../overlays/SyncStatusPopover.vue'
 import { displayText } from '../../utils.js'
+import { isUnnamedGroupName } from '../../composables/domain/useGroup.js'
 import { t, tN } from '../../i18n/index.js'
 
 const ui = useUIStore()
@@ -185,9 +186,9 @@ const focusedGroup = computed(() => {
     || null
 })
 const isFocusedGroupPublic = computed(() => Boolean(focusedGroup.value?.isPublic))
-/** 「未命名」同时兼容旧存量数据的中文占位值 */
+/** 「未命名」同时兼容旧存量数据的中文占位值与「未命名笔记」变体 */
 function isUnnamed(v: string): boolean {
-  return v === '未命名' || v === 'Untitled'
+  return isUnnamedGroupName(v)
 }
 const displayName = computed(() =>
   focusedGroup.value && focusedGroup.value.name && !isUnnamed(focusedGroup.value.name)

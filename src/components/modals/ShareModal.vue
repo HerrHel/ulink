@@ -223,13 +223,17 @@ const isPublic = computed(() => {
   return Boolean(categoryShareId.value)
 })
 
+let passwordStateGen = 0
 /** 查询当前分享是否已设密码（只回布尔，服务端从不返回摘要） */
 async function refreshPasswordState() {
-  if (!isGroup.value || !isPublic.value || !targetId.value) {
+  const gen = ++passwordStateGen
+  const targetAtStart = targetId.value
+  if (!isGroup.value || !isPublic.value || !targetAtStart) {
     hasPassword.value = false
     return
   }
-  const r = await getSharePasswordState(targetId.value)
+  const r = await getSharePasswordState(targetAtStart)
+  if (gen !== passwordStateGen || !isGroup.value || !isPublic.value || targetId.value !== targetAtStart) return
   if (r.ok) hasPassword.value = Boolean(r.hasPassword)
 }
 

@@ -255,4 +255,25 @@ describe('useCloudSync online/visibility 核心契约护栏', () => {
     // 检测到仍是 half-open 即 recordSyncSuccess() 复位。
     expect(getSyncCircuitSnapshot().state).toBe('closed')
   })
+
+  it('online 触发时须等待异步 enqueueDirtyAsOps 落盘完成再 pushFromQueue（防 IDB 竞态读空队列）', async () => {
+    const events: string[] = []
+    _push.enqueueSpy.mockImplementation(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20))
+      events.push('enqueue-done')
+    })
+    _pull.pullChangesSpy.mockImplementation(async () => {
+      events.push('pull')
+      return true
+    })
+    _push.pushFromQueueSpy.mockImplementation(async () => {
+      events.push('push')
+      return true
+    })
+
+    initAndDispatch('online')
+    await vi.runAllTimersAsync()
+
+    expect(events).toEqual(['enqueue-done', 'pull', 'push'])
+  })
 })

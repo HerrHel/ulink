@@ -67,13 +67,28 @@ describe('inboxLlmClassify — 大模型兜底归类', () => {
     expect(res.error).toBe('额度已用完')
   })
 
-  it('parseLlmClassifyReply 容错破损 JSON', () => {
+  it('parseLlmClassifyReply 容错破损 JSON 与前后干扰方括号', () => {
     expect(parseLlmClassifyReply('not json')).toEqual([])
     expect(parseLlmClassifyReply('[{"i":1,"c":"A"},{"i":"x","c":"B"}]')).toEqual([{ i: 1, c: 'A' }])
+    expect(parseLlmClassifyReply('[说明] 结果如下：[{"i":1,"c":"[Dev]"},{"i":2,"c":"NAS"}]\n注：[1] 已匹配')).toEqual([
+      { i: 1, c: '[Dev]' },
+      { i: 2, c: 'NAS' },
+    ])
   })
 })
 
 describe('draftDiff — 笔记组归类项应用与撤销', () => {
+  it('未命名笔记组的草稿标题回退「未命名笔记」，不误显「未分类」', () => {
+    const group = { id: 'g-unnamed', name: '', categoryId: 'uncategorized', bookmarkIds: [] } as any
+    const payload = createInboxZeroDraftDiff({
+      assignableClusters: [],
+      relations: [],
+      groupMoves: [{ group, categoryId: 'c-mail', categoryName: '邮箱' }],
+    })
+    expect(payload.items[0].title).toBe('未命名笔记')
+    expect(payload.items[0].before?.categoryName).toBe('未分类')
+  })
+
   it('diff-gmove 项改组分类，撤销恢复原分类', async () => {
     clearUndoStack()
     const group = { id: 'g1', name: '笔记', categoryId: 'uncategorized', bookmarkIds: [] } as any

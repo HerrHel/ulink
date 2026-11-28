@@ -8,6 +8,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { createNoteAndFocus, createGroup, isEmptyNote } from '../../composables/domain/useGroup.js'
+import { useAppHandlers } from '../../composables/useAppHandlers.js'
 import type { SiblingGroup } from '../../types.js'
 
 vi.mock('../../lib/toast.js', () => ({
@@ -27,6 +28,8 @@ describe('isEmptyNote', () => {
   it.each([
     ['全空', {}, true],
     ['默认名「未命名」', { name: '未命名' }, true],
+    ['默认名「未命名笔记」', { name: '未命名笔记' }, true],
+    ['默认名「Untitled note」', { name: 'Untitled note' }, true],
     ['只有空段落和 &nbsp;', { notes: '<p></p><p>&nbsp;</p>' }, true],
     ['有标题', { name: '读书' }, false],
     ['有正文文字', { notes: '<p>hi</p>' }, false],
@@ -97,5 +100,22 @@ describe('新建后离开的空笔记自动删除', () => {
     ui.focusedGroupId = id
     ui.focusedGroupId = null
     expect(exists(id)).toBe(true)
+  })
+
+  it('新建后未填标题就失焦（点正文或空白处）再离开：不落库占位名，仍自动彻底删除', () => {
+    const ui = useUIStore()
+    const { handlers } = useAppHandlers()
+    const id = createNoteAndFocus()
+    const titleEl = document.createElement('span')
+    titleEl.className = 'focus-title-input'
+    titleEl.textContent = ''
+    document.body.appendChild(titleEl)
+
+    handlers.onFocusTitleChange({ target: titleEl } as unknown as Event)
+    expect(titleEl.textContent).toBe('未命名')
+    expect(titleEl.classList.contains('focus-title-unnamed')).toBe(true)
+
+    ui.focusedGroupId = null
+    expect(exists(id)).toBe(false)
   })
 })
